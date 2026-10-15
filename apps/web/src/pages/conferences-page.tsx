@@ -73,6 +73,18 @@ export function ConferencesPage() {
     return () => window.removeEventListener('keydown', onKey);
   }, [creating]);
   const mine = useQuery({ queryKey: ['conferences'], queryFn: loadMine });
+  async function respondInvite(id: string, accept: boolean) {
+    setError(null);
+    const response = await apiFetch(`/api/v1/conferences/${id}/invitation/respond`, {
+      method: 'POST',
+      body: JSON.stringify({ accept }),
+    });
+    if (!response.ok) {
+      setError(await apiErrorMessage(response));
+      return;
+    }
+    await queryClient.invalidateQueries({ queryKey: ['conferences'] });
+  }
   const create = useMutation({
     mutationFn: async (values: unknown) => {
       const response = await apiFetch('/api/v1/conferences', {
@@ -142,13 +154,31 @@ export function ConferencesPage() {
                 </div>
               </div>
               <div className="mt-4 flex flex-wrap gap-2 text-sm font-bold">
+                {item.membershipStatus === 'INVITED' ? (
+                  <>
+                    <button
+                      type="button"
+                      className="rounded-full bg-[#5d74ff]/85 px-3 py-1 text-white"
+                      onClick={() => void respondInvite(item.id, true)}
+                    >
+                      {t('conferences.accept')}
+                    </button>
+                    <button
+                      type="button"
+                      className="rounded-full bg-[#f4f7ff] px-3 py-1 text-[#5c6578]"
+                      onClick={() => void respondInvite(item.id, false)}
+                    >
+                      {t('conferences.decline')}
+                    </button>
+                  </>
+                ) : null}
                 <Link
                   to={`/workspace/conferences/${item.id}`}
                   className="rounded-full bg-[#eef2ff] px-3 py-1 text-[#3d4fd4] no-underline"
                 >
                   {t('home.manage')}
                 </Link>
-                <Link to="/workspace/program" className="rounded-full bg-[#eef2ff] px-3 py-1 text-[#3d4fd4] no-underline">
+                <Link to={`/workspace/program?conference=${item.id}`} className="rounded-full bg-[#eef2ff] px-3 py-1 text-[#3d4fd4] no-underline">
                   {t('home.program')}
                 </Link>
                 <Link to="/workspace/follow-up" className="rounded-full bg-[#eef2ff] px-3 py-1 text-[#3d4fd4] no-underline">

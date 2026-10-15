@@ -64,6 +64,7 @@ export function SubmissionEditorPage() {
   const [title, setTitle] = useState('');
   const [abstractText, setAbstractText] = useState('');
   const [trackId, setTrackId] = useState('');
+  const [keywordsText, setKeywordsText] = useState('');
   const [authorName, setAuthorName] = useState('');
   const [authorEmail, setAuthorEmail] = useState('');
   const memberships = useQuery({
@@ -97,6 +98,7 @@ export function SubmissionEditorPage() {
     setTitle(current.title);
     setAbstractText(current.abstract);
     setTrackId(current.trackId ?? '');
+    setKeywordsText(current.keywords.join(', '));
   }, [current]);
 
   async function send(path: string, method: string, payload?: unknown) {
@@ -115,7 +117,7 @@ export function SubmissionEditorPage() {
       send(`/api/v1/conferences/${conferenceId}/papers`, 'POST', {
         title,
         abstract: abstractText,
-        keywords: [],
+        keywords: keywordsText.split(',').map((item) => item.trim()).filter(Boolean),
         trackId: trackId || null,
         authors: [],
       }),
@@ -131,6 +133,7 @@ export function SubmissionEditorPage() {
         title: title || current?.title,
         abstract: abstractText || current?.abstract,
         trackId: trackId || null,
+        keywords: keywordsText.split(',').map((item) => item.trim()).filter(Boolean),
       }),
   });
 
@@ -290,6 +293,16 @@ export function SubmissionEditorPage() {
                   </option>
                 ))}
               </select>
+            </label>
+            <label className="text-sm font-bold">
+              {t('papers.keywords')}
+              <Input
+                className={field}
+                value={keywordsText}
+                disabled={locked}
+                placeholder={t('papers.keywordsHint')}
+                onChange={(event) => setKeywordsText(event.target.value)}
+              />
             </label>
             <label className="text-sm font-bold">
               {t('papers.paperTitle')}

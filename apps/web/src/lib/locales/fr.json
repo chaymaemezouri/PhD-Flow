@@ -253,6 +253,9 @@
       "DOUBLE_BLIND": "Double aveugle",
       "OPEN": "Ouverte"
     },
+    "edit": "Fiche de la conférence",
+    "payments": "Demander un paiement à l'inscription",
+    "site": "Site web",
     "back": "Toutes les conférences",
     "remove": "Retirer",
     "accept": "Accepter",
@@ -283,6 +286,8 @@
     "track": "Piste",
     "chooseTrack": "Choisir une piste",
     "paperTitle": "Titre",
+    "keywords": "Mots-clés",
+    "keywordsHint": "Séparés par des virgules",
     "abstract": "Résumé",
     "saveDraft": "Enregistrer le brouillon",
     "stepDetails": "Détails",
@@ -310,6 +315,14 @@
     "comments": "Commentaires pour les auteurs",
     "committee": "Commentaires pour le comité",
     "send": "Envoyer l'évaluation",
+    "sent": "Évaluation envoyée.",
+    "recommendations": {
+      "ACCEPT": "Accepter",
+      "WEAK_ACCEPT": "Accepter faiblement",
+      "BORDERLINE": "Limite",
+      "WEAK_REJECT": "Refuser faiblement",
+      "REJECT": "Refuser"
+    },
     "empty": "Vous n'avez aucune invitation d'évaluation.",
     "accept": "Accepter",
     "decline": "Refuser",
@@ -338,6 +351,7 @@
     "accepted": "Accepté",
     "camera": "Version finale",
     "similarity": "Similarité",
+    "similarityLocal": "Déposez le PDF du rapport, puis indiquez le pourcentage qu'il contient. L'admin vérifie qu'il reste sous 20 %. Le chiffre est enregistré ici, sans service extérieur.",
     "copyright": "Copyright",
     "ready": "Prêt à publier",
     "yes": "oui",
@@ -367,6 +381,7 @@
     "documents": "Fichiers",
     "history": "Fichiers déposés",
     "actions": "Actions",
+    "model": "Modèle de cession",
     "files": {
       "MANUSCRIPT": "Manuscrit",
       "REVISION": "Révision",
@@ -376,6 +391,33 @@
       "COPYRIGHT": "Copyright"
     },
     "choosePaper": "Article",
+    "noSessions": "Aucune session pour cette conférence.",
+    "sessionEmpty": "Aucun article dans cette session.",
+    "session": "Session",
+    "sessionTitle": "Titre de la session",
+    "starts": "Début",
+    "ends": "Fin",
+    "placePaper": "Placer un article",
+    "register": "S'inscrire",
+    "pay": "Payer l'inscription",
+    "feeDue": "Cette conférence demande un règlement local. Confirmez-le après l'inscription, avant la validation.",
+    "registrations": "Inscriptions",
+    "verifyRegistration": "Valider l'inscription",
+    "doi": "Publier avec un DOI",
+    "doiReady": "DOI attribué.",
+    "messages": "Messages",
+    "noMessages": "Aucun message.",
+    "registrationStatus": {
+      "REQUESTED": "Demandée",
+      "VERIFIED": "Validée",
+      "REJECTED": "Refusée"
+    },
+    "paymentStatus": {
+      "NOT_REQUIRED": "Sans paiement",
+      "PENDING": "À payer",
+      "VERIFIED": "Payée"
+    },
+    "others": "Autres articles",
     "decide": "Enregistrer la décision",
     "letter": "Lettre aux auteurs",
     "publish": "Publier la décision",
@@ -500,7 +542,12 @@
     "mfa": "Le code MFA est requis.",
     "decision": "Seule une soumission peut recevoir une décision.",
     "similarityHigh": "20 % n'est pas sous le seuil.",
-    "similarityFile": "Déposez le rapport de similarité avant de le vérifier."
+    "similarityFile": "Déposez le rapport de similarité avant de le vérifier.",
+    "notReady": "L'article n'est pas encore prêt à être publié.",
+    "registerFirst": "Inscrivez-vous avant de payer.",
+    "noPayment": "Cette conférence ne demande pas de paiement.",
+    "unpaid": "L'inscription n'est pas encore payée.",
+    "schedule": "Seul un article accepté peut entrer au programme."
   },
   "footer": {
     "note": "Fondation de développement. Ne l'utilisez pas encore pour de vrais manuscrits."

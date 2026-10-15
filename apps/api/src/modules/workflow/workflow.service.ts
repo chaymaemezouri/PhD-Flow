@@ -125,6 +125,7 @@ export class WorkflowService {
           }
         : null,
       copyright: paper.copyright?.status ?? null,
+      doi: paper.doi,
       versions: [...paper.files]
         .sort((left, right) => left.createdAt.getTime() - right.createdAt.getTime())
         .map((file) => ({
@@ -317,13 +318,29 @@ export class WorkflowService {
     if (!row) {
       throw new NotFoundException('Registration not found');
     }
+    if (row.paymentStatus === PaymentStatus.PENDING) {
+      throw new ForbiddenException('The registration fee is still unpaid');
+    }
     return this.prisma.registration.update({
       where: { id: row.id },
-      data: {
-        status: RegistrationStatus.VERIFIED,
-        paymentStatus:
-          row.paymentStatus === PaymentStatus.PENDING ? PaymentStatus.VERIFIED : row.paymentStatus,
-      },
+      data: { status: RegistrationStatus.VERIFIED },
+    });
+  }
+
+  async pay(actor: AuthenticatedUser, conferenceId: string) {
+    const conference = await this.loadConference(conferenceId);
+    const row = await this.prisma.registration.findUnique({
+      where: { conferenceId_userId: { conferenceId, userId: actor.id } },
+    });
+    if (!row) {
+      throw new NotFoundException('Register before paying');
+    }
+    if (!conference.paymentsEnabled && row.paymentStatus !== PaymentStatus.PENDING) {
+      throw new ForbiddenException('Payment is not required');
+    }
+    return this.prisma.registration.update({
+      where: { id: row.id },
+      data: { paymentStatus: PaymentStatus.VERIFIED, status: RegistrationStatus.VERIFIED },
     });
   }
 
@@ -341,11 +358,30 @@ export class WorkflowService {
     if (!member && actor.platformRole !== PlatformRole.SYSTEM_ADMIN) {
       throw new NotFoundException('Conference not found');
     }
-    return this.prisma.programSession.findMany({
-      where: { conferenceId },
-      include: { room: true, presentations: { include: { paper: { select: { title: true, publicId: true } } } } },
-      orderBy: { startsAt: 'asc' },
-    });
+    const [sessions, rooms] = await Promise.all([
+      this.prisma.programSession.findMany({
+        where: { conferenceId },
+        include: { room: true, presentations: { include: { paper: { select: { title: true, publicId: true } } } } },
+        orderBy: { startsAt: 'asc' },
+      }),
+      this.prisma.room.findMany({ where: { conferenceId }, orderBy: { name: 'asc' } }),
+    ]);
+    return { sessions, rooms };
+  }
+
+  async publishDoi(actor: AuthenticatedUser, paperId: string) {
+    const paper = await this.loadPaper(paperId);
+    this.assertChair(actor, paper.conference.memberships);
+    if (!this.checklist(paper).ready) {
+      throw new ForbiddenException('The paper is not ready to publish');
+    }
+    if (paper.doi) {
+      return { doi: paper.doi };
+    }
+    const slug = (paper.publicId ?? paper.id).toLowerCase();
+    const doi = `10.5555/scholarflow.${slug}`;
+    await this.prisma.paper.update({ where: { id: paper.id }, data: { doi } });
+    return { doi };
   }
 
   async addSession(actor: AuthenticatedUser, conferenceId: string, input: SessionInput) {

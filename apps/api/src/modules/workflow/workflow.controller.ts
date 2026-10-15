@@ -157,6 +157,16 @@ export class WorkflowController {
     return this.workflow.register(request.user!, id);
   }
 
+  @Post('conferences/:id/payment')
+  pay(@Req() request: AuthenticatedRequest, @Param('id', ParseUUIDPipe) id: string) {
+    return this.workflow.pay(request.user!, id);
+  }
+
+  @Post('papers/:id/publish')
+  publish(@Req() request: AuthenticatedRequest, @Param('id', ParseUUIDPipe) id: string) {
+    return this.workflow.publishDoi(request.user!, id);
+  }
+
   @Post('conferences/:id/registrations/:userId/verify')
   verify(
     @Req() request: AuthenticatedRequest,

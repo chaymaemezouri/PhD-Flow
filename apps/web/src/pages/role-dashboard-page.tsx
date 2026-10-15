@@ -2,12 +2,13 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Search } from 'lucide-react';
 import { type ReactNode, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Link, Navigate } from 'react-router';
+import { Link, Navigate, useSearchParams } from 'react-router';
 import { PaperWorkCard, type WorkPaper } from '@/components/paper-work-card';
 import { Button } from '@/components/ui/button';
 import { focusStep, type PaperStep } from '@/components/step-bar';
 import { useCurrentUser } from '@/features/auth/use-account';
 import { homePathFor } from '@/features/navigation/home-path';
+import { pickConference } from '@/features/navigation/pick-conference';
 import type { WorkspaceRole } from '@/features/navigation/modules';
 import { apiErrorMessage, apiFetch } from '@/services/api';
 
@@ -39,6 +40,8 @@ interface Membership {
   name: string;
   role: string;
   membershipStatus: string;
+  status: string;
+  startsOn: string | null;
 }
 
 async function loadMemberships(): Promise<Membership[]> {
@@ -283,12 +286,15 @@ function AuthorDashboard() {
 function ChairDashboard() {
   const { t } = useTranslation();
   const account = useCurrentUser();
+  const [params, setParams] = useSearchParams();
   const memberships = useQuery({ queryKey: ['conferences'], queryFn: loadMemberships });
-  const managed = memberships.data?.find(
-    (item) =>
-      item.membershipStatus === 'ACTIVE' &&
-      (item.role === 'CHAIR' || item.role === 'ADMINISTRATOR' || item.role === 'COMMITTEE'),
-  );
+  const managedList =
+    memberships.data?.filter(
+      (item) =>
+        item.membershipStatus === 'ACTIVE' &&
+        (item.role === 'CHAIR' || item.role === 'ADMINISTRATOR' || item.role === 'COMMITTEE'),
+    ) ?? [];
+  const managed = pickConference(managedList, params.get('conference'));
   const canStats = managed?.role === 'CHAIR' || managed?.role === 'ADMINISTRATOR';
   const stats = useQuery({
     queryKey: ['statistics', managed?.id],
@@ -345,6 +351,23 @@ function ChairDashboard() {
           {t('home.decisions')}
         </Link>
       </Identity>
+      {managedList.length > 1 ? (
+        <div className="flex flex-wrap gap-2">
+          {managedList.map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              aria-pressed={item.id === managed?.id}
+              className={`rounded-full px-3 py-2 text-sm font-bold ${
+                item.id === managed?.id ? 'bg-[#5d74ff]/15 text-[#3d4fd4]' : 'bg-white text-[#5c6578]'
+              }`}
+              onClick={() => setParams({ conference: item.id })}
+            >
+              {item.name}
+            </button>
+          ))}
+        </div>
+      ) : null}
       <section className="grid grid-cols-2 gap-3 xl:grid-cols-4">
         <Metric
           tone="blue"

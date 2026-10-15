@@ -58,6 +58,7 @@ const paperInclude = {
       memberships: true,
     },
   },
+  decision: { select: { outcome: true, status: true } },
 } satisfies Prisma.PaperInclude;
 
 type PaperRecord = Prisma.PaperGetPayload<{ include: typeof paperInclude }>;
@@ -314,8 +315,7 @@ export class PaperService {
         data: { nextPaperNumber: { increment: 1 } },
         select: { nextPaperNumber: true, slug: true, startsOn: true },
       });
-      const year = counter.startsOn?.getUTCFullYear() ?? new Date().getUTCFullYear();
-      const publicId = `${counter.slug.toUpperCase()}-${year}-${String(counter.nextPaperNumber).padStart(4, '0')}`;
+      const publicId = publicPaperId(counter.slug, counter.startsOn, counter.nextPaperNumber);
       await tx.paper.update({
         where: { id },
         data: {
@@ -549,6 +549,10 @@ export class PaperService {
             affiliation: author.affiliation,
             corresponding: author.corresponding,
           })),
+      decision:
+        (this.isManager(actor, row) || row.createdById === actor.id) && row.decision
+          ? { outcome: row.decision.outcome, status: row.decision.status }
+          : null,
       manuscript: file
         ? {
             id: file.id,
@@ -559,6 +563,13 @@ export class PaperService {
         : null,
     };
   }
+}
+
+function publicPaperId(slug: string, startsOn: Date | null, number: number): string {
+  const year = startsOn?.getUTCFullYear() ?? new Date().getUTCFullYear();
+  const code = slug.toUpperCase();
+  const prefix = code.endsWith(`-${year}`) ? code : `${code}-${year}`;
+  return `${prefix}-${String(number).padStart(4, '0')}`;
 }
 
 function safeName(value: string): string {

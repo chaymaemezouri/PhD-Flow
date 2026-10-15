@@ -146,6 +146,7 @@ async function main(): Promise<void> {
       status: 'PUBLISHED',
       visibility: 'PUBLIC',
       reviewMode: 'DOUBLE_BLIND',
+      paymentsEnabled: true,
       createdById: admin.id,
       nextPaperNumber: 11,
       tracks: {

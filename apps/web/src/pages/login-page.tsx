@@ -1,6 +1,7 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { loginSchema } from '@scholarflow/validation';
 import { useQueryClient } from '@tanstack/react-query';
+import { ChevronDown } from 'lucide-react';
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
@@ -19,6 +20,7 @@ export function LoginPage() {
   const location = useLocation();
   const queryClient = useQueryClient();
   const [error, setError] = useState<string | null>(null);
+  const [demosOpen, setDemosOpen] = useState(false);
   const form = useForm<LoginValues>({
     resolver: zodResolver(loginSchema),
     defaultValues: { email: '', password: '', mfaCode: '' },
@@ -32,9 +34,8 @@ export function LoginPage() {
       : '/workspace';
 
   return (
-    <AuthLayout>
+    <AuthLayout brand={false}>
       <h1 className="text-2xl text-navy">{t('auth.loginTitle')}</h1>
-      <p className="mt-2 text-sm text-muted-foreground">{t('auth.loginIntro')}</p>
       <form
         className="mt-6 space-y-4"
         onSubmit={form.handleSubmit(async (values) => {
@@ -61,10 +62,6 @@ export function LoginPage() {
           />
         </label>
         <label className="block text-sm">
-          {t('auth.mfaCode')}
-          <Input className="mt-1" autoComplete="one-time-code" {...form.register('mfaCode')} />
-        </label>
-        <label className="block text-sm">
           {t('auth.password')}
           <Input
             type="password"
@@ -84,14 +81,26 @@ export function LoginPage() {
           {t('auth.login')}
         </Button>
       </form>
-      <div className="mt-6 rounded-md border border-border bg-secondary/40 p-3 text-sm">
-        <p className="font-semibold text-navy">{t('auth.demoTitle')}</p>
-        <p className="mt-1">{t('auth.demoPassword')}</p>
-        <ul className="mt-2 space-y-1 text-muted-foreground">
-          <li>{t('auth.demoAdmin')}</li>
-          <li>{t('auth.demoReviewer')}</li>
-          <li>{t('auth.demoChercheur')}</li>
-        </ul>
+      <div className="mt-6 rounded-2xl border border-[#e4e7ee] bg-[#f6f7fb] text-sm">
+        <button
+          type="button"
+          className="flex w-full items-center justify-between gap-3 px-3 py-3 text-left font-extrabold text-[#1c2744]"
+          aria-expanded={demosOpen}
+          onClick={() => setDemosOpen((open) => !open)}
+        >
+          {t('auth.demoTitle')}
+          <ChevronDown className={`size-4 shrink-0 transition-transform ${demosOpen ? 'rotate-180' : ''}`} />
+        </button>
+        {demosOpen ? (
+          <div className="px-3 pb-3">
+            <p>{t('auth.demoPassword')}</p>
+            <ul className="mt-2 space-y-1 text-[#5c6578]">
+              <li>{t('auth.demoAdmin')}</li>
+              <li>{t('auth.demoReviewer')}</li>
+              <li>{t('auth.demoChercheur')}</li>
+            </ul>
+          </div>
+        ) : null}
       </div>
       <p className="mt-4 text-sm">
         <Link to="/forgot-password" className="text-teal">
