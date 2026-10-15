@@ -1,0 +1,504 @@
+{
+  "brand": {
+    "name": "PhD Flow",
+    "tagline": "Scientific publication and conference management"
+  },
+  "nav": {
+    "skip": "Skip to content",
+    "overview": "Overview",
+    "home": "Home",
+    "conferences": "Conferences",
+    "submissions": "Submissions",
+    "reviews": "Reviews",
+    "followUp": "Publication",
+    "program": "Program",
+    "decisions": "Decisions",
+    "administration": "Administration",
+    "preferences": "Preferences",
+    "collapse": "Collapse sidebar",
+    "expand": "Expand sidebar",
+    "workspace": "Workspace",
+    "more": "More",
+    "close": "Close"
+  },
+  "top": {
+    "search": "Search",
+    "searchLater": "Search arrives with conference records",
+    "notifications": "Notifications",
+    "notificationsLater": "Notifications arrive in a later phase",
+    "account": "Account menu",
+    "guest": "Guest preview",
+    "signInLater": "Sign in arrives in Phase 1"
+  },
+  "theme": {
+    "label": "Theme",
+    "light": "Light",
+    "dark": "Dark",
+    "system": "System"
+  },
+  "language": {
+    "label": "Language",
+    "en": "English",
+    "fr": "Français"
+  },
+  "landing": {
+    "kicker": "Phase 0 · Foundation",
+    "title": "The working record of a scientific meeting.",
+    "lede": "ScholarFlow is being built for authors, reviewers, and conference committees. This installation is the foundation: a conference-ready interface, a secured API shell, and a live health check. Manuscripts, reviews, and decisions are not available yet.",
+    "openWorkspace": "Open the workspace preview",
+    "audiences": {
+      "authors": {
+        "title": "Authors",
+        "body": "Submissions, revisions, camera-ready files, and copyright steps will live in one paper workspace."
+      },
+      "reviewers": {
+        "title": "Reviewers",
+        "body": "Assignments stay limited to invited papers, with separate comments for authors and the committee."
+      },
+      "committees": {
+        "title": "Committees",
+        "body": "Chairs and administrators will share a conference, with scientific decisions kept apart from office administration."
+      }
+    }
+  },
+  "health": {
+    "title": "API status",
+    "ok": "API and database are reachable",
+    "degraded": "API is up. The database is not reachable",
+    "error": "The API is not running",
+    "hint": "Start PostgreSQL and the API, then refresh this page.",
+    "database": "Database",
+    "api": "API"
+  },
+  "workspace": {
+    "banner": "Conferences, submissions, and review assignments are live. Review forms and decisions are not connected yet.",
+    "previewAs": "Preview role",
+    "notAuthenticated": "This control does not grant access."
+  },
+  "dashboard": {
+    "notConnected": "Not connected",
+    "emptyTitle": "No records yet",
+    "emptyBody": "This list stays empty until the corresponding workflow is implemented.",
+    "deadlinesTitle": "Upcoming deadlines",
+    "tasksTitle": "Action required",
+    "chartTitle": "Submission activity",
+    "chartEmpty": "Charts will use conference statistics from Phase 13. No sample series is shown.",
+    "author": {
+      "title": "Author workspace",
+      "intro": "A place for your manuscripts, revision requests, and publication tasks. The counters below are not live."
+    },
+    "reviewer": {
+      "title": "Reviewer workspace",
+      "intro": "Assigned papers, invitations, and review deadlines will appear here. No papers are assigned in this preview."
+    },
+    "committee": {
+      "title": "Scientific committee",
+      "intro": "Track chairs and program chairs will monitor reviews and record decisions here. Decision authority is not active."
+    },
+    "administrator": {
+      "title": "Conference administration",
+      "intro": "Conference setup, memberships, and document checks will be managed here, separately from scientific decisions."
+    },
+    "system": {
+      "title": "Platform administration",
+      "intro": "System-wide configuration will be limited, separate from any one conference, and audited. It is not available in this phase."
+    }
+  },
+  "stats": {
+    "submissions": "Submissions",
+    "inReview": "In review",
+    "decisions": "Decisions",
+    "deadlines": "Open deadlines"
+  },
+  "planned": {
+    "title": "This module is not available yet",
+    "body": "The page is reserved so the navigation matches the product. It does not pretend to load or save conference data.",
+    "phase": "Planned for phase {{phase}}",
+    "unknown": "This address is not part of the workspace."
+  },
+  "preferences": {
+    "title": "Interface preferences",
+    "intro": "These choices are stored in this browser only. They do not create an account.",
+    "save": "Save preferences",
+    "saved": "Preferences saved on this browser."
+  },
+  "common": {
+    "loading": "Loading",
+    "retry": "Try again",
+    "unavailable": "Not available yet",
+    "home": "Back to the introduction"
+  },
+  "notFound": {
+    "title": "This page is not part of ScholarFlow",
+    "body": "The address does not match a foundation screen."
+  },
+  "auth": {
+    "login": "Sign in",
+    "logout": "Sign out",
+    "loginTitle": "Sign in",
+    "loginIntro": "Use a verified ScholarFlow email. Local demo accounts all use the password Demo-scholar-12.",
+    "demoTitle": "Local demo accounts",
+    "demoPassword": "Password for every account: Demo-scholar-12",
+    "demoAdmin": "admin@demo.scholarflow.test — administrator",
+    "demoReviewer": "reviewer@demo.scholarflow.test — reviewer",
+    "demoChercheur": "chercheur@demo.scholarflow.test — PhD researcher",
+    "registerTitle": "Create an account",
+    "createAccount": "Create account",
+    "haveAccount": "Already registered? Sign in",
+    "email": "Email",
+    "password": "Password",
+    "passwordHint": "At least 12 characters, with a letter and a number.",
+    "firstName": "First name",
+    "lastName": "Last name",
+    "forgot": "Forgot password",
+    "forgotTitle": "Reset your password",
+    "forgotBody": "If an account exists for this address, a one-time link will be sent.",
+    "forgotSent": "If an account exists, a reset message has been sent.",
+    "sendReset": "Send reset link",
+    "resetTitle": "Choose a new password",
+    "reset": "Update password",
+    "checkEmail": "Check your email",
+    "checkEmailBody": "The account stays closed until you open the verification link. On this local install the message is in Mailpit, not in Gmail.",
+    "openMailpit": "Open Mailpit",
+    "verifyTitle": "Email verification",
+    "verifyDone": "Your email is verified. You can sign in.",
+    "verifyMissing": "This page needs a verification link.",
+    "profileTitle": "Academic profile",
+    "profileSaved": "Profile saved.",
+    "saveProfile": "Save profile",
+    "changePassword": "Change password",
+    "currentPassword": "Current password",
+    "passwordChanged": "Password updated.",
+    "photoLater": "Profile photos will be stored in private object storage in a later update. There is no upload control yet.",
+    "mfaCode": "MFA code",
+    "uploadPhoto": "Upload photo",
+    "startMfa": "Start MFA",
+    "confirmMfa": "Confirm the code",
+    "academicTitle": "Academic title",
+    "institution": "Institution",
+    "laboratory": "Laboratory",
+    "department": "Department",
+    "country": "Country",
+    "city": "City",
+    "disciplines": "Disciplines, separated by commas",
+    "interests": "Academic interests",
+    "biography": "About",
+    "biographyEmpty": "No biography yet.",
+    "parcours": "Path",
+    "parcoursEmpty": "No steps yet.",
+    "year": "Year",
+    "stepTitle": "Step",
+    "place": "Place",
+    "addStep": "Add a step",
+    "orcid": "ORCID",
+    "website": "Personal website",
+    "scholar": "Google Scholar URL"
+  },
+  "conferences": {
+    "directory": "Directory",
+    "directoryTitle": "Public conferences",
+    "directoryIntro": "Published conferences that chose to be listed. Drafts and unlisted meetings are not shown.",
+    "directoryEmpty": "No published conferences are listed yet.",
+    "title": "Your conferences",
+    "intro": "Create a meeting or open one you belong to. You become the chair of a conference you create.",
+    "empty": "You do not belong to a conference yet.",
+    "create": "Create conference",
+    "name": "Conference name",
+    "shortName": "Short name",
+    "description": "Description",
+    "tracks": "Tracks",
+    "deadlines": "Deadlines",
+    "templates": "Message templates",
+    "members": "Members",
+    "noTracks": "No tracks yet.",
+    "noDeadlines": "No deadlines yet.",
+    "noTemplates": "No templates yet. These texts are stored for later notifications. They are not sent by themselves.",
+    "addTrack": "Add track",
+    "trackName": "Track name",
+    "trackCode": "Code",
+    "addDeadline": "Add submission deadline",
+    "saveTemplate": "Save notification template",
+    "subject": "Subject",
+    "body": "Message",
+    "invite": "Send invitation",
+    "publish": "Publish in the directory",
+    "viewPublic": "View the public page",
+    "kinds": {
+      "SUBMISSION": "Submission",
+      "REVIEW": "Review",
+      "NOTIFICATION": "Notification",
+      "CAMERA_READY": "Camera-ready",
+      "REGISTRATION": "Registration",
+      "COPYRIGHT": "Copyright"
+    },
+    "roles": {
+      "AUTHOR": "Author",
+      "CHAIR": "Chair",
+      "REVIEWER": "Reviewer",
+      "COMMITTEE": "Committee",
+      "ADMINISTRATOR": "Administrator"
+    },
+    "states": {
+      "PUBLISHED": "Published",
+      "DRAFT": "Draft",
+      "ARCHIVED": "Archived",
+      "ACTIVE": "Active"
+    },
+    "membership": {
+      "ACTIVE": "Active",
+      "INVITED": "Invited"
+    },
+    "review": {
+      "SINGLE_BLIND": "Single blind",
+      "DOUBLE_BLIND": "Double blind",
+      "OPEN": "Open"
+    },
+    "back": "All conferences",
+    "remove": "Remove",
+    "accept": "Accept",
+    "decline": "Decline",
+    "invitationTitle": "Conference invitation",
+    "invitationBody": "Accepting adds you to the conference with the role in the invitation. The link works once.",
+    "invitationMissing": "This page needs an invitation link.",
+    "invitationDone": "Your response was recorded.",
+    "loadError": "The conference list could not be loaded.",
+    "notPublic": "This conference is not available.",
+    "locationLater": "Location not set"
+  },
+  "papers": {
+    "title": "Submissions",
+    "intro": "Save a draft, add authors, upload a PDF, then submit. The public paper id is assigned once and does not change.",
+    "empty": "You have no submissions yet.",
+    "new": "New submission",
+    "back": "All submissions",
+    "draft": "Draft",
+    "submitted": "Submitted",
+    "withdrawn": "Withdrawn",
+    "conference": "Conference",
+    "chooseConference": "Choose a conference",
+    "track": "Track",
+    "chooseTrack": "Choose a track",
+    "paperTitle": "Title",
+    "abstract": "Abstract",
+    "saveDraft": "Save draft",
+    "stepDetails": "Details",
+    "stepAuthors": "Authors",
+    "stepFile": "Manuscript",
+    "stepSubmit": "Submit",
+    "formNote": "These four pills only file the manuscript. The ten round steps are in the list above.",
+    "corresponding": "corresponding",
+    "authorName": "Author name",
+    "addAuthor": "Add author",
+    "noFile": "No PDF uploaded yet.",
+    "needDraft": "Save the draft in Details first. The file is uploaded on the Manuscript step.",
+    "fileHint": "PDF only, up to 20 MB. The file stays in private storage.",
+    "submitHint": "Submitting freezes the manuscript. Withdrawal is the only later change in this phase.",
+    "submit": "Submit paper",
+    "withdraw": "Withdraw paper",
+    "failed": "The submission could not be saved."
+  },
+  "reviews": {
+    "title": "Review invitations",
+    "intro": "Accept a review, then send a score from 1 to 10 and comments. Committee notes stay hidden from authors.",
+    "recommendation": "Recommendation",
+    "score": "Score",
+    "confidence": "Confidence",
+    "comments": "Comments for the authors",
+    "committee": "Comments for the committee",
+    "send": "Send review",
+    "empty": "You have no review invitations.",
+    "accept": "Accept",
+    "decline": "Decline",
+    "openPaper": "Open the manuscript",
+    "assignTitle": "Assign a reviewer",
+    "assignIntro": "Only submitted papers can be assigned. A conflict of interest or an existing active assignment is rejected.",
+    "chooseConference": "Choose a conference",
+    "choosePaper": "Choose a paper",
+    "chooseReviewer": "Choose a reviewer",
+    "assign": "Send invitation",
+    "assigned": "Invitation sent.",
+    "statuses": {
+      "INVITED": "Invitation",
+      "ACCEPTED": "Accepted",
+      "DECLINED": "Declined",
+      "IN_PROGRESS": "In progress",
+      "COMPLETED": "Submitted",
+      "CANCELLED": "Cancelled",
+      "OVERDUE": "Overdue"
+    }
+  },
+  "workflow": {
+    "followTitle": "After the decision",
+    "programTitle": "Program",
+    "noDecision": "No published decision yet.",
+    "accepted": "Accepted",
+    "camera": "Camera-ready",
+    "similarity": "Similarity",
+    "copyright": "Copyright",
+    "ready": "Ready to publish",
+    "yes": "yes",
+    "no": "no",
+    "underThreshold": "under 20%",
+    "notSatisfied": "20% is not enough",
+    "save": "Save",
+    "saved": "Saved.",
+    "room": "Room name",
+    "remind": "Send review reminders",
+    "reminded": "Reminders sent.",
+    "export": "Export metadata",
+    "report": "Similarity report",
+    "verify": "Verify the report",
+    "verified": "Report verified.",
+    "presentationScore": "Presentation score",
+    "averageScore": "Average score",
+    "openReviews": "Open reviews",
+    "overdue": "Overdue",
+    "round": "Submission round",
+    "stepDone": "Validated",
+    "stepPending": "Not yet",
+    "stepFailed": "Refused",
+    "editable": "Editable version",
+    "templateOk": "Template respected",
+    "choosePdf": "Choose a PDF",
+    "documents": "Files",
+    "history": "Uploaded files",
+    "actions": "Actions",
+    "files": {
+      "MANUSCRIPT": "Manuscript",
+      "REVISION": "Revision",
+      "CAMERA_READY": "Camera-ready",
+      "EDITABLE": "Editable version",
+      "SIMILARITY": "Similarity report",
+      "COPYRIGHT": "Copyright"
+    },
+    "choosePaper": "Paper",
+    "decide": "Record the decision",
+    "letter": "Letter to the authors",
+    "publish": "Publish the decision",
+    "outcomeAccepted": "Accepted",
+    "outcomeConditional": "Conditionally accepted",
+    "outcomeRevision": "Revision required",
+    "outcomeRejected": "Rejected",
+    "steps": {
+      "submission": "Submission",
+      "notification": "Notification",
+      "track": "Track",
+      "presentation": "Presentation",
+      "registration": "Registration",
+      "editable": "Editable",
+      "cameraPdf": "Final PDF",
+      "template": "Template",
+      "similarity": "Similarity",
+      "copyright": "Copyright"
+    }
+  },
+  "home": {
+    "hello": "Hello,",
+    "search": "Search",
+    "subjects": "Workspace",
+    "work": "Your papers",
+    "empty": "Nothing here yet. Open Submissions to start a draft.",
+    "overview": "Overview",
+    "attention": "To do",
+    "papersCount": "Papers",
+    "waiting": "Waiting",
+    "doneSteps": "Complete",
+    "stats": "Statistics",
+    "drafts": "Drafts",
+    "submitted": "Submitted",
+    "parcours": "Academic record",
+    "doctorate": "Doctorate",
+    "completeOf": "{{done}} of {{total}} are complete",
+    "waitingHint": "Steps still open",
+    "blockedHint": "Steps to correct",
+    "scoreHint": "Average of the reviews",
+    "openReviewsHint": "Not submitted yet",
+    "overdueHint": "Past the deadline",
+    "boardAll": "All",
+    "boardWaiting": "Waiting",
+    "boardBlocked": "Blocked",
+    "boardClear": "Complete",
+    "conference": "Conference",
+    "open": "Continue",
+    "next": "Next",
+    "blocked": "Blocked",
+    "progress": "{{done}} / {{total}} steps",
+    "clear": "Round complete",
+    "join": "Join",
+    "joinTitle": "Open conferences",
+    "joinBody": "A new account has no papers until you join a conference.",
+    "actions": {
+      "submission": {
+        "pending": "The draft has not been submitted.",
+        "failed": "The paper was withdrawn."
+      },
+      "notification": {
+        "pending": "Waiting for the decision.",
+        "failed": "The paper was rejected."
+      },
+      "track": {
+        "pending": "The track is not chosen.",
+        "failed": "The track is not chosen."
+      },
+      "presentation": {
+        "pending": "The talk is not on the program yet.",
+        "failed": "The talk is not on the program yet."
+      },
+      "registration": {
+        "pending": "Registration is not confirmed.",
+        "failed": "Registration was refused."
+      },
+      "editable": {
+        "pending": "The editable final version is missing.",
+        "failed": "The editable final version is missing."
+      },
+      "cameraPdf": {
+        "pending": "The final PDF is missing.",
+        "failed": "The final PDF is missing."
+      },
+      "template": {
+        "pending": "The template has not been checked.",
+        "failed": "The template has not been checked."
+      },
+      "similarity": {
+        "pending": "The similarity report is not verified.",
+        "failed": "Similarity is over 20%."
+      },
+      "copyright": {
+        "pending": "The copyright form has not been filed.",
+        "failed": "The copyright form was refused."
+      }
+    },
+    "manage": "Open conference",
+    "program": "Program",
+    "publication": "Publication",
+    "reviewQueue": "Your reviews",
+    "noConference": "You are not in a conference yet.",
+    "chairPapers": "Conference papers",
+    "chairEmpty": "This conference has no papers yet.",
+    "reviewEmpty": "No reviews for now.",
+    "toAccept": "To accept",
+    "inProgress": "In progress",
+    "returned": "Submitted",
+    "invitations": "Invitations",
+    "decisions": "Decisions"
+  },
+  "errors": {
+    "verifyEmail": "Confirm your email before signing in. On this local install, open the link in Mailpit.",
+    "invalidLogin": "Unknown email or password.",
+    "emailTaken": "An account with this email already exists.",
+    "alreadyMember": "You are already a member of this conference.",
+    "conferenceMissing": "This conference is not available.",
+    "tooMany": "Too many requests. Wait a moment and try again.",
+    "failed": "The request failed.",
+    "csrf": "The secure request could not be prepared. Reload the page.",
+    "signIn": "Sign in required.",
+    "mfa": "The MFA code is required.",
+    "decision": "Only a submitted paper can receive a decision.",
+    "similarityHigh": "20 percent is not under the threshold.",
+    "similarityFile": "Upload the similarity report before verification."
+  },
+  "footer": {
+    "note": "Development foundation. Do not use it for real manuscripts yet."
+  }
+}

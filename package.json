@@ -1,0 +1,35 @@
+{
+  "name": "scholarflow",
+  "version": "0.1.0",
+  "private": true,
+  "description": "ScholarFlow — scientific publication and conference management system",
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "concurrently -n api,web -c blue,green \"npm run dev -w @scholarflow/api\" \"npm run dev -w @scholarflow/web\"",
+    "build": "npm run build -w @scholarflow/types && npm run build -w @scholarflow/validation && npm run build -w @scholarflow/ui && npm run build -w @scholarflow/api && npm run build -w @scholarflow/web",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "test": "npm run build -w @scholarflow/types && npm run build -w @scholarflow/validation && npm run build -w @scholarflow/ui && npm run test -w @scholarflow/validation && npm run test -w @scholarflow/api && npm run test -w @scholarflow/web",
+    "db:generate": "npm run db:generate -w @scholarflow/api",
+    "db:migrate": "npm run db:migrate -w @scholarflow/api",
+    "db:deploy": "npm run db:deploy -w @scholarflow/api",
+    "db:seed": "npm run db:seed -w @scholarflow/api"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "concurrently": "^10.0.6",
+    "eslint": "^10.2.1",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "globals": "^17.6.0",
+    "prettier": "^3.9.10",
+    "typescript": "~5.9.3",
+    "typescript-eslint": "^8.61.1"
+  }
+}

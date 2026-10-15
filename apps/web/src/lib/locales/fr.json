@@ -1,0 +1,504 @@
+{
+  "brand": {
+    "name": "PhD Flow",
+    "tagline": "Gestion des publications et des conférences scientifiques"
+  },
+  "nav": {
+    "skip": "Aller au contenu",
+    "overview": "Vue d'ensemble",
+    "home": "Accueil",
+    "conferences": "Conférences",
+    "submissions": "Soumissions",
+    "reviews": "Évaluations",
+    "followUp": "Publication",
+    "program": "Programme",
+    "decisions": "Décisions",
+    "administration": "Administration",
+    "preferences": "Préférences",
+    "collapse": "Réduire le menu",
+    "expand": "Développer le menu",
+    "workspace": "Espace de travail",
+    "more": "Plus",
+    "close": "Fermer"
+  },
+  "top": {
+    "search": "Recherche",
+    "searchLater": "La recherche arrivera avec les dossiers de conférence",
+    "notifications": "Notifications",
+    "notificationsLater": "Les notifications arriveront dans une phase ultérieure",
+    "account": "Menu du compte",
+    "guest": "Aperçu invité",
+    "signInLater": "La connexion arrivera en phase 1"
+  },
+  "theme": {
+    "label": "Thème",
+    "light": "Clair",
+    "dark": "Sombre",
+    "system": "Système"
+  },
+  "language": {
+    "label": "Langue",
+    "en": "English",
+    "fr": "Français"
+  },
+  "landing": {
+    "kicker": "Phase 0 · Fondations",
+    "title": "Le dossier de travail d'une réunion scientifique.",
+    "lede": "ScholarFlow est conçu pour les auteurs, les évaluateurs et les comités de conférence. Cette installation en est la fondation : une interface, une API sécurisée et un contrôle de santé réel. Les manuscrits, les évaluations et les décisions ne sont pas encore disponibles.",
+    "openWorkspace": "Ouvrir l'aperçu de l'espace de travail",
+    "audiences": {
+      "authors": {
+        "title": "Auteurs",
+        "body": "Les soumissions, les révisions, les versions finales et le droit d'auteur seront réunis dans l'espace de chaque article."
+      },
+      "reviewers": {
+        "title": "Évaluateurs",
+        "body": "Les missions resteront limitées aux articles assignés, avec des commentaires distincts pour les auteurs et le comité."
+      },
+      "committees": {
+        "title": "Comités",
+        "body": "Les présidents et les administrateurs partageront une conférence, tout en séparant la décision scientifique de la gestion administrative."
+      }
+    }
+  },
+  "health": {
+    "title": "État de l'API",
+    "ok": "L'API et la base de données répondent",
+    "degraded": "L'API fonctionne. La base de données est injoignable",
+    "error": "L'API n'est pas démarrée",
+    "hint": "Démarrez PostgreSQL et l'API, puis actualisez cette page.",
+    "database": "Base de données",
+    "api": "API"
+  },
+  "workspace": {
+    "banner": "Les conférences, les soumissions et les invitations d'évaluation sont en place. Les formulaires et les décisions ne sont pas encore reliés.",
+    "previewAs": "Rôle affiché",
+    "notAuthenticated": "Cette commande n'accorde aucun accès."
+  },
+  "dashboard": {
+    "notConnected": "Non connecté",
+    "emptyTitle": "Aucun dossier",
+    "emptyBody": "Cette liste reste vide jusqu'à la mise en place du flux correspondant.",
+    "deadlinesTitle": "Échéances à venir",
+    "tasksTitle": "Actions attendues",
+    "chartTitle": "Activité des soumissions",
+    "chartEmpty": "Les graphiques utiliseront les statistiques de conférence à partir de la phase 13. Aucune série d'exemple n'est affichée.",
+    "author": {
+      "title": "Espace auteur",
+      "intro": "Un emplacement pour vos manuscrits, demandes de révision et tâches de publication. Les compteurs ci-dessous ne sont pas réels."
+    },
+    "reviewer": {
+      "title": "Espace évaluateur",
+      "intro": "Les articles assignés, les invitations et les échéances d'évaluation apparaîtront ici. Aucun article n'est assigné dans cet aperçu."
+    },
+    "committee": {
+      "title": "Comité scientifique",
+      "intro": "Les responsables de track et de programme suivront les évaluations et enregistreront les décisions ici. Cette autorité n'est pas active."
+    },
+    "administrator": {
+      "title": "Administration de conférence",
+      "intro": "La configuration, les membres et la vérification des documents seront gérés ici, séparément des décisions scientifiques."
+    },
+    "system": {
+      "title": "Administration de la plateforme",
+      "intro": "La configuration globale restera limitée, distincte de chaque conférence, et auditée. Elle n'est pas disponible dans cette phase."
+    }
+  },
+  "stats": {
+    "submissions": "Soumissions",
+    "inReview": "En évaluation",
+    "decisions": "Décisions",
+    "deadlines": "Échéances ouvertes"
+  },
+  "planned": {
+    "title": "Ce module n'est pas encore disponible",
+    "body": "La page est réservée pour que la navigation corresponde au produit. Elle ne charge ni n'enregistre de données de conférence.",
+    "phase": "Prévu pour la phase {{phase}}",
+    "unknown": "Cette adresse ne fait pas partie de l'espace de travail."
+  },
+  "preferences": {
+    "title": "Préférences d'interface",
+    "intro": "Ces choix restent dans ce navigateur. Ils ne créent pas de compte.",
+    "save": "Enregistrer les préférences",
+    "saved": "Préférences enregistrées dans ce navigateur."
+  },
+  "common": {
+    "loading": "Chargement",
+    "retry": "Réessayer",
+    "unavailable": "Pas encore disponible",
+    "home": "Retour à l'introduction"
+  },
+  "notFound": {
+    "title": "Cette page ne fait pas partie de ScholarFlow",
+    "body": "L'adresse ne correspond à aucun écran de la fondation."
+  },
+  "auth": {
+    "login": "Connexion",
+    "logout": "Déconnexion",
+    "loginTitle": "Connexion",
+    "loginIntro": "Utilisez une adresse ScholarFlow vérifiée. Les comptes de démo locaux ont tous le mot de passe Demo-scholar-12.",
+    "demoTitle": "Comptes de démonstration",
+    "demoPassword": "Mot de passe de chaque compte : Demo-scholar-12",
+    "demoAdmin": "admin@demo.scholarflow.test — administrateur",
+    "demoReviewer": "reviewer@demo.scholarflow.test — évaluateur",
+    "demoChercheur": "chercheur@demo.scholarflow.test — chercheur PhD",
+    "registerTitle": "Créer un compte",
+    "createAccount": "Créer un compte",
+    "haveAccount": "Déjà inscrit ? Connexion",
+    "email": "Adresse électronique",
+    "password": "Mot de passe",
+    "passwordHint": "Au moins 12 caractères, avec une lettre et un chiffre.",
+    "firstName": "Prénom",
+    "lastName": "Nom",
+    "forgot": "Mot de passe oublié",
+    "forgotTitle": "Réinitialiser le mot de passe",
+    "forgotBody": "Si un compte existe pour cette adresse, un lien à usage unique sera envoyé.",
+    "forgotSent": "Si un compte existe, un message de réinitialisation a été envoyé.",
+    "sendReset": "Envoyer le lien",
+    "resetTitle": "Choisir un nouveau mot de passe",
+    "reset": "Mettre à jour le mot de passe",
+    "checkEmail": "Confirmez l'adresse",
+    "checkEmailBody": "Le compte reste fermé tant que le lien de vérification n'est pas ouvert. En local, le message est dans Mailpit, pas dans Gmail.",
+    "openMailpit": "Ouvrir Mailpit",
+    "verifyTitle": "Vérification de l'adresse",
+    "verifyDone": "Votre adresse est vérifiée. Vous pouvez vous connecter.",
+    "verifyMissing": "Cette page a besoin d'un lien de vérification.",
+    "profileTitle": "Profil académique",
+    "profileSaved": "Profil enregistré.",
+    "saveProfile": "Enregistrer le profil",
+    "changePassword": "Changer le mot de passe",
+    "currentPassword": "Mot de passe actuel",
+    "passwordChanged": "Mot de passe mis à jour.",
+    "photoLater": "La photo de profil sera conservée dans un stockage privé lors d'une mise à jour ultérieure. Il n'y a pas encore de téléversement.",
+    "mfaCode": "Code MFA",
+    "uploadPhoto": "Téléverser la photo",
+    "startMfa": "Activer le MFA",
+    "confirmMfa": "Confirmer le code",
+    "academicTitle": "Titre académique",
+    "institution": "Institution",
+    "laboratory": "Laboratoire",
+    "department": "Département",
+    "country": "Pays",
+    "city": "Ville",
+    "disciplines": "Disciplines, séparées par des virgules",
+    "interests": "Intérêts académiques",
+    "biography": "Présentation",
+    "biographyEmpty": "Pas encore de présentation.",
+    "parcours": "Parcours",
+    "parcoursEmpty": "Aucune étape pour le moment.",
+    "year": "Année",
+    "stepTitle": "Étape",
+    "place": "Lieu",
+    "addStep": "Ajouter une étape",
+    "orcid": "ORCID",
+    "website": "Site personnel",
+    "scholar": "URL Google Scholar"
+  },
+  "conferences": {
+    "directory": "Annuaire",
+    "directoryTitle": "Conférences publiques",
+    "directoryIntro": "Conférences publiées qui ont choisi d'être listées. Les brouillons et les réunions non listées n'apparaissent pas.",
+    "directoryEmpty": "Aucune conférence publiée n'est listée pour le moment.",
+    "title": "Vos conférences",
+    "intro": "Créez une réunion ou ouvrez celle à laquelle vous appartenez. Vous devenez président de la conférence que vous créez.",
+    "empty": "Vous n'appartenez encore à aucune conférence.",
+    "create": "Créer une conférence",
+    "name": "Nom de la conférence",
+    "shortName": "Nom court",
+    "description": "Description",
+    "tracks": "Thématiques",
+    "deadlines": "Échéances",
+    "templates": "Modèles de message",
+    "members": "Membres",
+    "noTracks": "Aucune thématique pour le moment.",
+    "noDeadlines": "Aucune échéance pour le moment.",
+    "noTemplates": "Aucun modèle pour le moment. Ces textes sont conservés pour des notifications ultérieures. Ils ne sont pas envoyés seuls.",
+    "addTrack": "Ajouter une thématique",
+    "trackName": "Nom de la thématique",
+    "trackCode": "Code",
+    "addDeadline": "Ajouter l'échéance de soumission",
+    "saveTemplate": "Enregistrer le modèle de notification",
+    "subject": "Objet",
+    "body": "Message",
+    "invite": "Envoyer une invitation",
+    "publish": "Publier dans l'annuaire",
+    "viewPublic": "Voir la page publique",
+    "kinds": {
+      "SUBMISSION": "Soumission",
+      "REVIEW": "Évaluation",
+      "NOTIFICATION": "Notification",
+      "CAMERA_READY": "Version finale",
+      "REGISTRATION": "Inscription",
+      "COPYRIGHT": "Droits"
+    },
+    "roles": {
+      "AUTHOR": "Auteur",
+      "CHAIR": "Présidence",
+      "REVIEWER": "Évaluateur",
+      "COMMITTEE": "Comité",
+      "ADMINISTRATOR": "Administration"
+    },
+    "states": {
+      "PUBLISHED": "Publiée",
+      "DRAFT": "Brouillon",
+      "ARCHIVED": "Archivée",
+      "ACTIVE": "Active"
+    },
+    "membership": {
+      "ACTIVE": "Active",
+      "INVITED": "Invitée"
+    },
+    "review": {
+      "SINGLE_BLIND": "Simple aveugle",
+      "DOUBLE_BLIND": "Double aveugle",
+      "OPEN": "Ouverte"
+    },
+    "back": "Toutes les conférences",
+    "remove": "Retirer",
+    "accept": "Accepter",
+    "decline": "Refuser",
+    "invitationTitle": "Invitation à une conférence",
+    "invitationBody": "Accepter vous ajoute à la conférence avec le rôle indiqué. Le lien ne fonctionne qu'une fois.",
+    "invitationMissing": "Cette page a besoin d'un lien d'invitation.",
+    "invitationDone": "Votre réponse a été enregistrée.",
+    "loadError": "La liste des conférences n'a pas pu être chargée.",
+    "notPublic": "Cette conférence n'est pas disponible.",
+    "locationLater": "Lieu non renseigné"
+  },
+  "papers": {
+    "title": "Soumissions",
+    "intro": "Enregistrez un brouillon, ajoutez les auteurs, téléversez un PDF, puis soumettez. L'identifiant public est attribué une seule fois.",
+    "empty": "Vous n'avez encore aucune soumission.",
+    "new": "Nouvelle soumission",
+    "back": "Toutes les soumissions",
+    "draft": "Brouillon",
+    "submitted": "Soumis",
+    "withdrawn": "Retiré",
+    "conference": "Conférence",
+    "chooseConference": "Choisir une conférence",
+    "track": "Piste",
+    "chooseTrack": "Choisir une piste",
+    "paperTitle": "Titre",
+    "abstract": "Résumé",
+    "saveDraft": "Enregistrer le brouillon",
+    "stepDetails": "Détails",
+    "stepAuthors": "Auteurs",
+    "stepFile": "Manuscrit",
+    "stepSubmit": "Soumettre",
+    "formNote": "Ces quatre pastilles servent seulement à déposer le texte. Les dix étapes du tour sont dans la liste au-dessus.",
+    "corresponding": "correspondant",
+    "authorName": "Nom de l'auteur",
+    "addAuthor": "Ajouter un auteur",
+    "noFile": "Aucun PDF pour le moment.",
+    "needDraft": "Enregistrez d'abord le brouillon dans Détails. Le fichier se dépose à l'étape Manuscrit.",
+    "fileHint": "PDF uniquement, 20 Mo maximum. Le fichier reste dans un stockage privé.",
+    "submitHint": "La soumission fige le manuscrit. Le retrait est le seul changement ultérieur dans cette phase.",
+    "submit": "Soumettre l'article",
+    "withdraw": "Retirer l'article",
+    "failed": "La soumission n'a pas pu être enregistrée."
+  },
+  "reviews": {
+    "title": "Invitations d'évaluation",
+    "intro": "Acceptez une évaluation, puis envoyez une note de 1 à 10 et des commentaires. Les notes au comité restent cachées aux auteurs.",
+    "recommendation": "Recommandation",
+    "score": "Note",
+    "confidence": "Confiance",
+    "comments": "Commentaires pour les auteurs",
+    "committee": "Commentaires pour le comité",
+    "send": "Envoyer l'évaluation",
+    "empty": "Vous n'avez aucune invitation d'évaluation.",
+    "accept": "Accepter",
+    "decline": "Refuser",
+    "openPaper": "Ouvrir le manuscrit",
+    "assignTitle": "Attribuer un évaluateur",
+    "assignIntro": "Seuls les articles soumis peuvent être attribués. Un conflit d'intérêts ou une attribution déjà active est refusé.",
+    "chooseConference": "Choisir une conférence",
+    "choosePaper": "Choisir un article",
+    "chooseReviewer": "Choisir un évaluateur",
+    "assign": "Envoyer l'invitation",
+    "assigned": "Invitation envoyée.",
+    "statuses": {
+      "INVITED": "Invitation",
+      "ACCEPTED": "Acceptée",
+      "DECLINED": "Refusée",
+      "IN_PROGRESS": "En cours",
+      "COMPLETED": "Rendue",
+      "CANCELLED": "Annulée",
+      "OVERDUE": "En retard"
+    }
+  },
+  "workflow": {
+    "followTitle": "Après la décision",
+    "programTitle": "Programme",
+    "noDecision": "Aucune décision publiée.",
+    "accepted": "Accepté",
+    "camera": "Version finale",
+    "similarity": "Similarité",
+    "copyright": "Copyright",
+    "ready": "Prêt à publier",
+    "yes": "oui",
+    "no": "non",
+    "underThreshold": "sous 20 %",
+    "notSatisfied": "20 % ne suffit pas",
+    "save": "Enregistrer",
+    "saved": "Enregistré.",
+    "room": "Nom de la salle",
+    "remind": "Relancer les évaluateurs",
+    "reminded": "Relances envoyées.",
+    "export": "Exporter les métadonnées",
+    "report": "Rapport de similarité",
+    "verify": "Vérifier le rapport",
+    "verified": "Rapport vérifié.",
+    "presentationScore": "Note de présentation",
+    "averageScore": "Note moyenne",
+    "openReviews": "Évaluations ouvertes",
+    "overdue": "En retard",
+    "round": "Tour de soumission",
+    "stepDone": "Validé",
+    "stepPending": "Pas encore",
+    "stepFailed": "Refusé",
+    "editable": "Version éditable",
+    "templateOk": "Gabarit respecté",
+    "choosePdf": "Choisir un PDF",
+    "documents": "Fichiers",
+    "history": "Fichiers déposés",
+    "actions": "Actions",
+    "files": {
+      "MANUSCRIPT": "Manuscrit",
+      "REVISION": "Révision",
+      "CAMERA_READY": "Version finale",
+      "EDITABLE": "Version éditable",
+      "SIMILARITY": "Rapport de similarité",
+      "COPYRIGHT": "Copyright"
+    },
+    "choosePaper": "Article",
+    "decide": "Enregistrer la décision",
+    "letter": "Lettre aux auteurs",
+    "publish": "Publier la décision",
+    "outcomeAccepted": "Accepté",
+    "outcomeConditional": "Accepté sous conditions",
+    "outcomeRevision": "Révision demandée",
+    "outcomeRejected": "Refusé",
+    "steps": {
+      "submission": "Soumission",
+      "notification": "Notification",
+      "track": "Piste",
+      "presentation": "Présentation",
+      "registration": "Inscription",
+      "editable": "Éditable",
+      "cameraPdf": "PDF final",
+      "template": "Gabarit",
+      "similarity": "Similarité",
+      "copyright": "Droits"
+    }
+  },
+  "home": {
+    "hello": "Bonjour,",
+    "search": "Rechercher",
+    "subjects": "Espace",
+    "work": "Vos articles",
+    "empty": "Rien pour le moment. Ouvrez Soumissions pour créer un brouillon.",
+    "overview": "Vue d'ensemble",
+    "attention": "À faire",
+    "papersCount": "Articles",
+    "waiting": "En attente",
+    "doneSteps": "Complets",
+    "stats": "Statistiques",
+    "drafts": "Brouillons",
+    "submitted": "Soumis",
+    "parcours": "Parcours",
+    "doctorate": "Doctorat",
+    "completeOf": "{{done}} sur {{total}} sont complets",
+    "waitingHint": "Étapes encore ouvertes",
+    "blockedHint": "Étapes à corriger",
+    "scoreHint": "Moyenne des évaluations",
+    "openReviewsHint": "Pas encore rendues",
+    "overdueHint": "Délai dépassé",
+    "boardAll": "Tous",
+    "boardWaiting": "En attente",
+    "boardBlocked": "Bloqués",
+    "boardClear": "Complets",
+    "conference": "Conférence",
+    "open": "Continuer",
+    "next": "Suite",
+    "blocked": "Bloqué",
+    "progress": "{{done}} / {{total}} étapes",
+    "clear": "Parcours complet",
+    "join": "Rejoindre",
+    "joinTitle": "Conférences ouvertes",
+    "joinBody": "Un compte neuf n'a pas d'articles tant qu'il n'a pas rejoint une conférence.",
+    "actions": {
+      "submission": {
+        "pending": "Le brouillon n'est pas encore soumis.",
+        "failed": "L'article a été retiré."
+      },
+      "notification": {
+        "pending": "En attente de la décision.",
+        "failed": "L'article a été refusé."
+      },
+      "track": {
+        "pending": "La piste n'est pas choisie.",
+        "failed": "La piste n'est pas choisie."
+      },
+      "presentation": {
+        "pending": "L'exposé n'est pas encore au programme.",
+        "failed": "L'exposé n'est pas encore au programme."
+      },
+      "registration": {
+        "pending": "L'inscription n'est pas confirmée.",
+        "failed": "L'inscription a été refusée."
+      },
+      "editable": {
+        "pending": "La version éditable manque.",
+        "failed": "La version éditable manque."
+      },
+      "cameraPdf": {
+        "pending": "Le PDF final manque.",
+        "failed": "Le PDF final manque."
+      },
+      "template": {
+        "pending": "Le gabarit n'est pas encore validé.",
+        "failed": "Le gabarit n'est pas encore validé."
+      },
+      "similarity": {
+        "pending": "Le rapport de similarité n'est pas vérifié.",
+        "failed": "La similarité dépasse 20 %."
+      },
+      "copyright": {
+        "pending": "La cession de droits n'est pas déposée.",
+        "failed": "La cession de droits a été refusée."
+      }
+    },
+    "manage": "Ouvrir la conférence",
+    "program": "Programme",
+    "publication": "Publication",
+    "reviewQueue": "Vos évaluations",
+    "noConference": "Vous n'êtes dans aucune conférence.",
+    "chairPapers": "Articles de la conférence",
+    "chairEmpty": "Aucun article dans cette conférence.",
+    "reviewEmpty": "Aucune évaluation pour le moment.",
+    "toAccept": "À accepter",
+    "inProgress": "En cours",
+    "returned": "Rendues",
+    "invitations": "Invitations",
+    "decisions": "Décisions"
+  },
+  "errors": {
+    "verifyEmail": "Confirmez l'adresse avant de vous connecter. En local, ouvrez le lien dans Mailpit.",
+    "invalidLogin": "Adresse ou mot de passe inconnu.",
+    "emailTaken": "Un compte existe déjà avec cette adresse.",
+    "alreadyMember": "Vous êtes déjà membre de cette conférence.",
+    "conferenceMissing": "Cette conférence n'est pas disponible.",
+    "tooMany": "Trop de tentatives. Attendez un instant, puis réessayez.",
+    "failed": "La demande a échoué.",
+    "csrf": "La requête sécurisée n'a pas pu être préparée. Rechargez la page.",
+    "signIn": "Connexion requise.",
+    "mfa": "Le code MFA est requis.",
+    "decision": "Seule une soumission peut recevoir une décision.",
+    "similarityHigh": "20 % n'est pas sous le seuil.",
+    "similarityFile": "Déposez le rapport de similarité avant de le vérifier."
+  },
+  "footer": {
+    "note": "Fondation de développement. Ne l'utilisez pas encore pour de vrais manuscrits."
+  }
+}

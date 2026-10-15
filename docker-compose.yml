@@ -1,0 +1,71 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-scholarflow}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-scholarflow}
+      POSTGRES_DB: ${POSTGRES_DB:-scholarflow}
+    ports:
+      - '${POSTGRES_PORT:-5432}:5432'
+    volumes:
+      - scholarflow-postgres:/var/lib/postgresql/data
+    healthcheck:
+      test:
+        [
+          'CMD-SHELL',
+          'pg_isready -U ${POSTGRES_USER:-scholarflow} -d ${POSTGRES_DB:-scholarflow}',
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - '${REDIS_PORT:-6379}:6379'
+    volumes:
+      - scholarflow-redis:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address ':9001'
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-scholarflow}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-scholarflow-dev-secret}
+    ports:
+      - '${MINIO_PORT:-9000}:9000'
+      - '${MINIO_CONSOLE_PORT:-9001}:9001'
+    volumes:
+      - scholarflow-minio:/data
+
+  minio-init:
+    image: minio/mc:latest
+    depends_on:
+      - minio
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-scholarflow}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-scholarflow-dev-secret}
+      MINIO_BUCKET: ${MINIO_BUCKET:-scholarflow}
+    entrypoint: >
+      /bin/sh -c "
+      until mc alias set local http://minio:9000 $$MINIO_ROOT_USER $$MINIO_ROOT_PASSWORD; do sleep 2; done;
+      mc mb --ignore-existing local/$$MINIO_BUCKET;
+      exit 0;
+      "
+    restart: 'no'
+
+  mailpit:
+    image: axllent/mailpit:latest
+    ports:
+      - '${SMTP_PORT:-1025}:1025'
+      - '${MAILPIT_UI_PORT:-8025}:8025'
+
+volumes:
+  scholarflow-postgres:
+  scholarflow-redis:
+  scholarflow-minio:

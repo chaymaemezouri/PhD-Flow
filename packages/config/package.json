@@ -1,0 +1,9 @@
+{
+  "name": "@scholarflow/config",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Shared TypeScript and tooling defaults for ScholarFlow",
+  "files": [
+    "tsconfig"
+  ]
+}

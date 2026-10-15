@@ -1,0 +1,607 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum PlatformRole {
+  RESEARCHER
+  SYSTEM_ADMIN
+}
+
+enum AccountLanguage {
+  en
+  fr
+}
+
+enum OutboxStatus {
+  PENDING
+  SENT
+  FAILED
+}
+
+model User {
+  id              String       @id @default(uuid()) @db.Uuid
+  email           String       @unique
+  passwordHash    String       @map("password_hash")
+  platformRole    PlatformRole @default(RESEARCHER) @map("platform_role")
+  emailVerifiedAt DateTime?    @map("email_verified_at")
+  mfaEnabled      Boolean      @default(false) @map("mfa_enabled")
+  mfaSecret       String?      @map("mfa_secret")
+  createdAt       DateTime     @default(now()) @map("created_at")
+  updatedAt       DateTime     @updatedAt @map("updated_at")
+  profile         Profile?
+  sessions        Session[]
+  verificationTokens  EmailVerificationToken[]
+  passwordResetTokens PasswordResetToken[]
+  auditLogs       AuditLog[]
+  memberships     Membership[]
+  invitationsSent ConferenceInvitation[] @relation("InvitedBy")
+  createdConferences Conference[]         @relation("ConferenceCreator")
+  papersCreated       Paper[]             @relation("PaperCreator")
+  paperFilesUploaded  PaperFile[]         @relation("PaperFileUploader")
+  paperStatusEvents   PaperStatusEvent[]  @relation("PaperStatusActor")
+  reviewAssignments   ReviewAssignment[]  @relation("AssignmentReviewer")
+  assignmentsInvited  ReviewAssignment[]  @relation("AssignmentInviter")
+  declaredConflicts   ConflictDeclaration[] @relation("ConflictSubject")
+  conflictsDeclared   ConflictDeclaration[] @relation("ConflictDeclarer")
+  decisionsMade       Decision[]            @relation("DecisionMaker")
+  registrations       Registration[]
+
+  @@map("users")
+}
+
+model Profile {
+  userId           String          @id @db.Uuid @map("user_id")
+  firstName        String          @map("first_name")
+  lastName         String          @map("last_name")
+  academicTitle    String?         @map("academic_title")
+  institution      String?
+  laboratory       String?
+  department       String?
+  country          String?
+  city             String?
+  disciplines      String[]        @default([])
+  interests        String?
+  orcid            String?
+  googleScholarUrl String?         @map("google_scholar_url")
+  website          String?
+  biography        String?
+  photoPath        String?         @map("photo_path")
+  education        Json            @default("[]")
+  language         AccountLanguage @default(en)
+  updatedAt        DateTime        @updatedAt @map("updated_at")
+  user             User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("profiles")
+}
+
+model Session {
+  id        String    @id @default(uuid()) @db.Uuid
+  userId    String    @map("user_id") @db.Uuid
+  tokenHash String    @unique @map("token_hash")
+  expiresAt DateTime  @map("expires_at")
+  revokedAt DateTime? @map("revoked_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("sessions")
+}
+
+model EmailVerificationToken {
+  id        String    @id @default(uuid()) @db.Uuid
+  userId    String    @map("user_id") @db.Uuid
+  tokenHash String    @unique @map("token_hash")
+  expiresAt DateTime  @map("expires_at")
+  usedAt    DateTime? @map("used_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("email_verification_tokens")
+}
+
+model PasswordResetToken {
+  id        String    @id @default(uuid()) @db.Uuid
+  userId    String    @map("user_id") @db.Uuid
+  tokenHash String    @unique @map("token_hash")
+  expiresAt DateTime  @map("expires_at")
+  usedAt    DateTime? @map("used_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("password_reset_tokens")
+}
+
+model EmailOutbox {
+  id        String       @id @default(uuid()) @db.Uuid
+  recipient String
+  template  String
+  status    OutboxStatus @default(PENDING)
+  attempts  Int          @default(0)
+  lastError String?      @map("last_error")
+  subject   String       @default("")
+  body      String       @default("")
+  sentAt    DateTime?    @map("sent_at")
+  createdAt DateTime     @default(now()) @map("created_at")
+
+  @@index([status, createdAt])
+  @@map("email_outbox")
+}
+
+model AuditLog {
+  id           String   @id @default(uuid()) @db.Uuid
+  actorId      String?  @map("actor_id") @db.Uuid
+  action       String
+  resourceType String   @map("resource_type")
+  resourceId   String?  @map("resource_id")
+  metadata     Json     @default("{}")
+  createdAt    DateTime @default(now()) @map("created_at")
+  actor        User?    @relation(fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([actorId, createdAt])
+  @@index([resourceType, resourceId])
+  @@map("audit_logs")
+}
+
+enum ConferenceVisibility {
+  PUBLIC
+  UNLISTED
+}
+
+enum ConferenceStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+enum ReviewMode {
+  SINGLE_BLIND
+  DOUBLE_BLIND
+  OPEN
+}
+
+enum ConferenceRole {
+  CHAIR
+  ADMINISTRATOR
+  COMMITTEE
+  REVIEWER
+  AUTHOR
+}
+
+enum MembershipStatus {
+  INVITED
+  ACTIVE
+  DECLINED
+  REMOVED
+}
+
+enum DeadlineKind {
+  SUBMISSION
+  REVIEW
+  NOTIFICATION
+  CAMERA_READY
+  REGISTRATION
+}
+
+enum TemplateKind {
+  INVITATION
+  DECISION_LETTER
+  COPYRIGHT
+  NOTIFICATION
+}
+
+enum PaperStatus {
+  DRAFT
+  SUBMITTED
+  WITHDRAWN
+}
+
+enum PaperFileKind {
+  MANUSCRIPT
+  REVISION
+  CAMERA_READY
+  EDITABLE
+  SIMILARITY
+  COPYRIGHT
+}
+
+enum Recommendation {
+  ACCEPT
+  WEAK_ACCEPT
+  BORDERLINE
+  WEAK_REJECT
+  REJECT
+}
+
+enum DecisionOutcome {
+  ACCEPTED
+  CONDITIONALLY_ACCEPTED
+  REVISION_REQUIRED
+  REJECTED
+}
+
+enum DecisionStatus {
+  DRAFT
+  PUBLISHED
+}
+
+enum CopyrightStatus {
+  PENDING
+  VALIDATED
+  REJECTED
+}
+
+enum RegistrationStatus {
+  REQUESTED
+  VERIFIED
+  REJECTED
+}
+
+enum PaymentStatus {
+  NOT_REQUIRED
+  PENDING
+  VERIFIED
+}
+
+enum AssignmentStatus {
+  INVITED
+  ACCEPTED
+  DECLINED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+  OVERDUE
+}
+
+model Conference {
+  id               String               @id @default(uuid()) @db.Uuid
+  slug             String               @unique
+  name             String
+  shortName        String               @map("short_name")
+  description      String               @default("")
+  website          String?
+  city             String?
+  country          String?
+  startsOn         DateTime?            @map("starts_on") @db.Date
+  endsOn           DateTime?            @map("ends_on") @db.Date
+  timezone         String               @default("UTC")
+  visibility       ConferenceVisibility @default(PUBLIC)
+  status           ConferenceStatus     @default(DRAFT)
+  reviewMode       ReviewMode           @default(DOUBLE_BLIND) @map("review_mode")
+  paymentsEnabled  Boolean              @default(false) @map("payments_enabled")
+  createdById      String?              @map("created_by_id") @db.Uuid
+  nextPaperNumber  Int                  @default(0) @map("next_paper_number")
+  createdAt        DateTime             @default(now()) @map("created_at")
+  updatedAt        DateTime             @updatedAt @map("updated_at")
+  createdBy        User?                @relation("ConferenceCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  tracks           Track[]
+  deadlines        Deadline[]
+  templates        ConferenceTemplate[]
+  memberships      Membership[]
+  invitations      ConferenceInvitation[]
+  papers           Paper[]
+  conflicts        ConflictDeclaration[]
+  rooms            Room[]
+  sessions         ProgramSession[]
+  registrations    Registration[]
+
+  @@index([status, visibility])
+  @@map("conferences")
+}
+
+model Track {
+  id           String     @id @default(uuid()) @db.Uuid
+  conferenceId String     @map("conference_id") @db.Uuid
+  name         String
+  code         String
+  description  String     @default("")
+  sortOrder    Int        @default(0) @map("sort_order")
+  conference   Conference @relation(fields: [conferenceId], references: [id], onDelete: Cascade)
+  deadlines    Deadline[]
+  papers       Paper[]
+
+  @@unique([conferenceId, code])
+  @@map("tracks")
+}
+
+model Deadline {
+  id           String       @id @default(uuid()) @db.Uuid
+  conferenceId String       @map("conference_id") @db.Uuid
+  trackId      String?      @map("track_id") @db.Uuid
+  kind         DeadlineKind
+  label        String       @default("")
+  dueAt        DateTime     @map("due_at")
+  conference   Conference   @relation(fields: [conferenceId], references: [id], onDelete: Cascade)
+  track        Track?       @relation(fields: [trackId], references: [id], onDelete: SetNull)
+
+  @@index([conferenceId, dueAt])
+  @@map("deadlines")
+}
+
+model ConferenceTemplate {
+  id           String       @id @default(uuid()) @db.Uuid
+  conferenceId String       @map("conference_id") @db.Uuid
+  kind         TemplateKind
+  language     AccountLanguage @default(en)
+  subject      String
+  body         String
+  updatedAt    DateTime     @updatedAt @map("updated_at")
+  conference   Conference   @relation(fields: [conferenceId], references: [id], onDelete: Cascade)
+
+  @@unique([conferenceId, kind, language])
+  @@map("conference_templates")
+}
+
+model Membership {
+  id           String           @id @default(uuid()) @db.Uuid
+  conferenceId String           @map("conference_id") @db.Uuid
+  userId       String           @map("user_id") @db.Uuid
+  role         ConferenceRole
+  status       MembershipStatus @default(ACTIVE)
+  createdAt    DateTime         @default(now()) @map("created_at")
+  updatedAt    DateTime         @updatedAt @map("updated_at")
+  conference   Conference       @relation(fields: [conferenceId], references: [id], onDelete: Cascade)
+  user         User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([conferenceId, userId])
+  @@index([userId, status])
+  @@map("memberships")
+}
+
+model ConferenceInvitation {
+  id           String         @id @default(uuid()) @db.Uuid
+  conferenceId String         @map("conference_id") @db.Uuid
+  email        String
+  role         ConferenceRole
+  tokenHash    String         @unique @map("token_hash")
+  expiresAt    DateTime       @map("expires_at")
+  acceptedAt   DateTime?      @map("accepted_at")
+  declinedAt   DateTime?      @map("declined_at")
+  invitedById  String?        @map("invited_by_id") @db.Uuid
+  createdAt    DateTime       @default(now()) @map("created_at")
+  conference   Conference     @relation(fields: [conferenceId], references: [id], onDelete: Cascade)
+  invitedBy    User?          @relation("InvitedBy", fields: [invitedById], references: [id], onDelete: SetNull)
+
+  @@index([conferenceId, email])
+  @@map("conference_invitations")
+}
+
+model Paper {
+  id           String       @id @default(uuid()) @db.Uuid
+  conferenceId String       @map("conference_id") @db.Uuid
+  trackId      String?      @map("track_id") @db.Uuid
+  publicId     String?      @unique @map("public_id")
+  title        String
+  abstract     String       @default("")
+  keywords     String[]     @default([])
+  status       PaperStatus  @default(DRAFT)
+  submittedAt         DateTime? @map("submitted_at")
+  withdrawnAt         DateTime? @map("withdrawn_at")
+  templateValidatedAt DateTime? @map("template_validated_at")
+  createdById  String       @map("created_by_id") @db.Uuid
+  createdAt    DateTime     @default(now()) @map("created_at")
+  updatedAt    DateTime     @updatedAt @map("updated_at")
+  conference   Conference   @relation(fields: [conferenceId], references: [id], onDelete: Cascade)
+  track        Track?       @relation(fields: [trackId], references: [id], onDelete: SetNull)
+  createdBy    User         @relation("PaperCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  authors      PaperAuthor[]
+  files        PaperFile[]
+  events       PaperStatusEvent[]
+  assignments  ReviewAssignment[]
+  conflicts    ConflictDeclaration[]
+  decision     Decision?
+  similarity   SimilarityReport?
+  copyright    CopyrightRecord?
+  presentation Presentation?
+
+  @@index([conferenceId, status])
+  @@index([createdById])
+  @@map("papers")
+}
+
+model PaperAuthor {
+  id            String  @id @default(uuid()) @db.Uuid
+  paperId       String  @map("paper_id") @db.Uuid
+  position      Int
+  firstName     String  @map("first_name")
+  lastName      String  @map("last_name")
+  email         String
+  affiliation   String  @default("")
+  corresponding Boolean @default(false)
+  paper         Paper   @relation(fields: [paperId], references: [id], onDelete: Cascade)
+
+  @@unique([paperId, position])
+  @@map("paper_authors")
+}
+
+model PaperFile {
+  id           String        @id @default(uuid()) @db.Uuid
+  paperId      String        @map("paper_id") @db.Uuid
+  kind         PaperFileKind
+  storageKey   String        @map("storage_key")
+  originalName String        @map("original_name")
+  contentType  String        @map("content_type")
+  sizeBytes    Int           @map("size_bytes")
+  sha256       String
+  uploadedById String        @map("uploaded_by_id") @db.Uuid
+  createdAt    DateTime      @default(now()) @map("created_at")
+  paper        Paper         @relation(fields: [paperId], references: [id], onDelete: Cascade)
+  uploadedBy   User          @relation("PaperFileUploader", fields: [uploadedById], references: [id], onDelete: Restrict)
+
+  @@index([paperId, kind])
+  @@map("paper_files")
+}
+
+model PaperStatusEvent {
+  id         String       @id @default(uuid()) @db.Uuid
+  paperId    String       @map("paper_id") @db.Uuid
+  fromStatus PaperStatus? @map("from_status")
+  toStatus   PaperStatus  @map("to_status")
+  actorId    String?      @map("actor_id") @db.Uuid
+  reason     String       @default("")
+  createdAt  DateTime     @default(now()) @map("created_at")
+  paper      Paper        @relation(fields: [paperId], references: [id], onDelete: Cascade)
+  actor      User?        @relation("PaperStatusActor", fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([paperId, createdAt])
+  @@map("paper_status_events")
+}
+
+model ReviewAssignment {
+  id           String           @id @default(uuid()) @db.Uuid
+  paperId      String           @map("paper_id") @db.Uuid
+  reviewerId   String           @map("reviewer_id") @db.Uuid
+  status       AssignmentStatus @default(INVITED)
+  tokenHash    String           @unique @map("token_hash")
+  expiresAt    DateTime         @map("expires_at")
+  respondedAt  DateTime?        @map("responded_at")
+  invitedById  String?          @map("invited_by_id") @db.Uuid
+  createdAt    DateTime         @default(now()) @map("created_at")
+  updatedAt    DateTime         @updatedAt @map("updated_at")
+  paper        Paper            @relation(fields: [paperId], references: [id], onDelete: Cascade)
+  reviewer     User             @relation("AssignmentReviewer", fields: [reviewerId], references: [id], onDelete: Cascade)
+  invitedBy    User?            @relation("AssignmentInviter", fields: [invitedById], references: [id], onDelete: SetNull)
+  form         ReviewForm?
+
+  @@index([paperId, reviewerId])
+  @@index([reviewerId, status])
+  @@map("review_assignments")
+}
+
+model ConflictDeclaration {
+  id           String   @id @default(uuid()) @db.Uuid
+  conferenceId String   @map("conference_id") @db.Uuid
+  userId       String   @map("user_id") @db.Uuid
+  paperId      String?  @map("paper_id") @db.Uuid
+  authorEmail  String?  @map("author_email")
+  reason       String   @default("")
+  declaredById String?  @map("declared_by_id") @db.Uuid
+  createdAt    DateTime @default(now()) @map("created_at")
+  conference   Conference @relation(fields: [conferenceId], references: [id], onDelete: Cascade)
+  user         User     @relation("ConflictSubject", fields: [userId], references: [id], onDelete: Cascade)
+  paper        Paper?   @relation(fields: [paperId], references: [id], onDelete: Cascade)
+  declaredBy   User?    @relation("ConflictDeclarer", fields: [declaredById], references: [id], onDelete: SetNull)
+
+  @@index([conferenceId, userId])
+  @@map("conflict_declarations")
+}
+
+model ReviewForm {
+  id                   String         @id @default(uuid()) @db.Uuid
+  assignmentId         String         @unique @map("assignment_id") @db.Uuid
+  recommendation       Recommendation
+  score                Int
+  confidence           Int
+  commentsToAuthor     String         @default("") @map("comments_to_author")
+  commentsToCommittee  String         @default("") @map("comments_to_committee")
+  submittedAt          DateTime       @default(now()) @map("submitted_at")
+  assignment           ReviewAssignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+
+  @@map("review_forms")
+}
+
+model Decision {
+  id          String          @id @default(uuid()) @db.Uuid
+  paperId     String          @unique @map("paper_id") @db.Uuid
+  outcome     DecisionOutcome
+  letter      String          @default("")
+  status      DecisionStatus  @default(DRAFT)
+  decidedById String?         @map("decided_by_id") @db.Uuid
+  publishedAt DateTime?       @map("published_at")
+  createdAt   DateTime        @default(now()) @map("created_at")
+  updatedAt   DateTime        @updatedAt @map("updated_at")
+  paper       Paper           @relation(fields: [paperId], references: [id], onDelete: Cascade)
+  decidedBy   User?           @relation("DecisionMaker", fields: [decidedById], references: [id], onDelete: SetNull)
+
+  @@map("decisions")
+}
+
+model SimilarityReport {
+  id         String   @id @default(uuid()) @db.Uuid
+  paperId    String   @unique @map("paper_id") @db.Uuid
+  percentage Float
+  note       String   @default("")
+  verifiedAt DateTime? @map("verified_at")
+  createdAt  DateTime @default(now()) @map("created_at")
+  paper      Paper    @relation(fields: [paperId], references: [id], onDelete: Cascade)
+
+  @@map("similarity_reports")
+}
+
+model CopyrightRecord {
+  id        String          @id @default(uuid()) @db.Uuid
+  paperId   String          @unique @map("paper_id") @db.Uuid
+  status    CopyrightStatus @default(PENDING)
+  createdAt DateTime        @default(now()) @map("created_at")
+  paper     Paper           @relation(fields: [paperId], references: [id], onDelete: Cascade)
+
+  @@map("copyright_records")
+}
+
+model Registration {
+  id            String             @id @default(uuid()) @db.Uuid
+  conferenceId  String             @map("conference_id") @db.Uuid
+  userId        String             @map("user_id") @db.Uuid
+  status        RegistrationStatus @default(REQUESTED)
+  paymentStatus PaymentStatus      @default(NOT_REQUIRED) @map("payment_status")
+  createdAt     DateTime           @default(now()) @map("created_at")
+  conference    Conference         @relation(fields: [conferenceId], references: [id], onDelete: Cascade)
+  user          User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([conferenceId, userId])
+  @@map("registrations")
+}
+
+model Room {
+  id           String           @id @default(uuid()) @db.Uuid
+  conferenceId String           @map("conference_id") @db.Uuid
+  name         String
+  capacity     Int              @default(40)
+  conference   Conference       @relation(fields: [conferenceId], references: [id], onDelete: Cascade)
+  sessions     ProgramSession[]
+
+  @@map("rooms")
+}
+
+model ProgramSession {
+  id           String         @id @default(uuid()) @db.Uuid
+  conferenceId String         @map("conference_id") @db.Uuid
+  roomId       String         @map("room_id") @db.Uuid
+  title        String
+  startsAt     DateTime       @map("starts_at")
+  endsAt       DateTime       @map("ends_at")
+  conference   Conference     @relation(fields: [conferenceId], references: [id], onDelete: Cascade)
+  room         Room           @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  presentations Presentation[]
+
+  @@map("program_sessions")
+}
+
+model Presentation {
+  id        String         @id @default(uuid()) @db.Uuid
+  sessionId String         @map("session_id") @db.Uuid
+  paperId   String         @unique @map("paper_id") @db.Uuid
+  score     Int?
+  comment   String         @default("")
+  session   ProgramSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  paper     Paper          @relation(fields: [paperId], references: [id], onDelete: Cascade)
+
+  @@map("presentations")
+}
+
+/// Platform key-value metadata.
+model PlatformMetadata {
+  id        String   @id @default(uuid()) @db.Uuid
+  key       String   @unique
+  value     String
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("platform_metadata")
+}
