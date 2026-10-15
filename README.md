@@ -64,11 +64,11 @@ infrastructure  Notes for the local services
 
 `npm run db:seed` replaces the local demonstration records. Every account uses the password `Demo-scholar-12`. These addresses are for a local database only.
 
-| Email | Role |
-| ----- | ---- |
-| `admin@demo.scholarflow.test` | Conference administrator (chair of ScholarFlow Demo 2027) |
-| `reviewer@demo.scholarflow.test` | Reviewer, with one accepted double-blind assignment |
-| `chercheur@demo.scholarflow.test` | PhD researcher, with one submitted paper and one draft |
+| Email                             | Role                                                      |
+| --------------------------------- | --------------------------------------------------------- |
+| `admin@demo.scholarflow.test`     | Conference administrator (chair of ScholarFlow Demo 2027) |
+| `reviewer@demo.scholarflow.test`  | Reviewer, with one accepted double-blind assignment       |
+| `chercheur@demo.scholarflow.test` | PhD researcher, with one submitted paper and one draft    |
 
 The public directory lists the demo conference. Author names stay hidden from the reviewer.
 

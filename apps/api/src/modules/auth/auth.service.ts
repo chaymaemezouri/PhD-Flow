@@ -275,7 +275,10 @@ export class AuthService {
 
   async beginMfa(userId: string, email: string) {
     const secret = newTotpSecret();
-    await this.prisma.user.update({ where: { id: userId }, data: { mfaSecret: secret, mfaEnabled: false } });
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { mfaSecret: secret, mfaEnabled: false },
+    });
     return { uri: totpUri(email, secret) };
   }
 
@@ -392,6 +395,34 @@ export class AuthService {
         metadata,
       },
     });
+  }
+
+  async messages(userId: string) {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user) {
+      return [];
+    }
+    const rows = await this.prisma.emailOutbox.findMany({
+      where: { recipient: user.email },
+      orderBy: { createdAt: 'desc' },
+      take: 20,
+      select: {
+        id: true,
+        subject: true,
+        body: true,
+        status: true,
+        template: true,
+        createdAt: true,
+      },
+    });
+    return rows.map((row) => ({
+      id: row.id,
+      subject: row.subject,
+      body: row.body,
+      status: row.status,
+      template: row.template,
+      createdAt: row.createdAt.toISOString(),
+    }));
   }
 
   private requireProfile(user: User & { profile: Profile | null }): UserWithProfile {

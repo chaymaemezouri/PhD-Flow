@@ -30,7 +30,10 @@ import type { AuthenticatedUser } from '../auth/auth.types.js';
 import { EmailService } from '../auth/email.service.js';
 import { ObjectStorage } from '../papers/object-storage.js';
 
-const CHAIRS = new Set<ConferenceRole>([ConferenceRole.CHAIR, ConferenceRole.ADMINISTRATOR]);
+const CHAIRS = new Set<ConferenceRole>([
+  ConferenceRole.CHAIR,
+  ConferenceRole.ADMINISTRATOR,
+]);
 const ACCEPTED = new Set<DecisionOutcome>([
   DecisionOutcome.ACCEPTED,
   DecisionOutcome.CONDITIONALLY_ACCEPTED,
@@ -76,7 +79,11 @@ export class WorkflowService {
           name: { contains: needle, mode: 'insensitive' },
           OR: [
             { status: 'PUBLISHED', visibility: 'PUBLIC' },
-            { memberships: { some: { userId: actor.id, status: MembershipStatus.ACTIVE } } },
+            {
+              memberships: {
+                some: { userId: actor.id, status: MembershipStatus.ACTIVE },
+              },
+            },
           ],
         },
         take: 8,
@@ -106,7 +113,8 @@ export class WorkflowService {
   async followUp(actor: AuthenticatedUser, paperId: string) {
     const paper = await this.loadPaper(paperId);
     this.assertReader(actor, paper);
-    const published = paper.decision?.status === DecisionStatus.PUBLISHED ? paper.decision : null;
+    const published =
+      paper.decision?.status === DecisionStatus.PUBLISHED ? paper.decision : null;
     const chair = this.isChair(actor, paper.conference.memberships);
     return {
       paperId: paper.id,
@@ -119,12 +127,14 @@ export class WorkflowService {
       similarity: paper.similarity
         ? {
             percentage: paper.similarity.percentage,
-            satisfied: paper.similarity.percentage < 20 && paper.similarity.verifiedAt !== null,
+            satisfied:
+              paper.similarity.percentage < 20 && paper.similarity.verifiedAt !== null,
             verified: paper.similarity.verifiedAt !== null,
             note: paper.similarity.note,
           }
         : null,
       copyright: paper.copyright?.status ?? null,
+      doi: paper.doi,
       versions: [...paper.files]
         .sort((left, right) => left.createdAt.getTime() - right.createdAt.getTime())
         .map((file) => ({
@@ -177,12 +187,18 @@ export class WorkflowService {
     if (paper.status === PaperStatus.WITHDRAWN) {
       throw new ForbiddenException('A withdrawn paper cannot receive a new file');
     }
-    const outcome = paper.decision?.status === DecisionStatus.PUBLISHED ? paper.decision.outcome : null;
+    const outcome =
+      paper.decision?.status === DecisionStatus.PUBLISHED ? paper.decision.outcome : null;
     if (kind === 'REVISION' && outcome !== DecisionOutcome.REVISION_REQUIRED) {
-      throw new ForbiddenException('A revision file is allowed after a revision decision');
+      throw new ForbiddenException(
+        'A revision file is allowed after a revision decision',
+      );
     }
     if (
-      (kind === 'CAMERA_READY' || kind === 'EDITABLE' || kind === 'COPYRIGHT' || kind === 'SIMILARITY') &&
+      (kind === 'CAMERA_READY' ||
+        kind === 'EDITABLE' ||
+        kind === 'COPYRIGHT' ||
+        kind === 'SIMILARITY') &&
       (!outcome || !ACCEPTED.has(outcome))
     ) {
       throw new ForbiddenException('This file is allowed after acceptance');
@@ -214,16 +230,26 @@ export class WorkflowService {
     }
   }
 
-  async saveSimilarity(actor: AuthenticatedUser, paperId: string, input: SimilarityInput) {
+  async saveSimilarity(
+    actor: AuthenticatedUser,
+    paperId: string,
+    input: SimilarityInput,
+  ) {
     const paper = await this.loadPaper(paperId);
     this.assertAuthor(actor, paper);
-    const outcome = paper.decision?.status === DecisionStatus.PUBLISHED ? paper.decision.outcome : null;
+    const outcome =
+      paper.decision?.status === DecisionStatus.PUBLISHED ? paper.decision.outcome : null;
     if (!outcome || !ACCEPTED.has(outcome)) {
       throw new ForbiddenException('A similarity report follows acceptance');
     }
     return this.prisma.similarityReport.upsert({
       where: { paperId },
-      create: { paperId, percentage: input.percentage, note: input.note, verifiedAt: null },
+      create: {
+        paperId,
+        percentage: input.percentage,
+        note: input.note,
+        verifiedAt: null,
+      },
       update: { percentage: input.percentage, note: input.note, verifiedAt: null },
     });
   }
@@ -293,7 +319,9 @@ export class WorkflowService {
   }
 
   async register(actor: AuthenticatedUser, conferenceId: string) {
-    const conference = await this.prisma.conference.findUnique({ where: { id: conferenceId } });
+    const conference = await this.prisma.conference.findUnique({
+      where: { id: conferenceId },
+    });
     if (!conference || conference.status !== 'PUBLISHED') {
       throw new NotFoundException('Conference not found');
     }
@@ -302,13 +330,19 @@ export class WorkflowService {
       create: {
         conferenceId,
         userId: actor.id,
-        paymentStatus: conference.paymentsEnabled ? PaymentStatus.PENDING : PaymentStatus.NOT_REQUIRED,
+        paymentStatus: conference.paymentsEnabled
+          ? PaymentStatus.PENDING
+          : PaymentStatus.NOT_REQUIRED,
       },
       update: {},
     });
   }
 
-  async verifyRegistration(actor: AuthenticatedUser, conferenceId: string, userId: string) {
+  async verifyRegistration(
+    actor: AuthenticatedUser,
+    conferenceId: string,
+    userId: string,
+  ) {
     const conference = await this.loadConference(conferenceId);
     this.assertChair(actor, conference.memberships);
     const row = await this.prisma.registration.findUnique({
@@ -317,12 +351,31 @@ export class WorkflowService {
     if (!row) {
       throw new NotFoundException('Registration not found');
     }
+    if (row.paymentStatus === PaymentStatus.PENDING) {
+      throw new ForbiddenException('The registration fee is still unpaid');
+    }
+    return this.prisma.registration.update({
+      where: { id: row.id },
+      data: { status: RegistrationStatus.VERIFIED },
+    });
+  }
+
+  async pay(actor: AuthenticatedUser, conferenceId: string) {
+    const conference = await this.loadConference(conferenceId);
+    const row = await this.prisma.registration.findUnique({
+      where: { conferenceId_userId: { conferenceId, userId: actor.id } },
+    });
+    if (!row) {
+      throw new NotFoundException('Register before paying');
+    }
+    if (!conference.paymentsEnabled && row.paymentStatus !== PaymentStatus.PENDING) {
+      throw new ForbiddenException('Payment is not required');
+    }
     return this.prisma.registration.update({
       where: { id: row.id },
       data: {
+        paymentStatus: PaymentStatus.VERIFIED,
         status: RegistrationStatus.VERIFIED,
-        paymentStatus:
-          row.paymentStatus === PaymentStatus.PENDING ? PaymentStatus.VERIFIED : row.paymentStatus,
       },
     });
   }
@@ -330,7 +383,9 @@ export class WorkflowService {
   async addRoom(actor: AuthenticatedUser, conferenceId: string, input: RoomInput) {
     const conference = await this.loadConference(conferenceId);
     this.assertChair(actor, conference.memberships);
-    return this.prisma.room.create({ data: { conferenceId, name: input.name, capacity: input.capacity } });
+    return this.prisma.room.create({
+      data: { conferenceId, name: input.name, capacity: input.capacity },
+    });
   }
 
   async program(actor: AuthenticatedUser, conferenceId: string) {
@@ -341,11 +396,35 @@ export class WorkflowService {
     if (!member && actor.platformRole !== PlatformRole.SYSTEM_ADMIN) {
       throw new NotFoundException('Conference not found');
     }
-    return this.prisma.programSession.findMany({
-      where: { conferenceId },
-      include: { room: true, presentations: { include: { paper: { select: { title: true, publicId: true } } } } },
-      orderBy: { startsAt: 'asc' },
-    });
+    const [sessions, rooms] = await Promise.all([
+      this.prisma.programSession.findMany({
+        where: { conferenceId },
+        include: {
+          room: true,
+          presentations: {
+            include: { paper: { select: { title: true, publicId: true } } },
+          },
+        },
+        orderBy: { startsAt: 'asc' },
+      }),
+      this.prisma.room.findMany({ where: { conferenceId }, orderBy: { name: 'asc' } }),
+    ]);
+    return { sessions, rooms };
+  }
+
+  async publishDoi(actor: AuthenticatedUser, paperId: string) {
+    const paper = await this.loadPaper(paperId);
+    this.assertChair(actor, paper.conference.memberships);
+    if (!this.checklist(paper).ready) {
+      throw new ForbiddenException('The paper is not ready to publish');
+    }
+    if (paper.doi) {
+      return { doi: paper.doi };
+    }
+    const slug = (paper.publicId ?? paper.id).toLowerCase();
+    const doi = `10.5555/scholarflow.${slug}`;
+    await this.prisma.paper.update({ where: { id: paper.id }, data: { doi } });
+    return { doi };
   }
 
   async addSession(actor: AuthenticatedUser, conferenceId: string, input: SessionInput) {
@@ -382,7 +461,8 @@ export class WorkflowService {
     if (paper.conferenceId !== session.conferenceId) {
       throw new ForbiddenException('The paper belongs to another conference');
     }
-    const outcome = paper.decision?.status === DecisionStatus.PUBLISHED ? paper.decision.outcome : null;
+    const outcome =
+      paper.decision?.status === DecisionStatus.PUBLISHED ? paper.decision.outcome : null;
     if (!outcome || !ACCEPTED.has(outcome)) {
       throw new ForbiddenException('Only an accepted paper can be scheduled');
     }
@@ -400,7 +480,9 @@ export class WorkflowService {
   ) {
     const row = await this.prisma.presentation.findUnique({
       where: { id: presentationId },
-      include: { session: { include: { conference: { include: { memberships: true } } } } },
+      include: {
+        session: { include: { conference: { include: { memberships: true } } } },
+      },
     });
     if (!row) {
       throw new NotFoundException('Presentation not found');
@@ -422,12 +504,18 @@ export class WorkflowService {
     });
     const forms = await this.prisma.reviewForm.findMany({
       where: { assignment: { paper: { conferenceId } } },
-      select: { score: true, submittedAt: true, assignment: { select: { createdAt: true } } },
+      select: {
+        score: true,
+        submittedAt: true,
+        assignment: { select: { createdAt: true } },
+      },
     });
     const averageScore =
       forms.length === 0
         ? null
-        : Math.round((forms.reduce((sum, form) => sum + form.score, 0) / forms.length) * 10) / 10;
+        : Math.round(
+            (forms.reduce((sum, form) => sum + form.score, 0) / forms.length) * 10,
+          ) / 10;
     const openReviews = await this.prisma.reviewAssignment.count({
       where: {
         paper: { conferenceId },
@@ -438,10 +526,14 @@ export class WorkflowService {
       where: { paper: { conferenceId }, status: 'OVERDUE' },
     });
     const late = forms.filter(
-      (form) => form.submittedAt.getTime() - form.assignment.createdAt.getTime() > 14 * 24 * 60 * 60 * 1000,
+      (form) =>
+        form.submittedAt.getTime() - form.assignment.createdAt.getTime() >
+        14 * 24 * 60 * 60 * 1000,
     ).length;
     return {
-      papersByStatus: Object.fromEntries(papers.map((row) => [row.status, row._count._all])),
+      papersByStatus: Object.fromEntries(
+        papers.map((row) => [row.status, row._count._all]),
+      ),
       averageScore,
       openReviews,
       overdueReviews,
@@ -476,7 +568,13 @@ export class WorkflowService {
     this.assertChair(actor, conference.memberships);
     const papers = await this.prisma.paper.findMany({
       where: { conferenceId, status: PaperStatus.SUBMITTED },
-      include: { authors: true, decision: true, similarity: true, copyright: true, files: true },
+      include: {
+        authors: true,
+        decision: true,
+        similarity: true,
+        copyright: true,
+        files: true,
+      },
     });
     const header = 'publicId,title,outcome,similarity,copyright,ready';
     const lines = papers.map((paper) => {
@@ -501,8 +599,11 @@ export class WorkflowService {
     files: { kind: PaperFileKind }[];
   }) {
     const published = paper.decision?.status === DecisionStatus.PUBLISHED;
-    const accepted = published && paper.decision ? ACCEPTED.has(paper.decision.outcome) : false;
-    const cameraReady = paper.files.some((file) => file.kind === PaperFileKind.CAMERA_READY);
+    const accepted =
+      published && paper.decision ? ACCEPTED.has(paper.decision.outcome) : false;
+    const cameraReady = paper.files.some(
+      (file) => file.kind === PaperFileKind.CAMERA_READY,
+    );
     const similarityOk =
       paper.similarity !== null &&
       paper.similarity.percentage < 20 &&
@@ -513,7 +614,12 @@ export class WorkflowService {
       cameraReady,
       similarityOk,
       copyrightOk,
-      ready: paper.status !== PaperStatus.WITHDRAWN && accepted && cameraReady && similarityOk && copyrightOk,
+      ready:
+        paper.status !== PaperStatus.WITHDRAWN &&
+        accepted &&
+        cameraReady &&
+        similarityOk &&
+        copyrightOk,
     };
   }
 
@@ -610,7 +716,9 @@ export class WorkflowService {
     paper: {
       createdById: string;
       authors: { email: string }[];
-      conference: { memberships: { userId: string; role: ConferenceRole; status: MembershipStatus }[] };
+      conference: {
+        memberships: { userId: string; role: ConferenceRole; status: MembershipStatus }[];
+      };
     },
   ) {
     if (this.isChair(actor, paper.conference.memberships)) {

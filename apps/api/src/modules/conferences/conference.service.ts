@@ -52,6 +52,7 @@ const conferenceInclude = {
     orderBy: { createdAt: 'asc' as const },
   },
   invitations: { orderBy: { createdAt: 'desc' as const } },
+  registrations: { include: { user: { include: { profile: true } } } },
 } satisfies Prisma.ConferenceInclude;
 
 type ConferenceRecord = Prisma.ConferenceGetPayload<{
@@ -594,6 +595,22 @@ export class ConferenceService {
       myMembership: membership
         ? { id: membership.id, role: membership.role, status: membership.status }
         : null,
+      myRegistration: (() => {
+        const registration = row.registrations.find((item) => item.userId === actor.id);
+        return registration
+          ? { status: registration.status, paymentStatus: registration.paymentStatus }
+          : null;
+      })(),
+      registrations: canManage
+        ? row.registrations.map((item) => ({
+            userId: item.userId,
+            email: item.user.email,
+            firstName: item.user.profile?.firstName ?? '',
+            lastName: item.user.profile?.lastName ?? '',
+            status: item.status,
+            paymentStatus: item.paymentStatus,
+          }))
+        : [],
       templates: canManage
         ? row.templates.map((template) => ({
             id: template.id,

@@ -377,6 +377,7 @@ model Paper {
   conferenceId String       @map("conference_id") @db.Uuid
   trackId      String?      @map("track_id") @db.Uuid
   publicId     String?      @unique @map("public_id")
+  doi          String?      @unique
   title        String
   abstract     String       @default("")
   keywords     String[]     @default([])

@@ -73,6 +73,18 @@ export function ConferencesPage() {
     return () => window.removeEventListener('keydown', onKey);
   }, [creating]);
   const mine = useQuery({ queryKey: ['conferences'], queryFn: loadMine });
+  async function respondInvite(id: string, accept: boolean) {
+    setError(null);
+    const response = await apiFetch(`/api/v1/conferences/${id}/invitation/respond`, {
+      method: 'POST',
+      body: JSON.stringify({ accept }),
+    });
+    if (!response.ok) {
+      setError(await apiErrorMessage(response));
+      return;
+    }
+    await queryClient.invalidateQueries({ queryKey: ['conferences'] });
+  }
   const create = useMutation({
     mutationFn: async (values: unknown) => {
       const response = await apiFetch('/api/v1/conferences', {
@@ -98,15 +110,23 @@ export function ConferencesPage() {
     <div className="space-y-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-extrabold text-[#1c2744]">{t('conferences.title')}</h1>
-          <p className="mt-2 max-w-2xl text-sm text-[#5c6578]">{t('conferences.intro')}</p>
+          <h1 className="text-2xl font-extrabold text-[#1c2744]">
+            {t('conferences.title')}
+          </h1>
+          <p className="mt-2 max-w-2xl text-sm text-[#5c6578]">
+            {t('conferences.intro')}
+          </p>
         </div>
         <Button type="button" onClick={() => setCreating(true)}>
           {t('conferences.create')}
         </Button>
       </div>
-      {mine.isPending ? <p className="text-sm text-[#8b909a]">{t('common.loading')}</p> : null}
-      {mine.isError ? <p className="text-sm text-[#c54545]">{mine.error.message}</p> : null}
+      {mine.isPending ? (
+        <p className="text-sm text-[#8b909a]">{t('common.loading')}</p>
+      ) : null}
+      {mine.isError ? (
+        <p className="text-sm text-[#c54545]">{mine.error.message}</p>
+      ) : null}
       {mine.data?.length === 0 ? (
         <p className="text-sm text-[#5c6578]">{t('conferences.empty')}</p>
       ) : null}
@@ -116,12 +136,20 @@ export function ConferencesPage() {
           const when = formatRange(item.startsOn, item.endsOn, i18n.language);
           const where = [place, when].filter(Boolean).join(' · ');
           return (
-            <li key={item.id} className="rounded-2xl border border-[#e4e7ee] bg-white p-5">
+            <li
+              key={item.id}
+              className="rounded-2xl border border-[#e4e7ee] bg-white p-5"
+            >
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div className="min-w-0">
-                  <p className="text-xs font-bold tracking-wide text-[#5d74ff]">{item.shortName}</p>
+                  <p className="text-xs font-bold tracking-wide text-[#5d74ff]">
+                    {item.shortName}
+                  </p>
                   <h2 className="mt-1 text-xl font-extrabold">
-                    <Link to={`/workspace/conferences/${item.id}`} className="text-[#1c2744] no-underline">
+                    <Link
+                      to={`/workspace/conferences/${item.id}`}
+                      className="text-[#1c2744] no-underline"
+                    >
                       {item.name}
                     </Link>
                   </h2>
@@ -132,7 +160,9 @@ export function ConferencesPage() {
                     {t(`conferences.roles.${item.role}`, { defaultValue: item.role })}
                   </span>
                   <span className="rounded-full bg-[#2fbf71]/14 px-3 py-1 text-xs font-bold text-[#1c9a57]">
-                    {t(`conferences.states.${item.status}`, { defaultValue: item.status })}
+                    {t(`conferences.states.${item.status}`, {
+                      defaultValue: item.status,
+                    })}
                   </span>
                   <span className="rounded-full bg-[#f4f7ff] px-3 py-1 text-xs font-bold text-[#5c6578]">
                     {t(`conferences.membership.${item.membershipStatus}`, {
@@ -142,16 +172,40 @@ export function ConferencesPage() {
                 </div>
               </div>
               <div className="mt-4 flex flex-wrap gap-2 text-sm font-bold">
+                {item.membershipStatus === 'INVITED' ? (
+                  <>
+                    <button
+                      type="button"
+                      className="rounded-full bg-[#5d74ff]/85 px-3 py-1 text-white"
+                      onClick={() => void respondInvite(item.id, true)}
+                    >
+                      {t('conferences.accept')}
+                    </button>
+                    <button
+                      type="button"
+                      className="rounded-full bg-[#f4f7ff] px-3 py-1 text-[#5c6578]"
+                      onClick={() => void respondInvite(item.id, false)}
+                    >
+                      {t('conferences.decline')}
+                    </button>
+                  </>
+                ) : null}
                 <Link
                   to={`/workspace/conferences/${item.id}`}
                   className="rounded-full bg-[#eef2ff] px-3 py-1 text-[#3d4fd4] no-underline"
                 >
                   {t('home.manage')}
                 </Link>
-                <Link to="/workspace/program" className="rounded-full bg-[#eef2ff] px-3 py-1 text-[#3d4fd4] no-underline">
+                <Link
+                  to={`/workspace/program?conference=${item.id}`}
+                  className="rounded-full bg-[#eef2ff] px-3 py-1 text-[#3d4fd4] no-underline"
+                >
                   {t('home.program')}
                 </Link>
-                <Link to="/workspace/follow-up" className="rounded-full bg-[#eef2ff] px-3 py-1 text-[#3d4fd4] no-underline">
+                <Link
+                  to="/workspace/follow-up"
+                  className="rounded-full bg-[#eef2ff] px-3 py-1 text-[#3d4fd4] no-underline"
+                >
                   {t('home.publication')}
                 </Link>
               </div>
@@ -173,55 +227,81 @@ export function ConferencesPage() {
             aria-labelledby="create-conference-title"
             className="relative z-10 w-full max-w-lg rounded-2xl border border-[#e4e7ee] bg-white p-5 shadow-[0_16px_40px_rgba(28,36,48,0.16)]"
           >
-        <h2 id="create-conference-title" className="text-lg font-extrabold">{t('conferences.create')}</h2>
-        <form
-          className="mt-4 grid gap-3 sm:grid-cols-2"
-          onSubmit={(event) => {
-            event.preventDefault();
-            setError(null);
-            const parsed = createConferenceSchema.safeParse({
-              name,
-              shortName,
-              description,
-              city,
-              country,
-            });
-            if (!parsed.success) {
-              setError(parsed.error.issues[0]?.message ?? t('conferences.loadError'));
-              return;
-            }
-            void create.mutateAsync(parsed.data).catch((caught: unknown) => {
-              setError(caught instanceof Error ? caught.message : t('conferences.loadError'));
-            });
-          }}
-        >
-          <label className="text-sm font-bold text-[#1c2744]">
-            {t('conferences.name')}
-            <Input className="mt-1" value={name} onChange={(event) => setName(event.target.value)} />
-          </label>
-          <label className="text-sm font-bold text-[#1c2744]">
-            {t('conferences.shortName')}
-            <Input className="mt-1" value={shortName} onChange={(event) => setShortName(event.target.value)} />
-          </label>
-          <label className="text-sm font-bold text-[#1c2744] sm:col-span-2">
-            {t('conferences.description')}
-            <Input className="mt-1" value={description} onChange={(event) => setDescription(event.target.value)} />
-          </label>
-          <label className="text-sm font-bold text-[#1c2744]">
-            {t('auth.city')}
-            <Input className="mt-1" value={city} onChange={(event) => setCity(event.target.value)} />
-          </label>
-          <label className="text-sm font-bold text-[#1c2744]">
-            {t('auth.country')}
-            <Input className="mt-1" value={country} onChange={(event) => setCountry(event.target.value)} />
-          </label>
-          {error ? <p className="text-sm text-[#c54545] sm:col-span-2">{error}</p> : null}
-          <div>
-            <Button type="submit" disabled={create.isPending}>
+            <h2 id="create-conference-title" className="text-lg font-extrabold">
               {t('conferences.create')}
-            </Button>
-          </div>
-        </form>
+            </h2>
+            <form
+              className="mt-4 grid gap-3 sm:grid-cols-2"
+              onSubmit={(event) => {
+                event.preventDefault();
+                setError(null);
+                const parsed = createConferenceSchema.safeParse({
+                  name,
+                  shortName,
+                  description,
+                  city,
+                  country,
+                });
+                if (!parsed.success) {
+                  setError(parsed.error.issues[0]?.message ?? t('conferences.loadError'));
+                  return;
+                }
+                void create.mutateAsync(parsed.data).catch((caught: unknown) => {
+                  setError(
+                    caught instanceof Error ? caught.message : t('conferences.loadError'),
+                  );
+                });
+              }}
+            >
+              <label className="text-sm font-bold text-[#1c2744]">
+                {t('conferences.name')}
+                <Input
+                  className="mt-1"
+                  value={name}
+                  onChange={(event) => setName(event.target.value)}
+                />
+              </label>
+              <label className="text-sm font-bold text-[#1c2744]">
+                {t('conferences.shortName')}
+                <Input
+                  className="mt-1"
+                  value={shortName}
+                  onChange={(event) => setShortName(event.target.value)}
+                />
+              </label>
+              <label className="text-sm font-bold text-[#1c2744] sm:col-span-2">
+                {t('conferences.description')}
+                <Input
+                  className="mt-1"
+                  value={description}
+                  onChange={(event) => setDescription(event.target.value)}
+                />
+              </label>
+              <label className="text-sm font-bold text-[#1c2744]">
+                {t('auth.city')}
+                <Input
+                  className="mt-1"
+                  value={city}
+                  onChange={(event) => setCity(event.target.value)}
+                />
+              </label>
+              <label className="text-sm font-bold text-[#1c2744]">
+                {t('auth.country')}
+                <Input
+                  className="mt-1"
+                  value={country}
+                  onChange={(event) => setCountry(event.target.value)}
+                />
+              </label>
+              {error ? (
+                <p className="text-sm text-[#c54545] sm:col-span-2">{error}</p>
+              ) : null}
+              <div>
+                <Button type="submit" disabled={create.isPending}>
+                  {t('conferences.create')}
+                </Button>
+              </div>
+            </form>
           </section>
         </div>
       ) : null}

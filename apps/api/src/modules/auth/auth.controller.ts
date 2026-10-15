@@ -132,6 +132,12 @@ export class AuthController {
     await this.auth.resetPassword(body);
   }
 
+  @Get('messages')
+  @UseGuards(AuthGuard)
+  messages(@Req() request: AuthenticatedRequest) {
+    return this.auth.messages(request.user!.id);
+  }
+
   @Get('me')
   @UseGuards(AuthGuard)
   @ApiOperation({ summary: 'Return the signed-in account' })

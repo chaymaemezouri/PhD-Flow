@@ -17,6 +17,11 @@ const knownErrors: Record<string, string> = {
   'Only a submitted paper can receive a decision': 'errors.decision',
   '20 percent is not under the threshold': 'errors.similarityHigh',
   'Upload the similarity report before verification': 'errors.similarityFile',
+  'The paper is not ready to publish': 'errors.notReady',
+  'Register before paying': 'errors.registerFirst',
+  'Payment is not required': 'errors.noPayment',
+  'The registration fee is still unpaid': 'errors.unpaid',
+  'Only an accepted paper can be scheduled': 'errors.schedule',
 };
 
 const base = import.meta.env.VITE_API_URL ?? '';

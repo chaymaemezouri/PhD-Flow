@@ -12,7 +12,11 @@ const tone = {
 } as const;
 
 export function focusStep(steps: PaperStep[]): PaperStep | null {
-  return steps.find((step) => step.state === 'failed') ?? steps.find((step) => step.state === 'pending') ?? null;
+  return (
+    steps.find((step) => step.state === 'failed') ??
+    steps.find((step) => step.state === 'pending') ??
+    null
+  );
 }
 
 export function stepAction(paperId: string, key: string): string {
@@ -61,7 +65,11 @@ export function StepBar({ steps }: { steps: PaperStep[] }) {
           <span className="mt-1 block text-[10px] font-bold leading-tight text-[#243044]">
             {t(`workflow.steps.${step.key}`)}
           </span>
-          <span className="sr-only">{t(`workflow.step${step.state === 'done' ? 'Done' : step.state === 'failed' ? 'Failed' : 'Pending'}`)}</span>
+          <span className="sr-only">
+            {t(
+              `workflow.step${step.state === 'done' ? 'Done' : step.state === 'failed' ? 'Failed' : 'Pending'}`,
+            )}
+          </span>
         </li>
       ))}
     </ol>

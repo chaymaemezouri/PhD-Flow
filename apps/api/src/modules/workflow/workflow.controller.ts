@@ -104,12 +104,18 @@ export class WorkflowController {
   }
 
   @Post('papers/:id/template/validate')
-  validateTemplate(@Req() request: AuthenticatedRequest, @Param('id', ParseUUIDPipe) id: string) {
+  validateTemplate(
+    @Req() request: AuthenticatedRequest,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
     return this.workflow.validateTemplate(request.user!, id);
   }
 
   @Post('papers/:id/similarity/verify')
-  verifySimilarity(@Req() request: AuthenticatedRequest, @Param('id', ParseUUIDPipe) id: string) {
+  verifySimilarity(
+    @Req() request: AuthenticatedRequest,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
     return this.workflow.verifySimilarity(request.user!, id);
   }
 
@@ -122,7 +128,10 @@ export class WorkflowController {
   }
 
   @Get('conferences/:id/statistics')
-  statistics(@Req() request: AuthenticatedRequest, @Param('id', ParseUUIDPipe) id: string) {
+  statistics(
+    @Req() request: AuthenticatedRequest,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
     return this.workflow.statistics(request.user!, id);
   }
 
@@ -155,6 +164,16 @@ export class WorkflowController {
   @Post('conferences/:id/register')
   register(@Req() request: AuthenticatedRequest, @Param('id', ParseUUIDPipe) id: string) {
     return this.workflow.register(request.user!, id);
+  }
+
+  @Post('conferences/:id/payment')
+  pay(@Req() request: AuthenticatedRequest, @Param('id', ParseUUIDPipe) id: string) {
+    return this.workflow.pay(request.user!, id);
+  }
+
+  @Post('papers/:id/publish')
+  publish(@Req() request: AuthenticatedRequest, @Param('id', ParseUUIDPipe) id: string) {
+    return this.workflow.publishDoi(request.user!, id);
   }
 
   @Post('conferences/:id/registrations/:userId/verify')
@@ -193,7 +212,8 @@ export class WorkflowController {
   present(
     @Req() request: AuthenticatedRequest,
     @Param('id', ParseUUIDPipe) id: string,
-    @Body(new ZodValidationPipe(presentationSchema)) body: z.infer<typeof presentationSchema>,
+    @Body(new ZodValidationPipe(presentationSchema))
+    body: z.infer<typeof presentationSchema>,
   ) {
     return this.workflow.assignPresentation(request.user!, id, body);
   }

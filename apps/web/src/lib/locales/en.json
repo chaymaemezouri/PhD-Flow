@@ -253,6 +253,9 @@
       "DOUBLE_BLIND": "Double blind",
       "OPEN": "Open"
     },
+    "edit": "Conference record",
+    "payments": "Ask for a registration payment",
+    "site": "Website",
     "back": "All conferences",
     "remove": "Remove",
     "accept": "Accept",
@@ -283,6 +286,8 @@
     "track": "Track",
     "chooseTrack": "Choose a track",
     "paperTitle": "Title",
+    "keywords": "Keywords",
+    "keywordsHint": "Separated by commas",
     "abstract": "Abstract",
     "saveDraft": "Save draft",
     "stepDetails": "Details",
@@ -310,6 +315,14 @@
     "comments": "Comments for the authors",
     "committee": "Comments for the committee",
     "send": "Send review",
+    "sent": "Review sent.",
+    "recommendations": {
+      "ACCEPT": "Accept",
+      "WEAK_ACCEPT": "Weak accept",
+      "BORDERLINE": "Borderline",
+      "WEAK_REJECT": "Weak reject",
+      "REJECT": "Reject"
+    },
     "empty": "You have no review invitations.",
     "accept": "Accept",
     "decline": "Decline",
@@ -338,6 +351,7 @@
     "accepted": "Accepted",
     "camera": "Camera-ready",
     "similarity": "Similarity",
+    "similarityLocal": "Upload the report PDF, then enter the percentage it shows. The admin checks that it stays under 20%. The figure is stored here, without an outside service.",
     "copyright": "Copyright",
     "ready": "Ready to publish",
     "yes": "yes",
@@ -367,6 +381,7 @@
     "documents": "Files",
     "history": "Uploaded files",
     "actions": "Actions",
+    "model": "Copyright form",
     "files": {
       "MANUSCRIPT": "Manuscript",
       "REVISION": "Revision",
@@ -376,6 +391,33 @@
       "COPYRIGHT": "Copyright"
     },
     "choosePaper": "Paper",
+    "noSessions": "This conference has no sessions yet.",
+    "sessionEmpty": "No paper in this session.",
+    "session": "Session",
+    "sessionTitle": "Session title",
+    "starts": "Start",
+    "ends": "End",
+    "placePaper": "Schedule a paper",
+    "register": "Register",
+    "pay": "Pay the registration",
+    "feeDue": "This conference asks for a local payment. Confirm it after registering, before it can be approved.",
+    "registrations": "Registrations",
+    "verifyRegistration": "Confirm registration",
+    "doi": "Publish with a DOI",
+    "doiReady": "DOI assigned.",
+    "messages": "Messages",
+    "noMessages": "No messages.",
+    "registrationStatus": {
+      "REQUESTED": "Requested",
+      "VERIFIED": "Confirmed",
+      "REJECTED": "Declined"
+    },
+    "paymentStatus": {
+      "NOT_REQUIRED": "No payment",
+      "PENDING": "Unpaid",
+      "VERIFIED": "Paid"
+    },
+    "others": "Other papers",
     "decide": "Record the decision",
     "letter": "Letter to the authors",
     "publish": "Publish the decision",
@@ -500,7 +542,12 @@
     "mfa": "The MFA code is required.",
     "decision": "Only a submitted paper can receive a decision.",
     "similarityHigh": "20 percent is not under the threshold.",
-    "similarityFile": "Upload the similarity report before verification."
+    "similarityFile": "Upload the similarity report before verification.",
+    "notReady": "The paper is not ready to publish yet.",
+    "registerFirst": "Register before paying.",
+    "noPayment": "This conference does not ask for a payment.",
+    "unpaid": "The registration fee is still unpaid.",
+    "schedule": "Only an accepted paper can be scheduled."
   },
   "footer": {
     "note": "Development foundation. Do not use it for real manuscripts yet."

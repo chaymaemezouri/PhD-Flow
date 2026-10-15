@@ -1,11 +1,5 @@
 import type { LucideIcon } from 'lucide-react';
-import {
-  CalendarRange,
-  Gavel,
-  Landmark,
-  LayoutDashboard,
-  Settings2,
-} from 'lucide-react';
+import { CalendarRange, Gavel, Landmark, LayoutDashboard, Settings2 } from 'lucide-react';
 
 export const workspaceRoles = [
   'author',

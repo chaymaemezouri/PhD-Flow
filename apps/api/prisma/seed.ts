@@ -85,7 +85,11 @@ async function main(): Promise<void> {
     website: 'https://liris.cnrs.fr',
     education: [
       { year: '2008', title: 'Doctorat en informatique', place: 'Université de Lyon' },
-      { year: '2012', title: 'Maître de conférences', place: 'Université Claude Bernard Lyon 1' },
+      {
+        year: '2012',
+        title: 'Maître de conférences',
+        place: 'Université Claude Bernard Lyon 1',
+      },
       { year: '2024', title: 'Présidente de conférence', place: 'ScholarFlow Demo 2027' },
     ],
   });
@@ -105,7 +109,11 @@ async function main(): Promise<void> {
     website: 'https://lip.ens-lyon.fr',
     education: [
       { year: '2014', title: 'Master informatique', place: 'ENS de Lyon' },
-      { year: '2018', title: 'Doctorat en systèmes distribués', place: 'Université de Lyon' },
+      {
+        year: '2018',
+        title: 'Doctorat en systèmes distribués',
+        place: 'Université de Lyon',
+      },
       { year: '2020', title: 'Chargé de recherche', place: 'CNRS, laboratoire LIP' },
     ],
   });
@@ -125,7 +133,11 @@ async function main(): Promise<void> {
     orcid: '0000-0001-2345-6783',
     website: 'https://liris.cnrs.fr',
     education: [
-      { year: '2018', title: 'Licence informatique', place: 'Université Claude Bernard Lyon 1' },
+      {
+        year: '2018',
+        title: 'Licence informatique',
+        place: 'Université Claude Bernard Lyon 1',
+      },
       { year: '2020', title: 'Master systèmes et données', place: 'ENS de Lyon' },
       { year: '2022', title: 'Doctorat en cours', place: 'LIRIS, Université de Lyon' },
     ],
@@ -146,22 +158,58 @@ async function main(): Promise<void> {
       status: 'PUBLISHED',
       visibility: 'PUBLIC',
       reviewMode: 'DOUBLE_BLIND',
+      paymentsEnabled: true,
       createdById: admin.id,
       nextPaperNumber: 11,
       tracks: {
         create: [
-          { name: 'Systèmes', code: 'SYS', description: 'Systèmes distribués et données.', sortOrder: 0 },
-          { name: 'Théorie', code: 'TH', description: 'Modèles et preuves.', sortOrder: 1 },
-          { name: 'Données', code: 'DATA', description: 'Jeux de données et reproductibilité.', sortOrder: 2 },
+          {
+            name: 'Systèmes',
+            code: 'SYS',
+            description: 'Systèmes distribués et données.',
+            sortOrder: 0,
+          },
+          {
+            name: 'Théorie',
+            code: 'TH',
+            description: 'Modèles et preuves.',
+            sortOrder: 1,
+          },
+          {
+            name: 'Données',
+            code: 'DATA',
+            description: 'Jeux de données et reproductibilité.',
+            sortOrder: 2,
+          },
         ],
       },
       deadlines: {
         create: [
-          { kind: 'SUBMISSION', dueAt: new Date('2027-03-01T23:59:00.000Z'), label: 'Soumissions' },
-          { kind: 'REVIEW', dueAt: new Date('2027-04-15T23:59:00.000Z'), label: 'Évaluations' },
-          { kind: 'NOTIFICATION', dueAt: new Date('2027-05-01T23:59:00.000Z'), label: 'Décisions' },
-          { kind: 'CAMERA_READY', dueAt: new Date('2027-05-20T23:59:00.000Z'), label: 'Version finale' },
-          { kind: 'REGISTRATION', dueAt: new Date('2027-06-01T23:59:00.000Z'), label: 'Inscriptions' },
+          {
+            kind: 'SUBMISSION',
+            dueAt: new Date('2027-03-01T23:59:00.000Z'),
+            label: 'Soumissions',
+          },
+          {
+            kind: 'REVIEW',
+            dueAt: new Date('2027-04-15T23:59:00.000Z'),
+            label: 'Évaluations',
+          },
+          {
+            kind: 'NOTIFICATION',
+            dueAt: new Date('2027-05-01T23:59:00.000Z'),
+            label: 'Décisions',
+          },
+          {
+            kind: 'CAMERA_READY',
+            dueAt: new Date('2027-05-20T23:59:00.000Z'),
+            label: 'Version finale',
+          },
+          {
+            kind: 'REGISTRATION',
+            dueAt: new Date('2027-06-01T23:59:00.000Z'),
+            label: 'Inscriptions',
+          },
         ],
       },
       templates: {
@@ -200,9 +248,21 @@ async function main(): Promise<void> {
       },
       memberships: {
         create: [
-          { userId: admin.id, role: ConferenceRole.CHAIR, status: MembershipStatus.ACTIVE },
-          { userId: chercheur.id, role: ConferenceRole.AUTHOR, status: MembershipStatus.ACTIVE },
-          { userId: reviewer.id, role: ConferenceRole.REVIEWER, status: MembershipStatus.ACTIVE },
+          {
+            userId: admin.id,
+            role: ConferenceRole.CHAIR,
+            status: MembershipStatus.ACTIVE,
+          },
+          {
+            userId: chercheur.id,
+            role: ConferenceRole.AUTHOR,
+            status: MembershipStatus.ACTIVE,
+          },
+          {
+            userId: reviewer.id,
+            role: ConferenceRole.REVIEWER,
+            status: MembershipStatus.ACTIVE,
+          },
         ],
       },
     },
@@ -230,11 +290,24 @@ async function main(): Promise<void> {
   const invited = await submittedPaper(conference.id, systems?.id, lea, {
     publicId: 'DEMO-2027-0002',
     title: 'Clock skew in harbour logs',
-    abstract: 'Mesures de décalage d’horloge sur les journaux portuaires. Article en cours d’évaluation.',
+    abstract:
+      'Mesures de décalage d’horloge sur les journaux portuaires. Article en cours d’évaluation.',
     keywords: ['horloges', 'journaux'],
   });
-  await addFile(conference.id, invited.id, PaperFileKind.MANUSCRIPT, 'clocks.pdf', chercheur.id);
-  await assign(invited.id, reviewer.id, admin.id, AssignmentStatus.ACCEPTED, 'accepted-clocks');
+  await addFile(
+    conference.id,
+    invited.id,
+    PaperFileKind.MANUSCRIPT,
+    'clocks.pdf',
+    chercheur.id,
+  );
+  await assign(
+    invited.id,
+    reviewer.id,
+    admin.id,
+    AssignmentStatus.ACCEPTED,
+    'accepted-clocks',
+  );
 
   const overdue = await submittedPaper(conference.id, systems?.id, lea, {
     publicId: 'DEMO-2027-0003',
@@ -242,27 +315,60 @@ async function main(): Promise<void> {
     abstract: 'Relevés tardifs du quai. L’évaluation est en retard.',
     keywords: ['quai', 'mesures'],
   });
-  await addFile(conference.id, overdue.id, PaperFileKind.MANUSCRIPT, 'quay.pdf', chercheur.id);
-  await assign(overdue.id, reviewer.id, admin.id, AssignmentStatus.OVERDUE, 'overdue-quay', {
-    createdAt: new Date('2026-09-01T08:00:00.000Z'),
-  });
+  await addFile(
+    conference.id,
+    overdue.id,
+    PaperFileKind.MANUSCRIPT,
+    'quay.pdf',
+    chercheur.id,
+  );
+  await assign(
+    overdue.id,
+    reviewer.id,
+    admin.id,
+    AssignmentStatus.OVERDUE,
+    'overdue-quay',
+    {
+      createdAt: new Date('2026-09-01T08:00:00.000Z'),
+    },
+  );
 
   const waiting = await submittedPaper(conference.id, theory?.id, lea, {
     publicId: 'DEMO-2027-0004',
     title: 'A note on public identifiers',
-    abstract: 'Note courte sur les identifiants publics. L’invitation d’évaluation est encore ouverte.',
+    abstract:
+      'Note courte sur les identifiants publics. L’invitation d’évaluation est encore ouverte.',
     keywords: ['identifiants'],
   });
-  await addFile(conference.id, waiting.id, PaperFileKind.MANUSCRIPT, 'identifiers.pdf', chercheur.id);
-  await assign(waiting.id, reviewer.id, admin.id, AssignmentStatus.DECLINED, 'declined-identifiers');
+  await addFile(
+    conference.id,
+    waiting.id,
+    PaperFileKind.MANUSCRIPT,
+    'identifiers.pdf',
+    chercheur.id,
+  );
+  await assign(
+    waiting.id,
+    reviewer.id,
+    admin.id,
+    AssignmentStatus.DECLINED,
+    'declined-identifiers',
+  );
 
   const conditional = await submittedPaper(conference.id, theory?.id, lea, {
     publicId: 'DEMO-2027-0005',
     title: 'Sensor traces under a conditional acceptance',
-    abstract: 'Traces de capteurs acceptées sous condition, déjà placées dans le programme.',
+    abstract:
+      'Traces de capteurs acceptées sous condition, déjà placées dans le programme.',
     keywords: ['capteurs', 'traces'],
   });
-  await addFile(conference.id, conditional.id, PaperFileKind.MANUSCRIPT, 'sensors.pdf', chercheur.id);
+  await addFile(
+    conference.id,
+    conditional.id,
+    PaperFileKind.MANUSCRIPT,
+    'sensors.pdf',
+    chercheur.id,
+  );
   await prisma.similarityReport.create({
     data: {
       paperId: conditional.id,
@@ -329,17 +435,24 @@ async function main(): Promise<void> {
     chercheur.id,
     new Date('2026-10-10T09:00:00.000Z'),
   );
-  await assign(accepted.id, reviewer.id, admin.id, AssignmentStatus.COMPLETED, 'completed-tides', {
-    respondedAt: new Date('2026-10-02T12:30:00.000Z'),
+  await assign(
+    accepted.id,
+    reviewer.id,
+    admin.id,
+    AssignmentStatus.COMPLETED,
+    'completed-tides',
+    {
+      respondedAt: new Date('2026-10-02T12:30:00.000Z'),
       form: {
-      recommendation: 'ACCEPT',
-      score: 8,
-      confidence: 4,
-      commentsToAuthor:
-        'The public identifier stays stable and the argument is clear enough to accept.',
-      commentsToCommittee: 'No remaining conflict after the declared checks.',
+        recommendation: 'ACCEPT',
+        score: 8,
+        confidence: 4,
+        commentsToAuthor:
+          'The public identifier stays stable and the argument is clear enough to accept.',
+        commentsToCommittee: 'No remaining conflict after the declared checks.',
+      },
     },
-  });
+  );
   await prisma.decision.create({
     data: {
       paperId: accepted.id,
@@ -370,17 +483,37 @@ async function main(): Promise<void> {
   const revision = await submittedPaper(conference.id, systems?.id, lea, {
     publicId: 'DEMO-2027-0006',
     title: 'Le modèle de menace des journaux portuaires',
-    abstract: 'Article accepté seulement après révision. Le fichier de révision est déjà déposé.',
+    abstract:
+      'Article accepté seulement après révision. Le fichier de révision est déjà déposé.',
     keywords: ['révision', 'menace'],
   });
-  await addFile(conference.id, revision.id, PaperFileKind.MANUSCRIPT, 'menace.pdf', lea.id);
-  await addFile(conference.id, revision.id, PaperFileKind.REVISION, 'menace-revision.pdf', lea.id);
-  await assign(revision.id, reviewer.id, admin.id, AssignmentStatus.IN_PROGRESS, 'progress-revision');
+  await addFile(
+    conference.id,
+    revision.id,
+    PaperFileKind.MANUSCRIPT,
+    'menace.pdf',
+    lea.id,
+  );
+  await addFile(
+    conference.id,
+    revision.id,
+    PaperFileKind.REVISION,
+    'menace-revision.pdf',
+    lea.id,
+  );
+  await assign(
+    revision.id,
+    reviewer.id,
+    admin.id,
+    AssignmentStatus.IN_PROGRESS,
+    'progress-revision',
+  );
   await prisma.decision.create({
     data: {
       paperId: revision.id,
       outcome: 'REVISION_REQUIRED',
-      letter: 'DEMO-2027-0006 doit être révisé. Le modèle de menace doit citer les journaux réellement observés.',
+      letter:
+        'DEMO-2027-0006 doit être révisé. Le modèle de menace doit citer les journaux réellement observés.',
       status: 'PUBLISHED',
       publishedAt: new Date('2026-10-12T16:00:00.000Z'),
       decidedById: admin.id,
@@ -390,19 +523,33 @@ async function main(): Promise<void> {
   const rejected = await submittedPaper(conference.id, theory?.id, lea, {
     publicId: 'DEMO-2027-0007',
     title: 'Une esquisse de preuve qui ne tient pas',
-    abstract: 'Article refusé après une évaluation négative. Julien a décliné cette invitation.',
+    abstract:
+      'Article refusé après une évaluation négative. Julien a décliné cette invitation.',
     keywords: ['preuve', 'refus'],
   });
-  await addFile(conference.id, rejected.id, PaperFileKind.MANUSCRIPT, 'preuve.pdf', lea.id);
-  await assign(rejected.id, reviewer.id, admin.id, AssignmentStatus.COMPLETED, 'reject-proof', {
-    form: {
-      recommendation: 'REJECT',
-      score: 3,
-      confidence: 5,
-      commentsToAuthor: 'Le lemme principal n’est pas démontré.',
-      commentsToCommittee: 'Refus clair.',
+  await addFile(
+    conference.id,
+    rejected.id,
+    PaperFileKind.MANUSCRIPT,
+    'preuve.pdf',
+    lea.id,
+  );
+  await assign(
+    rejected.id,
+    reviewer.id,
+    admin.id,
+    AssignmentStatus.COMPLETED,
+    'reject-proof',
+    {
+      form: {
+        recommendation: 'REJECT',
+        score: 3,
+        confidence: 5,
+        commentsToAuthor: 'Le lemme principal n’est pas démontré.',
+        commentsToCommittee: 'Refus clair.',
+      },
     },
-  });
+  );
   await prisma.decision.create({
     data: {
       paperId: rejected.id,
@@ -420,11 +567,26 @@ async function main(): Promise<void> {
     abstract: 'Article soumis puis retiré par l’auteure. L’évaluation a été annulée.',
     keywords: ['retrait'],
   });
-  await addFile(conference.id, withdrawn.id, PaperFileKind.MANUSCRIPT, 'retrait.pdf', lea.id);
-  await assign(withdrawn.id, reviewer.id, admin.id, AssignmentStatus.CANCELLED, 'cancelled-withdrawn');
+  await addFile(
+    conference.id,
+    withdrawn.id,
+    PaperFileKind.MANUSCRIPT,
+    'retrait.pdf',
+    lea.id,
+  );
+  await assign(
+    withdrawn.id,
+    reviewer.id,
+    admin.id,
+    AssignmentStatus.CANCELLED,
+    'cancelled-withdrawn',
+  );
   await prisma.paper.update({
     where: { id: withdrawn.id },
-    data: { status: PaperStatus.WITHDRAWN, withdrawnAt: new Date('2026-10-12T10:00:00.000Z') },
+    data: {
+      status: PaperStatus.WITHDRAWN,
+      withdrawnAt: new Date('2026-10-12T10:00:00.000Z'),
+    },
   });
   await prisma.paperStatusEvent.create({
     data: {
@@ -439,24 +601,39 @@ async function main(): Promise<void> {
   const unpublished = await submittedPaper(conference.id, dataTrack?.id, lea, {
     publicId: 'DEMO-2027-0009',
     title: 'Paquet de réplication des tables de marée',
-    abstract: 'Les deux évaluations sont rendues. La décision existe encore à l’état de brouillon.',
+    abstract:
+      'Les deux évaluations sont rendues. La décision existe encore à l’état de brouillon.',
     keywords: ['réplication', 'décision'],
   });
-  await addFile(conference.id, unpublished.id, PaperFileKind.MANUSCRIPT, 'replication.pdf', lea.id);
-  await assign(unpublished.id, reviewer.id, admin.id, AssignmentStatus.COMPLETED, 'completed-replication', {
-    form: {
-      recommendation: 'ACCEPT',
-      score: 7,
-      confidence: 4,
-      commentsToAuthor: 'Le paquet de réplication est suffisant.',
-      commentsToCommittee: 'Je suis favorable à l’acceptation.',
+  await addFile(
+    conference.id,
+    unpublished.id,
+    PaperFileKind.MANUSCRIPT,
+    'replication.pdf',
+    lea.id,
+  );
+  await assign(
+    unpublished.id,
+    reviewer.id,
+    admin.id,
+    AssignmentStatus.COMPLETED,
+    'completed-replication',
+    {
+      form: {
+        recommendation: 'ACCEPT',
+        score: 7,
+        confidence: 4,
+        commentsToAuthor: 'Le paquet de réplication est suffisant.',
+        commentsToCommittee: 'Je suis favorable à l’acceptation.',
+      },
     },
-  });
+  );
   await prisma.decision.create({
     data: {
       paperId: unpublished.id,
       outcome: 'ACCEPTED',
-      letter: 'Brouillon de lettre : DEMO-2027-0009 serait accepté. Cette décision n’est pas encore publiée.',
+      letter:
+        'Brouillon de lettre : DEMO-2027-0009 serait accepté. Cette décision n’est pas encore publiée.',
       status: 'DRAFT',
       publishedAt: null,
       decidedById: admin.id,
@@ -466,16 +643,30 @@ async function main(): Promise<void> {
   const copyrightRejected = await submittedPaper(conference.id, dataTrack?.id, lea, {
     publicId: 'DEMO-2027-0010',
     title: 'Version finale sans cession de droits valide',
-    abstract: 'Article accepté, mais la cession de droits a été refusée. La version finale manque encore.',
+    abstract:
+      'Article accepté, mais la cession de droits a été refusée. La version finale manque encore.',
     keywords: ['droits', 'version finale'],
   });
-  await addFile(conference.id, copyrightRejected.id, PaperFileKind.MANUSCRIPT, 'droits.pdf', lea.id);
-  await addFile(conference.id, copyrightRejected.id, PaperFileKind.COPYRIGHT, 'droits-refuses.pdf', lea.id);
+  await addFile(
+    conference.id,
+    copyrightRejected.id,
+    PaperFileKind.MANUSCRIPT,
+    'droits.pdf',
+    lea.id,
+  );
+  await addFile(
+    conference.id,
+    copyrightRejected.id,
+    PaperFileKind.COPYRIGHT,
+    'droits-refuses.pdf',
+    lea.id,
+  );
   await prisma.decision.create({
     data: {
       paperId: copyrightRejected.id,
       outcome: 'ACCEPTED',
-      letter: 'DEMO-2027-0010 est accepté. La cession déposée a été refusée : il faut la redéposer.',
+      letter:
+        'DEMO-2027-0010 est accepté. La cession déposée a été refusée : il faut la redéposer.',
       status: 'PUBLISHED',
       publishedAt: new Date('2026-10-14T16:00:00.000Z'),
       decidedById: admin.id,
@@ -502,7 +693,13 @@ async function main(): Promise<void> {
       declaredById: reviewer.id,
     },
   });
-  await assign(copyrightRejected.id, reviewer.id, admin.id, AssignmentStatus.INVITED, 'invited-copyright');
+  await assign(
+    copyrightRejected.id,
+    reviewer.id,
+    admin.id,
+    AssignmentStatus.INVITED,
+    'invited-copyright',
+  );
 
   const amphitheatre = await prisma.room.create({
     data: { conferenceId: conference.id, name: 'Amphi A', capacity: 80 },
@@ -585,20 +782,51 @@ async function main(): Promise<void> {
       createdById: admin.id,
       nextPaperNumber: 1,
       tracks: {
-        create: [{ name: 'Thèse', code: 'PHD', description: 'Travaux de doctorat.', sortOrder: 0 }],
+        create: [
+          {
+            name: 'Thèse',
+            code: 'PHD',
+            description: 'Travaux de doctorat.',
+            sortOrder: 0,
+          },
+        ],
       },
       deadlines: {
         create: [
-          { kind: 'SUBMISSION', dueAt: new Date('2027-06-30T23:59:00.000Z'), label: 'Soumissions' },
-          { kind: 'REVIEW', dueAt: new Date('2027-07-31T23:59:00.000Z'), label: 'Évaluations' },
-          { kind: 'NOTIFICATION', dueAt: new Date('2027-08-15T23:59:00.000Z'), label: 'Décisions' },
+          {
+            kind: 'SUBMISSION',
+            dueAt: new Date('2027-06-30T23:59:00.000Z'),
+            label: 'Soumissions',
+          },
+          {
+            kind: 'REVIEW',
+            dueAt: new Date('2027-07-31T23:59:00.000Z'),
+            label: 'Évaluations',
+          },
+          {
+            kind: 'NOTIFICATION',
+            dueAt: new Date('2027-08-15T23:59:00.000Z'),
+            label: 'Décisions',
+          },
         ],
       },
       memberships: {
         create: [
-          { userId: admin.id, role: ConferenceRole.CHAIR, status: MembershipStatus.ACTIVE },
-          { userId: chercheur.id, role: ConferenceRole.AUTHOR, status: MembershipStatus.INVITED },
-          { userId: reviewer.id, role: ConferenceRole.REVIEWER, status: MembershipStatus.INVITED },
+          {
+            userId: admin.id,
+            role: ConferenceRole.CHAIR,
+            status: MembershipStatus.ACTIVE,
+          },
+          {
+            userId: chercheur.id,
+            role: ConferenceRole.AUTHOR,
+            status: MembershipStatus.INVITED,
+          },
+          {
+            userId: reviewer.id,
+            role: ConferenceRole.REVIEWER,
+            status: MembershipStatus.INVITED,
+          },
         ],
       },
     },
@@ -626,7 +854,9 @@ async function main(): Promise<void> {
         conferenceId: doctoral.id,
         email: 'collegue@demo.scholarflow.test',
         role: ConferenceRole.AUTHOR,
-        tokenHash: createHash('sha256').update('invite-collegue-doctorales').digest('hex'),
+        tokenHash: createHash('sha256')
+          .update('invite-collegue-doctorales')
+          .digest('hex'),
         expiresAt: inviteUntil,
         invitedById: admin.id,
       },
@@ -648,7 +878,13 @@ async function main(): Promise<void> {
       reviewMode: 'DOUBLE_BLIND',
       createdById: admin.id,
       memberships: {
-        create: [{ userId: admin.id, role: ConferenceRole.CHAIR, status: MembershipStatus.ACTIVE }],
+        create: [
+          {
+            userId: admin.id,
+            role: ConferenceRole.CHAIR,
+            status: MembershipStatus.ACTIVE,
+          },
+        ],
       },
     },
   });
@@ -738,7 +974,11 @@ async function submittedPaper(
       events: {
         create: [
           { toStatus: PaperStatus.DRAFT, actorId: author.id },
-          { fromStatus: PaperStatus.DRAFT, toStatus: PaperStatus.SUBMITTED, actorId: author.id },
+          {
+            fromStatus: PaperStatus.DRAFT,
+            toStatus: PaperStatus.SUBMITTED,
+            actorId: author.id,
+          },
         ],
       },
     },
@@ -795,7 +1035,11 @@ async function assign(
       status,
       tokenHash: createHash('sha256').update(token).digest('hex'),
       expiresAt: new Date('2027-04-01T00:00:00.000Z'),
-      respondedAt: extra?.respondedAt ?? (status === AssignmentStatus.INVITED ? null : new Date('2026-10-11T12:30:00.000Z')),
+      respondedAt:
+        extra?.respondedAt ??
+        (status === AssignmentStatus.INVITED
+          ? null
+          : new Date('2026-10-11T12:30:00.000Z')),
       invitedById,
       createdAt: extra?.createdAt,
       form: extra?.form ? { create: extra.form } : undefined,
