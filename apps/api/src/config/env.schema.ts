@@ -14,6 +14,7 @@ export const envSchema = z.object({
   SMTP_PORT: z.coerce.number().int().positive().default(1025),
   MAIL_FROM: z.string().min(3).default('ScholarFlow <noreply@localhost>'),
   MINIO_PORT: z.coerce.number().int().positive().default(9000),
+  MINIO_ENDPOINT: z.string().url().optional(),
   MINIO_ROOT_USER: z.string().min(1).default('scholarflow'),
   MINIO_ROOT_PASSWORD: z.string().min(1).default('scholarflow-dev-secret'),
   MINIO_BUCKET: z.string().min(1).default('scholarflow'),
