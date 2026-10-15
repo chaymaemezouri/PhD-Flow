@@ -46,7 +46,13 @@ export const loginSchema = z.object({
 });
 
 export const reviewFormSchema = z.object({
-  recommendation: z.enum(['ACCEPT', 'WEAK_ACCEPT', 'BORDERLINE', 'WEAK_REJECT', 'REJECT']),
+  recommendation: z.enum([
+    'ACCEPT',
+    'WEAK_ACCEPT',
+    'BORDERLINE',
+    'WEAK_REJECT',
+    'REJECT',
+  ]),
   score: z.number().int().min(1).max(10),
   confidence: z.number().int().min(1).max(5),
   commentsToAuthor: z.string().trim().min(10).max(4000),
@@ -54,7 +60,12 @@ export const reviewFormSchema = z.object({
 });
 
 export const decisionSchema = z.object({
-  outcome: z.enum(['ACCEPTED', 'CONDITIONALLY_ACCEPTED', 'REVISION_REQUIRED', 'REJECTED']),
+  outcome: z.enum([
+    'ACCEPTED',
+    'CONDITIONALLY_ACCEPTED',
+    'REVISION_REQUIRED',
+    'REJECTED',
+  ]),
   letter: z.string().trim().min(10).max(4000),
   publish: z.boolean().default(false),
 });
@@ -86,7 +97,10 @@ export const assessmentSchema = z.object({
 });
 
 export const mfaConfirmSchema = z.object({
-  code: z.string().trim().regex(/^\d{6}$/),
+  code: z
+    .string()
+    .trim()
+    .regex(/^\d{6}$/),
 });
 
 export const emailOnlySchema = z.object({

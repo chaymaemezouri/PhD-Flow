@@ -15,7 +15,9 @@ export function PaperWorkCard({ paper }: { paper: WorkPaper }) {
   const { t } = useTranslation();
   const steps = paper.steps ?? [];
   const focus = focusStep(steps);
-  const href = focus ? stepAction(paper.id, focus.key) : `/workspace/submissions/${paper.id}`;
+  const href = focus
+    ? stepAction(paper.id, focus.key)
+    : `/workspace/submissions/${paper.id}`;
   const done = steps.filter((step) => step.state === 'done').length;
   const progress = steps.length === 0 ? 0 : Math.round((done / steps.length) * 100);
   const tone = focus?.state === 'failed' ? 'alert' : focus ? 'wait' : 'done';
@@ -56,15 +58,26 @@ export function PaperWorkCard({ paper }: { paper: WorkPaper }) {
         <p className="text-xs font-bold tracking-wide text-[#6d7585]">
           {paper.publicId ?? t('papers.draft')}
         </p>
-        <span className={`shrink-0 rounded-md px-2 py-0.5 text-xs font-bold ${styles.badge}`}>
-          {tone === 'alert' ? t('home.blocked') : tone === 'wait' ? t('home.waiting') : t('home.doneSteps')}
+        <span
+          className={`shrink-0 rounded-md px-2 py-0.5 text-xs font-bold ${styles.badge}`}
+        >
+          {tone === 'alert'
+            ? t('home.blocked')
+            : tone === 'wait'
+              ? t('home.waiting')
+              : t('home.doneSteps')}
         </span>
       </div>
       <h3 className="mt-2 truncate text-base font-extrabold">{paper.title}</h3>
-      {label === stepName ? null : <p className={`mt-1 text-sm font-semibold ${styles.text}`}>{label}</p>}
+      {label === stepName ? null : (
+        <p className={`mt-1 text-sm font-semibold ${styles.text}`}>{label}</p>
+      )}
       <div className="mt-4 flex items-center gap-3">
         <div className="h-1 flex-1 overflow-hidden rounded-full bg-[#eef1f6]">
-          <div className={`h-full rounded-full ${styles.bar}`} style={{ width: `${progress}%` }} />
+          <div
+            className={`h-full rounded-full ${styles.bar}`}
+            style={{ width: `${progress}%` }}
+          />
         </div>
         <span className="shrink-0 text-xs font-bold text-[#6d7585]">
           {stepName} · {done}/{steps.length || 10}

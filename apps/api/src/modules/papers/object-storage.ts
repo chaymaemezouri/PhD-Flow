@@ -66,7 +66,8 @@ export class ObjectStorage {
   private s3(): S3Client {
     if (!this.client) {
       const port = this.config.getOrThrow<number>('MINIO_PORT');
-      const endpoint = this.config.get<string>('MINIO_ENDPOINT') || `http://127.0.0.1:${port}`;
+      const endpoint =
+        this.config.get<string>('MINIO_ENDPOINT') || `http://127.0.0.1:${port}`;
       this.client = new S3Client({
         region: 'us-east-1',
         endpoint,

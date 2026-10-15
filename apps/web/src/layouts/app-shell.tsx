@@ -23,13 +23,55 @@ import { cn } from '@/lib/utils';
 
 const catalog = [
   { id: 'home', label: 'nav.home', icon: Home, end: true },
-  { id: 'conferences', to: '/workspace/conferences', label: 'nav.conferences', icon: Library, end: false },
-  { id: 'submissions', to: '/workspace/submissions', label: 'nav.submissions', icon: NotebookPen, end: false },
-  { id: 'reviews', to: '/workspace/reviews', label: 'nav.reviews', icon: Shield, end: false },
-  { id: 'followUp', to: '/workspace/follow-up', label: 'nav.followUp', icon: ListChecks, end: false },
-  { id: 'program', to: '/workspace/program', label: 'nav.program', icon: CalendarRange, end: false },
-  { id: 'account', to: '/workspace/account', label: 'auth.profileTitle', icon: UserRound, end: false },
-  { id: 'preferences', to: '/workspace/preferences', label: 'nav.preferences', icon: Settings2, end: false },
+  {
+    id: 'conferences',
+    to: '/workspace/conferences',
+    label: 'nav.conferences',
+    icon: Library,
+    end: false,
+  },
+  {
+    id: 'submissions',
+    to: '/workspace/submissions',
+    label: 'nav.submissions',
+    icon: NotebookPen,
+    end: false,
+  },
+  {
+    id: 'reviews',
+    to: '/workspace/reviews',
+    label: 'nav.reviews',
+    icon: Shield,
+    end: false,
+  },
+  {
+    id: 'followUp',
+    to: '/workspace/follow-up',
+    label: 'nav.followUp',
+    icon: ListChecks,
+    end: false,
+  },
+  {
+    id: 'program',
+    to: '/workspace/program',
+    label: 'nav.program',
+    icon: CalendarRange,
+    end: false,
+  },
+  {
+    id: 'account',
+    to: '/workspace/account',
+    label: 'auth.profileTitle',
+    icon: UserRound,
+    end: false,
+  },
+  {
+    id: 'preferences',
+    to: '/workspace/preferences',
+    label: 'nav.preferences',
+    icon: Settings2,
+    end: false,
+  },
 ] as const;
 
 function tabsFor(home: string) {
@@ -56,7 +98,9 @@ function navClass(isActive: boolean, compact = false) {
     compact
       ? 'w-full min-w-0 flex-col gap-1 overflow-hidden px-1 py-1 text-center text-[11px] leading-tight'
       : 'px-3 py-2.5 text-sm',
-    isActive ? 'bg-[#5d74ff]/15 text-[#3d4fd4]' : 'text-[#5c6578] hover:bg-[#eef2ff] hover:text-[#3d4fd4]',
+    isActive
+      ? 'bg-[#5d74ff]/15 text-[#3d4fd4]'
+      : 'text-[#5c6578] hover:bg-[#eef2ff] hover:text-[#3d4fd4]',
   );
 }
 
@@ -78,8 +122,9 @@ export function AppShell() {
     },
   });
   const roles =
-    memberships.data?.filter((item) => item.membershipStatus === 'ACTIVE').map((item) => item.role) ??
-    [];
+    memberships.data
+      ?.filter((item) => item.membershipStatus === 'ACTIVE')
+      .map((item) => item.role) ?? [];
   const home = memberships.isSuccess ? homePathFor(roles) : '/workspace/author';
   const tabs = tabsFor(home);
   const mobileBar = tabs.slice(0, 4);
@@ -108,8 +153,13 @@ export function AppShell() {
       </a>
       <div className="grid min-h-screen w-full grid-cols-1 lg:grid-cols-[260px_minmax(0,1fr)]">
         <aside className="hidden h-screen flex-col border-r border-[#e6e8ec] bg-white p-5 lg:sticky lg:top-0 lg:flex">
-          <p className="px-2 text-lg font-extrabold tracking-tight text-[#3d4fd4]">{t('brand.name')}</p>
-          <nav className="mt-12 flex flex-1 flex-col gap-1" aria-label={t('nav.workspace')}>
+          <p className="px-2 text-lg font-extrabold tracking-tight text-[#3d4fd4]">
+            {t('brand.name')}
+          </p>
+          <nav
+            className="mt-12 flex flex-1 flex-col gap-1"
+            aria-label={t('nav.workspace')}
+          >
             {tabs.map((tab) => {
               const Icon = tab.icon;
               return (
@@ -139,21 +189,31 @@ export function AppShell() {
         </aside>
         <div className="min-w-0 w-full p-3 pb-24 sm:p-4 lg:p-6">
           <header className="mb-4 flex items-center justify-between gap-3">
-            <p className="text-lg font-extrabold tracking-tight text-[#3d4fd4] lg:hidden">{t('brand.name')}</p>
+            <p className="text-lg font-extrabold tracking-tight text-[#3d4fd4] lg:hidden">
+              {t('brand.name')}
+            </p>
             <div className="ml-auto flex items-center gap-3">
               <DeadlineBell />
               {onHome ? null : (
                 <>
                   {account.data?.profile.photoPath ? (
-                    <img src={account.data.profile.photoPath} alt="" className="size-9 rounded-full object-cover" />
+                    <img
+                      src={account.data.profile.photoPath}
+                      alt=""
+                      className="size-9 rounded-full object-cover"
+                    />
                   ) : (
                     <span className="grid size-9 place-items-center rounded-full bg-white text-sm font-extrabold">
                       {displayName.slice(0, 1)}
                     </span>
                   )}
                   <span className="hidden min-w-0 sm:block">
-                    <span className="block truncate text-sm font-extrabold">{displayName}</span>
-                    <span className="block truncate text-xs text-[#8b909a]">{account.data?.email}</span>
+                    <span className="block truncate text-sm font-extrabold">
+                      {displayName}
+                    </span>
+                    <span className="block truncate text-xs text-[#8b909a]">
+                      {account.data?.email}
+                    </span>
                   </span>
                 </>
               )}

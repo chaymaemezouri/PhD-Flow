@@ -275,7 +275,10 @@ export class AuthService {
 
   async beginMfa(userId: string, email: string) {
     const secret = newTotpSecret();
-    await this.prisma.user.update({ where: { id: userId }, data: { mfaSecret: secret, mfaEnabled: false } });
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { mfaSecret: secret, mfaEnabled: false },
+    });
     return { uri: totpUri(email, secret) };
   }
 
@@ -403,7 +406,14 @@ export class AuthService {
       where: { recipient: user.email },
       orderBy: { createdAt: 'desc' },
       take: 20,
-      select: { id: true, subject: true, body: true, status: true, template: true, createdAt: true },
+      select: {
+        id: true,
+        subject: true,
+        body: true,
+        status: true,
+        template: true,
+        createdAt: true,
+      },
     });
     return rows.map((row) => ({
       id: row.id,

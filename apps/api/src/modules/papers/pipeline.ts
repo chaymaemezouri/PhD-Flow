@@ -26,11 +26,15 @@ interface RegistrationFact {
 
 const ACCEPTED = new Set(['ACCEPTED', 'CONDITIONALLY_ACCEPTED']);
 
-export function paperSteps(paper: PipelinePaper, registrations: RegistrationFact[]): PaperStep[] {
+export function paperSteps(
+  paper: PipelinePaper,
+  registrations: RegistrationFact[],
+): PaperStep[] {
   const submitted = paper.status === 'SUBMITTED' || paper.status === 'WITHDRAWN';
   const published = paper.decision?.status === 'PUBLISHED' ? paper.decision : null;
   const registration = registrations.find(
-    (item) => item.conferenceId === paper.conferenceId && item.userId === paper.createdById,
+    (item) =>
+      item.conferenceId === paper.conferenceId && item.userId === paper.createdById,
   );
   const has = (kind: string) => paper.files.some((file) => file.kind === kind);
 
@@ -55,16 +59,16 @@ function submissionState(status: string, submitted: boolean): StepState {
   return submitted ? 'done' : 'pending';
 }
 
-function notificationState(
-  decision: { outcome: string } | null,
-): StepState {
+function notificationState(decision: { outcome: string } | null): StepState {
   if (!decision) {
     return 'pending';
   }
   if (decision.outcome === 'REJECTED') {
     return 'failed';
   }
-  return ACCEPTED.has(decision.outcome) || decision.outcome === 'REVISION_REQUIRED' ? 'done' : 'pending';
+  return ACCEPTED.has(decision.outcome) || decision.outcome === 'REVISION_REQUIRED'
+    ? 'done'
+    : 'pending';
 }
 
 function registrationState(status: string | undefined): StepState {

@@ -18,5 +18,7 @@ export function pickConference<T extends ListedConference>(
   }
   const published = active.filter((item) => item.status === 'PUBLISHED');
   const pool = published.length > 0 ? published : active;
-  return [...pool].sort((left, right) => (left.startsOn ?? '9999').localeCompare(right.startsOn ?? '9999'))[0];
+  return [...pool].sort((left, right) =>
+    (left.startsOn ?? '9999').localeCompare(right.startsOn ?? '9999'),
+  )[0];
 }

@@ -22,7 +22,11 @@ describe('Home entry', () => {
     );
 
     expect(
-      await screen.findByRole('heading', { level: 1, name: 'Sign in' }, { timeout: 5_000 }),
+      await screen.findByRole(
+        'heading',
+        { level: 1, name: 'Sign in' },
+        { timeout: 5_000 },
+      ),
     ).toBeTruthy();
     expect(screen.getByRole('link', { name: 'Create account' })).toBeTruthy();
     vi.unstubAllGlobals();

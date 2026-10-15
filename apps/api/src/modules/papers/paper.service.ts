@@ -315,7 +315,11 @@ export class PaperService {
         data: { nextPaperNumber: { increment: 1 } },
         select: { nextPaperNumber: true, slug: true, startsOn: true },
       });
-      const publicId = publicPaperId(counter.slug, counter.startsOn, counter.nextPaperNumber);
+      const publicId = publicPaperId(
+        counter.slug,
+        counter.startsOn,
+        counter.nextPaperNumber,
+      );
       await tx.paper.update({
         where: { id },
         data: {
@@ -506,7 +510,10 @@ export class PaperService {
     });
     const registrations = await this.prisma.registration.findMany({
       where: {
-        OR: rows.map((row) => ({ conferenceId: row.conferenceId, userId: row.createdById })),
+        OR: rows.map((row) => ({
+          conferenceId: row.conferenceId,
+          userId: row.createdById,
+        })),
       },
       select: { conferenceId: true, userId: true, status: true },
     });

@@ -71,10 +71,14 @@ export function LoginPage() {
           />
         </label>
         {form.formState.errors.email ? (
-          <p className="text-sm text-destructive">{form.formState.errors.email.message}</p>
+          <p className="text-sm text-destructive">
+            {form.formState.errors.email.message}
+          </p>
         ) : null}
         {form.formState.errors.password ? (
-          <p className="text-sm text-destructive">{form.formState.errors.password.message}</p>
+          <p className="text-sm text-destructive">
+            {form.formState.errors.password.message}
+          </p>
         ) : null}
         {error ? <p className="text-sm text-destructive">{error}</p> : null}
         <Button type="submit" disabled={form.formState.isSubmitting}>
@@ -89,7 +93,9 @@ export function LoginPage() {
           onClick={() => setDemosOpen((open) => !open)}
         >
           {t('auth.demoTitle')}
-          <ChevronDown className={`size-4 shrink-0 transition-transform ${demosOpen ? 'rotate-180' : ''}`} />
+          <ChevronDown
+            className={`size-4 shrink-0 transition-transform ${demosOpen ? 'rotate-180' : ''}`}
+          />
         </button>
         {demosOpen ? (
           <div className="px-3 pb-3">

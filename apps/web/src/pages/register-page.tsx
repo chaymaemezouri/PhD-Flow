@@ -99,13 +99,19 @@ export function RegisterPage() {
           </span>
         </label>
         {form.formState.errors.email ? (
-          <p className="text-sm text-destructive">{form.formState.errors.email.message}</p>
+          <p className="text-sm text-destructive">
+            {form.formState.errors.email.message}
+          </p>
         ) : null}
         {form.formState.errors.firstName ? (
-          <p className="text-sm text-destructive">{form.formState.errors.firstName.message}</p>
+          <p className="text-sm text-destructive">
+            {form.formState.errors.firstName.message}
+          </p>
         ) : null}
         {form.formState.errors.lastName ? (
-          <p className="text-sm text-destructive">{form.formState.errors.lastName.message}</p>
+          <p className="text-sm text-destructive">
+            {form.formState.errors.lastName.message}
+          </p>
         ) : null}
         {error ? <p className="text-sm text-destructive">{error}</p> : null}
         <Button type="submit" disabled={form.formState.isSubmitting}>

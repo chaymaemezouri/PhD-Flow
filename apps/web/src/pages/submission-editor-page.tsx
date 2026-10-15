@@ -87,7 +87,9 @@ export function SubmissionEditorPage() {
       if (!response.ok) {
         throw new Error(await apiErrorMessage(response));
       }
-      return response.json() as Promise<{ tracks: { id: string; name: string; code: string }[] }>;
+      return response.json() as Promise<{
+        tracks: { id: string; name: string; code: string }[];
+      }>;
     },
     enabled: Boolean(tracksOf),
   });
@@ -117,7 +119,10 @@ export function SubmissionEditorPage() {
       send(`/api/v1/conferences/${conferenceId}/papers`, 'POST', {
         title,
         abstract: abstractText,
-        keywords: keywordsText.split(',').map((item) => item.trim()).filter(Boolean),
+        keywords: keywordsText
+          .split(',')
+          .map((item) => item.trim())
+          .filter(Boolean),
         trackId: trackId || null,
         authors: [],
       }),
@@ -133,7 +138,10 @@ export function SubmissionEditorPage() {
         title: title || current?.title,
         abstract: abstractText || current?.abstract,
         trackId: trackId || null,
-        keywords: keywordsText.split(',').map((item) => item.trim()).filter(Boolean),
+        keywords: keywordsText
+          .split(',')
+          .map((item) => item.trim())
+          .filter(Boolean),
       }),
   });
 
@@ -199,11 +207,15 @@ export function SubmissionEditorPage() {
     t('papers.stepSubmit'),
   ];
 
-  const field = 'mt-2 w-full rounded-2xl border-0 bg-[#f6f7fb] px-3 py-3 text-sm outline-none';
+  const field =
+    'mt-2 w-full rounded-2xl border-0 bg-[#f6f7fb] px-3 py-3 text-sm outline-none';
 
   return (
     <div className="space-y-5">
-      <Link to="/workspace/submissions" className="text-sm font-bold text-[#8b909a] no-underline">
+      <Link
+        to="/workspace/submissions"
+        className="text-sm font-bold text-[#8b909a] no-underline"
+      >
         {t('papers.back')}
       </Link>
       <div>
@@ -225,18 +237,24 @@ export function SubmissionEditorPage() {
                   ? t('papers.withdrawn')
                   : t('papers.submitted')}
             </span>
-            {current.publicId ? <span className="text-sm text-[#5c6578]">{current.publicId}</span> : null}
+            {current.publicId ? (
+              <span className="text-sm text-[#5c6578]">{current.publicId}</span>
+            ) : null}
           </p>
         ) : null}
       </div>
-      {current && current.status !== 'DRAFT' && current.steps ? <UsefulStep paperId={current.id} steps={current.steps} /> : null}
+      {current && current.status !== 'DRAFT' && current.steps ? (
+        <UsefulStep paperId={current.id} steps={current.steps} />
+      ) : null}
       <ol className="flex flex-wrap gap-2">
         {steps.map((label, index) => (
           <li key={label}>
             <button
               type="button"
               className={`rounded-full px-3 py-1.5 text-sm font-extrabold ${
-                index === step ? 'bg-[#5d74ff]/15 text-[#3d4fd4]' : 'bg-white text-[#5c6578]'
+                index === step
+                  ? 'bg-[#5d74ff]/15 text-[#3d4fd4]'
+                  : 'bg-white text-[#5c6578]'
               }`}
               onClick={() => setStep(index)}
             >
@@ -245,7 +263,11 @@ export function SubmissionEditorPage() {
           </li>
         ))}
       </ol>
-      {message ? <p className="text-sm font-bold text-[#c54545]" role="alert">{message}</p> : null}
+      {message ? (
+        <p className="text-sm font-bold text-[#c54545]" role="alert">
+          {message}
+        </p>
+      ) : null}
       {step > 0 && !current ? (
         <section className="rounded-[28px] bg-white p-6 shadow-[0_8px_24px_rgba(28,30,33,0.04)]">
           <p className="text-sm text-[#5c6370]">{t('papers.needDraft')}</p>
@@ -306,7 +328,11 @@ export function SubmissionEditorPage() {
             </label>
             <label className="text-sm font-bold">
               {t('papers.paperTitle')}
-              <Input className={field} value={title} onChange={(event) => setTitle(event.target.value)} />
+              <Input
+                className={field}
+                value={title}
+                onChange={(event) => setTitle(event.target.value)}
+              />
             </label>
             <label className="text-sm font-bold">
               {t('papers.abstract')}
@@ -324,7 +350,9 @@ export function SubmissionEditorPage() {
                   setMessage(null);
                   const action = paperId ? saveText.mutateAsync() : create.mutateAsync();
                   void action.catch((caught: unknown) => {
-                    setMessage(caught instanceof Error ? caught.message : t('papers.failed'));
+                    setMessage(
+                      caught instanceof Error ? caught.message : t('papers.failed'),
+                    );
                   });
                 }}
               >
@@ -339,10 +367,19 @@ export function SubmissionEditorPage() {
           <h2 className="text-lg">{t('papers.stepAuthors')}</h2>
           <ul className="mt-4 space-y-2">
             {current.authors.map((author, index) => (
-              <li key={`${author.email}-${index}`} className="rounded-2xl bg-[#f6f7fb] px-4 py-3 text-sm">
-                <span className="font-extrabold">{author.firstName} {author.lastName}</span>
+              <li
+                key={`${author.email}-${index}`}
+                className="rounded-2xl bg-[#f6f7fb] px-4 py-3 text-sm"
+              >
+                <span className="font-extrabold">
+                  {author.firstName} {author.lastName}
+                </span>
                 <span className="mt-0.5 block text-[#8b909a]">{author.email}</span>
-                {author.corresponding ? <span className="mt-1 inline-block rounded-full bg-white px-2 py-0.5 text-xs font-bold">{t('papers.corresponding')}</span> : null}
+                {author.corresponding ? (
+                  <span className="mt-1 inline-block rounded-full bg-white px-2 py-0.5 text-xs font-bold">
+                    {t('papers.corresponding')}
+                  </span>
+                ) : null}
               </li>
             ))}
           </ul>
@@ -353,12 +390,25 @@ export function SubmissionEditorPage() {
                 event.preventDefault();
                 setMessage(null);
                 void addAuthor.mutateAsync().catch((caught: unknown) => {
-                  setMessage(caught instanceof Error ? caught.message : t('papers.failed'));
+                  setMessage(
+                    caught instanceof Error ? caught.message : t('papers.failed'),
+                  );
                 });
               }}
             >
-              <Input className="rounded-2xl border-0 bg-[#f6f7fb]" value={authorName} onChange={(event) => setAuthorName(event.target.value)} placeholder={t('papers.authorName')} />
-              <Input className="rounded-2xl border-0 bg-[#f6f7fb]" type="email" value={authorEmail} onChange={(event) => setAuthorEmail(event.target.value)} placeholder={t('auth.email')} />
+              <Input
+                className="rounded-2xl border-0 bg-[#f6f7fb]"
+                value={authorName}
+                onChange={(event) => setAuthorName(event.target.value)}
+                placeholder={t('papers.authorName')}
+              />
+              <Input
+                className="rounded-2xl border-0 bg-[#f6f7fb]"
+                type="email"
+                value={authorEmail}
+                onChange={(event) => setAuthorEmail(event.target.value)}
+                placeholder={t('auth.email')}
+              />
               <Button type="submit">{t('papers.addAuthor')}</Button>
             </form>
           )}
@@ -373,7 +423,9 @@ export function SubmissionEditorPage() {
               {current.manuscript ? current.manuscript.originalName : t('papers.noFile')}
             </span>
             {current.manuscript ? (
-              <span className="mt-1 text-xs text-[#8b909a]">{Math.ceil(current.manuscript.sizeBytes / 1024)} Ko</span>
+              <span className="mt-1 text-xs text-[#8b909a]">
+                {Math.ceil(current.manuscript.sizeBytes / 1024)} Ko
+              </span>
             ) : null}
             {locked ? null : (
               <input
@@ -404,7 +456,9 @@ export function SubmissionEditorPage() {
                 onClick={() => {
                   setMessage(null);
                   void submit.mutateAsync().catch((caught: unknown) => {
-                    setMessage(caught instanceof Error ? caught.message : t('papers.failed'));
+                    setMessage(
+                      caught instanceof Error ? caught.message : t('papers.failed'),
+                    );
                   });
                 }}
               >
@@ -419,7 +473,9 @@ export function SubmissionEditorPage() {
                 onClick={() => {
                   setMessage(null);
                   void withdraw.mutateAsync().catch((caught: unknown) => {
-                    setMessage(caught instanceof Error ? caught.message : t('papers.failed'));
+                    setMessage(
+                      caught instanceof Error ? caught.message : t('papers.failed'),
+                    );
                   });
                 }}
               >
@@ -448,7 +504,9 @@ function UsefulStep({ paperId, steps }: { paperId: string; steps: PaperStep[] })
   }
   const sentence = t(`home.actions.${focus.key}.${focus.state}`);
   const badge =
-    focus.state === 'failed' ? 'bg-[#ffe8e8] text-[#c54545]' : 'bg-[#fff4e4] text-[#9a6410]';
+    focus.state === 'failed'
+      ? 'bg-[#ffe8e8] text-[#c54545]'
+      : 'bg-[#fff4e4] text-[#9a6410]';
   return (
     <section className="rounded-2xl border border-[#e4e7ee] bg-white p-5">
       <h2 className="text-lg">{t('workflow.round')}</h2>
@@ -457,11 +515,17 @@ function UsefulStep({ paperId, steps }: { paperId: string; steps: PaperStep[] })
         className="mt-4 flex items-center justify-between gap-3 rounded-2xl border border-[#e6eaf3] px-4 py-3 text-[#1c2744] no-underline"
       >
         <span className="min-w-0">
-          <span className="block text-sm font-extrabold">{t(`workflow.steps.${focus.key}`)}</span>
+          <span className="block text-sm font-extrabold">
+            {t(`workflow.steps.${focus.key}`)}
+          </span>
           <span className="block text-sm text-[#5c6578]">{sentence}</span>
         </span>
-        <span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-extrabold ${badge}`}>
-          {focus.state === 'failed' ? t('workflow.stepFailed') : t('workflow.stepPending')}
+        <span
+          className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-extrabold ${badge}`}
+        >
+          {focus.state === 'failed'
+            ? t('workflow.stepFailed')
+            : t('workflow.stepPending')}
         </span>
       </Link>
     </section>

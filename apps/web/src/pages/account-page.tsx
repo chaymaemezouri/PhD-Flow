@@ -112,7 +112,10 @@ export function AccountPage() {
           </div>
           <div className="mt-6 flex flex-wrap gap-2">
             {profile.disciplines.map((item) => (
-              <span key={item} className="rounded-full bg-[#f4f5f8] px-3 py-1 text-sm font-bold">
+              <span
+                key={item}
+                className="rounded-full bg-[#f4f5f8] px-3 py-1 text-sm font-bold"
+              >
                 {item}
               </span>
             ))}
@@ -133,11 +136,13 @@ export function AccountPage() {
               }
               const body = new FormData();
               body.set('photo', file);
-              void apiFetch('/api/v1/auth/photo', { method: 'POST', body }).then(async (response) => {
-                if (response.ok) {
-                  await queryClient.invalidateQueries({ queryKey: ['account'] });
-                }
-              });
+              void apiFetch('/api/v1/auth/photo', { method: 'POST', body }).then(
+                async (response) => {
+                  if (response.ok) {
+                    await queryClient.invalidateQueries({ queryKey: ['account'] });
+                  }
+                },
+              );
             }}
           />
         </label>
@@ -306,7 +311,9 @@ export function AccountPage() {
                 type="button"
                 variant="secondary"
                 className="mt-3"
-                onClick={() => setSteps((current) => [...current, { year: '', title: '', place: '' }])}
+                onClick={() =>
+                  setSteps((current) => [...current, { year: '', title: '', place: '' }])
+                }
               >
                 {t('auth.addStep')}
               </Button>

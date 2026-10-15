@@ -111,7 +111,9 @@ export function FollowUpPage() {
   const template = useQuery({
     queryKey: ['copyright-template', data?.conferenceId],
     queryFn: async () => {
-      const response = await apiFetch(`/api/v1/conferences/${data!.conferenceId}/copyright-template`);
+      const response = await apiFetch(
+        `/api/v1/conferences/${data!.conferenceId}/copyright-template`,
+      );
       if (!response.ok) {
         throw new Error(await apiErrorMessage(response));
       }
@@ -119,8 +121,11 @@ export function FollowUpPage() {
     },
     enabled: Boolean(data?.conferenceId && data.checklist.accepted),
   });
-  const field = 'h-10 w-full rounded-2xl border border-[#e4e7ee] bg-[#f6f7fb] px-3 text-sm outline-none';
-  const authorFiles = Boolean(selected && data && !data.canManage && data.checklist.accepted);
+  const field =
+    'h-10 w-full rounded-2xl border border-[#e4e7ee] bg-[#f6f7fb] px-3 text-sm outline-none';
+  const authorFiles = Boolean(
+    selected && data && !data.canManage && data.checklist.accepted,
+  );
   const showPublication = Boolean(data?.checklist.accepted);
   const showRevision = data?.decision?.outcome === 'REVISION_REQUIRED' && !data.canManage;
   const latest = (kind: string) =>
@@ -129,7 +134,13 @@ export function FollowUpPage() {
     const stamp = latest(kind);
     return stamp ? new Date(stamp).toLocaleString() : null;
   };
-  const toneRank: Record<Tone, number> = { red: 0, amber: 1, blue: 2, muted: 3, green: 4 };
+  const toneRank: Record<Tone, number> = {
+    red: 0,
+    amber: 1,
+    blue: 2,
+    muted: 3,
+    green: 4,
+  };
   const cards: WorkItem[] = [];
   if (selected && data && showRevision) {
     cards.push({
@@ -157,20 +168,26 @@ export function FollowUpPage() {
         action: authorFiles ? (
           <PdfButton
             label={t('workflow.editable')}
-            onFile={(file) => void sendFile(`/api/v1/papers/${selected.id}/editable`, file)}
+            onFile={(file) =>
+              void sendFile(`/api/v1/papers/${selected.id}/editable`, file)
+            }
           />
         ) : null,
       },
       {
         key: 'camera',
         label: t('workflow.camera'),
-        value: data.checklist.cameraReady ? t('workflow.stepDone') : t('workflow.stepPending'),
+        value: data.checklist.cameraReady
+          ? t('workflow.stepDone')
+          : t('workflow.stepPending'),
         tone: data.checklist.cameraReady ? 'green' : 'amber',
         hint: when('CAMERA_READY'),
         action: authorFiles ? (
           <PdfButton
             label={t('workflow.camera')}
-            onFile={(file) => void sendFile(`/api/v1/papers/${selected.id}/camera-ready`, file)}
+            onFile={(file) =>
+              void sendFile(`/api/v1/papers/${selected.id}/camera-ready`, file)
+            }
           />
         ) : null,
       },
@@ -178,7 +195,11 @@ export function FollowUpPage() {
         key: 'similarity',
         label: t('workflow.similarity'),
         value: data.similarity ? `${data.similarity.percentage} %` : '—',
-        tone: data.similarity?.satisfied ? 'green' : data.similarity && data.similarity.percentage >= 20 ? 'red' : 'amber',
+        tone: data.similarity?.satisfied
+          ? 'green'
+          : data.similarity && data.similarity.percentage >= 20
+            ? 'red'
+            : 'amber',
         hint: data.similarity
           ? data.similarity.percentage >= 20
             ? t('workflow.notSatisfied')
@@ -188,11 +209,15 @@ export function FollowUpPage() {
           : t('home.actions.similarity.pending'),
         action: (
           <div className="flex flex-col items-start gap-2">
-            <p className="max-w-md text-xs leading-relaxed text-[#5c6578]">{t('workflow.similarityLocal')}</p>
+            <p className="max-w-md text-xs leading-relaxed text-[#5c6578]">
+              {t('workflow.similarityLocal')}
+            </p>
             {authorFiles ? (
               <PdfButton
                 label={t('workflow.report')}
-                onFile={(file) => void sendFile(`/api/v1/papers/${selected.id}/similarity-report`, file)}
+                onFile={(file) =>
+                  void sendFile(`/api/v1/papers/${selected.id}/similarity-report`, file)
+                }
               />
             ) : null}
             {authorFiles && latest('SIMILARITY') ? (
@@ -200,7 +225,9 @@ export function FollowUpPage() {
                 className="flex flex-wrap items-center gap-2"
                 onSubmit={(event) => {
                   event.preventDefault();
-                  const percentage = Number(new FormData(event.currentTarget).get('percentage'));
+                  const percentage = Number(
+                    new FormData(event.currentTarget).get('percentage'),
+                  );
                   void apiFetch(`/api/v1/papers/${selected.id}/similarity`, {
                     method: 'POST',
                     body: JSON.stringify({ percentage, note: '' }),
@@ -250,18 +277,26 @@ export function FollowUpPage() {
             : data.copyright === 'REJECTED'
               ? t('workflow.stepFailed')
               : t('workflow.stepPending'),
-        tone: data.copyright === 'VALIDATED' ? 'green' : data.copyright === 'REJECTED' ? 'red' : 'amber',
+        tone:
+          data.copyright === 'VALIDATED'
+            ? 'green'
+            : data.copyright === 'REJECTED'
+              ? 'red'
+              : 'amber',
         hint: when('COPYRIGHT'),
         action: authorFiles ? (
           <PdfButton
             label={t('workflow.steps.copyright')}
-            onFile={(file) => void sendFile(`/api/v1/papers/${selected.id}/copyright`, file)}
+            onFile={(file) =>
+              void sendFile(`/api/v1/papers/${selected.id}/copyright`, file)
+            }
           />
         ) : null,
       },
     );
     if (data.canManage) {
-      const templateDone = selected.steps?.find((step) => step.key === 'template')?.state === 'done';
+      const templateDone =
+        selected.steps?.find((step) => step.key === 'template')?.state === 'done';
       cards.push({
         key: 'template',
         label: t('workflow.steps.template'),
@@ -289,197 +324,243 @@ export function FollowUpPage() {
 
   return (
     <div className="space-y-5">
-        {notice ? (
-          <p
-            className={`w-fit rounded-full px-3 py-1 text-sm font-extrabold ${notice.ok ? 'bg-[#2fbf71]/14 text-[#1c9a57]' : 'bg-[#e35d5d]/12 text-[#c54545]'}`}
-            role="status"
-          >
-            {notice.text}
-          </p>
-        ) : null}
-        {data && selected ? (
-          <>
-            <section className="rounded-[28px] border border-[#e4e7ee] bg-white p-5 sm:p-6">
-              <div className="flex flex-wrap items-start justify-between gap-4">
-                <div className="min-w-0">
-                  <p className="text-xs font-extrabold tracking-wide text-[#8b909a]">
-                    {data.publicId ?? t('workflow.followTitle')}
-                  </p>
-                  <h1 className="mt-1 text-2xl font-extrabold leading-tight">{data.title}</h1>
-                </div>
-                <span className={`rounded-full px-3 py-1 text-xs font-extrabold ${pillTone[data.decision ? outcomeTone[data.decision.outcome] ?? 'blue' : 'muted']}`}>
-                  {data.decision ? outcomes[data.decision.outcome] ?? data.decision.outcome : t('workflow.noDecision')}
-                </span>
+      {notice ? (
+        <p
+          className={`w-fit rounded-full px-3 py-1 text-sm font-extrabold ${notice.ok ? 'bg-[#2fbf71]/14 text-[#1c9a57]' : 'bg-[#e35d5d]/12 text-[#c54545]'}`}
+          role="status"
+        >
+          {notice.text}
+        </p>
+      ) : null}
+      {data && selected ? (
+        <>
+          <section className="rounded-[28px] border border-[#e4e7ee] bg-white p-5 sm:p-6">
+            <div className="flex flex-wrap items-start justify-between gap-4">
+              <div className="min-w-0">
+                <p className="text-xs font-extrabold tracking-wide text-[#8b909a]">
+                  {data.publicId ?? t('workflow.followTitle')}
+                </p>
+                <h1 className="mt-1 text-2xl font-extrabold leading-tight">
+                  {data.title}
+                </h1>
               </div>
-              {data.decision ? (
-                <p className="mt-4 max-w-3xl text-sm leading-relaxed text-[#5c6578]">{data.decision.letter}</p>
-              ) : null}
-              <p
-                className={`mt-5 rounded-2xl px-4 py-3 text-sm font-extrabold ${
-                  focus?.state === 'failed'
-                    ? 'bg-[#e35d5d]/12 text-[#c54545]'
-                    : focus
-                      ? 'bg-[#f0a04b]/16 text-[#9a6410]'
-                      : data.status === 'DRAFT'
-                        ? 'bg-[#f0a04b]/16 text-[#9a6410]'
-                        : 'bg-[#2fbf71]/14 text-[#1c9a57]'
-                }`}
+              <span
+                className={`rounded-full px-3 py-1 text-xs font-extrabold ${pillTone[data.decision ? (outcomeTone[data.decision.outcome] ?? 'blue') : 'muted']}`}
               >
-                {focus
-                  ? t(`home.actions.${focus.key}.${focus.state === 'failed' ? 'failed' : 'pending'}`)
-                  : data.status === 'DRAFT'
-                    ? t('home.actions.submission.pending')
-                    : t('home.clear')}
+                {data.decision
+                  ? (outcomes[data.decision.outcome] ?? data.decision.outcome)
+                  : t('workflow.noDecision')}
+              </span>
+            </div>
+            {data.decision ? (
+              <p className="mt-4 max-w-3xl text-sm leading-relaxed text-[#5c6578]">
+                {data.decision.letter}
               </p>
-              {data.doi ? (
-                <p className="mt-4 text-sm font-extrabold text-[#3d4fd4]">{data.doi}</p>
-              ) : null}
-              {data.canManage && data.checklist.ready && !data.doi && selected ? (
-                <div className="mt-4">
-                  <Button
-                    type="button"
-                    onClick={() => {
-                      void apiFetch(`/api/v1/papers/${selected.id}/publish`, { method: 'POST', body: '{}' }).then(
-                        (response) => refresh(response, t('workflow.doiReady')),
-                      );
-                    }}
-                  >
-                    {t('workflow.doi')}
-                  </Button>
-                </div>
-              ) : null}
-              {(papers.data?.length ?? 0) > 1 ? (
-                <div className="mt-5 border-t border-[#eef0f4] pt-4">
-                  <button
-                    type="button"
-                    className="flex w-full items-center justify-between gap-3 text-left text-sm font-extrabold"
-                    aria-expanded={othersOpen}
-                    onClick={() => setOthersOpen((open) => !open)}
-                  >
-                    {t('workflow.others')}
-                    <ChevronDown className={`size-4 shrink-0 transition-transform ${othersOpen ? 'rotate-180' : ''}`} />
-                  </button>
-                  {othersOpen ? (
-                    <ul className="mt-3 grid gap-2 sm:grid-cols-2">
-                      {papers.data?.map((paper) => {
-                        const active = paper.id === selected.id;
-                        const paperFocus = focusStep(paper.steps ?? []);
-                        const badge =
-                          paper.status === 'DRAFT'
-                            ? { label: t('papers.draft'), tone: 'amber' as Tone }
-                            : paper.status === 'WITHDRAWN'
-                              ? { label: t('papers.withdrawn'), tone: 'red' as Tone }
-                              : paperFocus
-                                ? {
-                                    label: t(`workflow.steps.${paperFocus.key}`),
-                                    tone: (paperFocus.state === 'failed' ? 'red' : 'amber') as Tone,
-                                  }
-                                : { label: t('workflow.stepDone'), tone: 'green' as Tone };
-                        return (
-                          <li key={paper.id}>
-                            <button
-                              type="button"
-                              aria-current={active ? 'true' : undefined}
-                              className={`h-full w-full rounded-2xl px-4 py-3 text-left ${active ? 'bg-[#5d74ff]/12' : 'bg-[#f6f7fb]'}`}
-                              onClick={() => {
-                                setNotice(null);
-                                setModelOpen(false);
-                                setOthersOpen(false);
-                                setParams({ paper: paper.id });
-                              }}
-                            >
-                              <span className="block text-sm font-extrabold leading-snug text-[#1c2744]">{paper.title}</span>
-                              <span className="mt-2 flex flex-wrap items-center gap-2">
-                                {paper.publicId ? <span className="text-xs text-[#8b909a]">{paper.publicId}</span> : null}
-                                <span className={`rounded-full px-2 py-0.5 text-[11px] font-extrabold ${pillTone[badge.tone]}`}>
-                                  {badge.label}
+            ) : null}
+            <p
+              className={`mt-5 rounded-2xl px-4 py-3 text-sm font-extrabold ${
+                focus?.state === 'failed'
+                  ? 'bg-[#e35d5d]/12 text-[#c54545]'
+                  : focus
+                    ? 'bg-[#f0a04b]/16 text-[#9a6410]'
+                    : data.status === 'DRAFT'
+                      ? 'bg-[#f0a04b]/16 text-[#9a6410]'
+                      : 'bg-[#2fbf71]/14 text-[#1c9a57]'
+              }`}
+            >
+              {focus
+                ? t(
+                    `home.actions.${focus.key}.${focus.state === 'failed' ? 'failed' : 'pending'}`,
+                  )
+                : data.status === 'DRAFT'
+                  ? t('home.actions.submission.pending')
+                  : t('home.clear')}
+            </p>
+            {data.doi ? (
+              <p className="mt-4 text-sm font-extrabold text-[#3d4fd4]">{data.doi}</p>
+            ) : null}
+            {data.canManage && data.checklist.ready && !data.doi && selected ? (
+              <div className="mt-4">
+                <Button
+                  type="button"
+                  onClick={() => {
+                    void apiFetch(`/api/v1/papers/${selected.id}/publish`, {
+                      method: 'POST',
+                      body: '{}',
+                    }).then((response) => refresh(response, t('workflow.doiReady')));
+                  }}
+                >
+                  {t('workflow.doi')}
+                </Button>
+              </div>
+            ) : null}
+            {(papers.data?.length ?? 0) > 1 ? (
+              <div className="mt-5 border-t border-[#eef0f4] pt-4">
+                <button
+                  type="button"
+                  className="flex w-full items-center justify-between gap-3 text-left text-sm font-extrabold"
+                  aria-expanded={othersOpen}
+                  onClick={() => setOthersOpen((open) => !open)}
+                >
+                  {t('workflow.others')}
+                  <ChevronDown
+                    className={`size-4 shrink-0 transition-transform ${othersOpen ? 'rotate-180' : ''}`}
+                  />
+                </button>
+                {othersOpen ? (
+                  <ul className="mt-3 grid gap-2 sm:grid-cols-2">
+                    {papers.data?.map((paper) => {
+                      const active = paper.id === selected.id;
+                      const paperFocus = focusStep(paper.steps ?? []);
+                      const badge =
+                        paper.status === 'DRAFT'
+                          ? { label: t('papers.draft'), tone: 'amber' as Tone }
+                          : paper.status === 'WITHDRAWN'
+                            ? { label: t('papers.withdrawn'), tone: 'red' as Tone }
+                            : paperFocus
+                              ? {
+                                  label: t(`workflow.steps.${paperFocus.key}`),
+                                  tone: (paperFocus.state === 'failed'
+                                    ? 'red'
+                                    : 'amber') as Tone,
+                                }
+                              : { label: t('workflow.stepDone'), tone: 'green' as Tone };
+                      return (
+                        <li key={paper.id}>
+                          <button
+                            type="button"
+                            aria-current={active ? 'true' : undefined}
+                            className={`h-full w-full rounded-2xl px-4 py-3 text-left ${active ? 'bg-[#5d74ff]/12' : 'bg-[#f6f7fb]'}`}
+                            onClick={() => {
+                              setNotice(null);
+                              setModelOpen(false);
+                              setOthersOpen(false);
+                              setParams({ paper: paper.id });
+                            }}
+                          >
+                            <span className="block text-sm font-extrabold leading-snug text-[#1c2744]">
+                              {paper.title}
+                            </span>
+                            <span className="mt-2 flex flex-wrap items-center gap-2">
+                              {paper.publicId ? (
+                                <span className="text-xs text-[#8b909a]">
+                                  {paper.publicId}
                                 </span>
+                              ) : null}
+                              <span
+                                className={`rounded-full px-2 py-0.5 text-[11px] font-extrabold ${pillTone[badge.tone]}`}
+                              >
+                                {badge.label}
                               </span>
-                            </button>
-                          </li>
-                        );
-                      })}
-                    </ul>
-                  ) : null}
+                            </span>
+                          </button>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                ) : null}
+              </div>
+            ) : null}
+          </section>
+
+          {data.canManage && !data.decision && data.status === 'SUBMITTED' ? (
+            <form
+              className="grid gap-3 rounded-2xl border border-[#e4e7ee] bg-white p-5"
+              onSubmit={(event) => {
+                event.preventDefault();
+                const form = new FormData(event.currentTarget);
+                void apiFetch(`/api/v1/papers/${selected.id}/decision`, {
+                  method: 'POST',
+                  body: JSON.stringify({
+                    outcome: String(form.get('outcome')),
+                    letter: String(form.get('letter')),
+                    publish: form.get('publish') === 'on',
+                  }),
+                }).then((response) => refresh(response, t('workflow.saved')));
+              }}
+            >
+              <h3 className="text-lg font-extrabold">{t('workflow.decide')}</h3>
+              <select
+                name="outcome"
+                className={field}
+                defaultValue="ACCEPTED"
+                aria-label={t('workflow.decide')}
+              >
+                <option value="ACCEPTED">{t('workflow.outcomeAccepted')}</option>
+                <option value="CONDITIONALLY_ACCEPTED">
+                  {t('workflow.outcomeConditional')}
+                </option>
+                <option value="REVISION_REQUIRED">{t('workflow.outcomeRevision')}</option>
+                <option value="REJECTED">{t('workflow.outcomeRejected')}</option>
+              </select>
+              <label className="text-sm font-extrabold">
+                {t('workflow.letter')}
+                <textarea
+                  name="letter"
+                  required
+                  minLength={10}
+                  className={`${field} mt-1 h-28 py-2`}
+                />
+              </label>
+              <label className="flex items-center gap-2 text-sm font-extrabold">
+                <input
+                  name="publish"
+                  type="checkbox"
+                  defaultChecked
+                  className="size-4 accent-[#5d74ff]"
+                />
+                {t('workflow.publish')}
+              </label>
+              <div>
+                <Button type="submit">{t('workflow.decide')}</Button>
+              </div>
+            </form>
+          ) : null}
+
+          {!data.canManage && !data.checklist.accepted ? (
+            <section className="rounded-2xl border border-[#e4e7ee] bg-white p-5">
+              <p className="text-sm text-[#5c6578]">
+                {t('conferences.filesAfterAcceptance')}
+              </p>
+            </section>
+          ) : null}
+
+          {cards.length > 0 ? (
+            <section>
+              <h2 className="mb-3 text-lg font-extrabold">{t('workflow.documents')}</h2>
+              <div className="grid gap-3 md:grid-cols-2">
+                {cards.map((card) => (
+                  <WorkCard key={card.key} item={card} />
+                ))}
+              </div>
+            </section>
+          ) : null}
+
+          {data.checklist.accepted && template.data ? (
+            <section className="rounded-2xl border border-[#e4e7ee] bg-white">
+              <button
+                type="button"
+                className="flex w-full items-center justify-between gap-3 px-5 py-4 text-left"
+                aria-expanded={modelOpen}
+                onClick={() => setModelOpen((open) => !open)}
+              >
+                <span className="text-sm font-extrabold">{t('workflow.model')}</span>
+                <ChevronDown
+                  className={`size-4 shrink-0 transition-transform ${modelOpen ? 'rotate-180' : ''}`}
+                />
+              </button>
+              {modelOpen ? (
+                <div className="border-t border-[#eef0f4] px-5 py-4">
+                  <h3 className="text-sm font-extrabold">{template.data.subject}</h3>
+                  <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-[#5c6578]">
+                    {template.data.body}
+                  </p>
                 </div>
               ) : null}
             </section>
-
-            {data.canManage && !data.decision && data.status === 'SUBMITTED' ? (
-              <form
-                className="grid gap-3 rounded-2xl border border-[#e4e7ee] bg-white p-5"
-                onSubmit={(event) => {
-                  event.preventDefault();
-                  const form = new FormData(event.currentTarget);
-                  void apiFetch(`/api/v1/papers/${selected.id}/decision`, {
-                    method: 'POST',
-                    body: JSON.stringify({
-                      outcome: String(form.get('outcome')),
-                      letter: String(form.get('letter')),
-                      publish: form.get('publish') === 'on',
-                    }),
-                  }).then((response) => refresh(response, t('workflow.saved')));
-                }}
-              >
-                <h3 className="text-lg font-extrabold">{t('workflow.decide')}</h3>
-                <select name="outcome" className={field} defaultValue="ACCEPTED" aria-label={t('workflow.decide')}>
-                  <option value="ACCEPTED">{t('workflow.outcomeAccepted')}</option>
-                  <option value="CONDITIONALLY_ACCEPTED">{t('workflow.outcomeConditional')}</option>
-                  <option value="REVISION_REQUIRED">{t('workflow.outcomeRevision')}</option>
-                  <option value="REJECTED">{t('workflow.outcomeRejected')}</option>
-                </select>
-                <label className="text-sm font-extrabold">
-                  {t('workflow.letter')}
-                  <textarea name="letter" required minLength={10} className={`${field} mt-1 h-28 py-2`} />
-                </label>
-                <label className="flex items-center gap-2 text-sm font-extrabold">
-                  <input name="publish" type="checkbox" defaultChecked className="size-4 accent-[#5d74ff]" />
-                  {t('workflow.publish')}
-                </label>
-                <div>
-                  <Button type="submit">{t('workflow.decide')}</Button>
-                </div>
-              </form>
-            ) : null}
-
-            {!data.canManage && !data.checklist.accepted ? (
-              <section className="rounded-2xl border border-[#e4e7ee] bg-white p-5">
-                <p className="text-sm text-[#5c6578]">{t('conferences.filesAfterAcceptance')}</p>
-              </section>
-            ) : null}
-
-            {cards.length > 0 ? (
-              <section>
-                <h2 className="mb-3 text-lg font-extrabold">{t('workflow.documents')}</h2>
-                <div className="grid gap-3 md:grid-cols-2">
-                  {cards.map((card) => (
-                    <WorkCard key={card.key} item={card} />
-                  ))}
-                </div>
-              </section>
-            ) : null}
-
-            {data.checklist.accepted && template.data ? (
-              <section className="rounded-2xl border border-[#e4e7ee] bg-white">
-                <button
-                  type="button"
-                  className="flex w-full items-center justify-between gap-3 px-5 py-4 text-left"
-                  aria-expanded={modelOpen}
-                  onClick={() => setModelOpen((open) => !open)}
-                >
-                  <span className="text-sm font-extrabold">{t('workflow.model')}</span>
-                  <ChevronDown className={`size-4 shrink-0 transition-transform ${modelOpen ? 'rotate-180' : ''}`} />
-                </button>
-                {modelOpen ? (
-                  <div className="border-t border-[#eef0f4] px-5 py-4">
-                    <h3 className="text-sm font-extrabold">{template.data.subject}</h3>
-                    <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-[#5c6578]">{template.data.body}</p>
-                  </div>
-                ) : null}
-              </section>
-            ) : null}
-          </>
-        ) : null}
+          ) : null}
+        </>
+      ) : null}
     </div>
   );
 }
@@ -498,12 +579,18 @@ function WorkCard({ item }: { item: WorkItem }) {
   return (
     <article
       className={`flex flex-col rounded-[24px] border p-5 ${
-        attention ? 'border-[#e35d5d]/20 bg-[#e35d5d]/8 md:col-span-2' : 'border-[#e4e7ee] bg-white'
+        attention
+          ? 'border-[#e35d5d]/20 bg-[#e35d5d]/8 md:col-span-2'
+          : 'border-[#e4e7ee] bg-white'
       }`}
     >
       <div className="flex items-start justify-between gap-3">
         <h3 className="text-base font-extrabold">{item.label}</h3>
-        <span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-extrabold ${pillTone[item.tone]}`}>{item.value}</span>
+        <span
+          className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-extrabold ${pillTone[item.tone]}`}
+        >
+          {item.value}
+        </span>
       </div>
       {item.hint ? <p className="mt-2 text-sm text-[#5c6578]">{item.hint}</p> : null}
       {item.action ? <div className="mt-4">{item.action}</div> : null}
