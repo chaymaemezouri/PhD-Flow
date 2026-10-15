@@ -346,8 +346,26 @@ function ChairDashboard() {
         </Link>
       </Identity>
       <section className="grid grid-cols-2 gap-3 xl:grid-cols-4">
-        <Metric tone="blue" label={t('home.submitted')} value={stats.data ? (byStatus.SUBMITTED ?? 0) : '—'} hint={t('home.chairPapers')} />
-        <Metric tone="green" label={t('home.drafts')} value={stats.data ? (byStatus.DRAFT ?? 0) : '—'} hint={managed?.name ?? '—'} />
+        <Metric
+          tone="blue"
+          label={t('home.submitted')}
+          value={
+            stats.data
+              ? (byStatus.SUBMITTED ?? 0)
+              : (papers.data?.filter((paper) => paper.status === 'SUBMITTED').length ?? '—')
+          }
+          hint={t('home.chairPapers')}
+        />
+        <Metric
+          tone="green"
+          label={t('home.drafts')}
+          value={
+            stats.data
+              ? (byStatus.DRAFT ?? 0)
+              : (papers.data?.filter((paper) => paper.status === 'DRAFT').length ?? '—')
+          }
+          hint={managed?.name ?? '—'}
+        />
         <Metric tone="amber" label={t('workflow.openReviews')} value={stats.data ? stats.data.openReviews : '—'} hint={t('home.openReviewsHint')} />
         <Metric tone="red" label={t('workflow.overdue')} value={stats.data ? stats.data.overdueReviews : '—'} hint={t('home.overdueHint')} />
       </section>

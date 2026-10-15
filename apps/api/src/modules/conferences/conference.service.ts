@@ -51,6 +51,7 @@ const conferenceInclude = {
     include: { user: { include: { profile: true } } },
     orderBy: { createdAt: 'asc' as const },
   },
+  invitations: { orderBy: { createdAt: 'desc' as const } },
 } satisfies Prisma.ConferenceInclude;
 
 type ConferenceRecord = Prisma.ConferenceGetPayload<{
@@ -408,7 +409,31 @@ export class ConferenceService {
         'This invitation was sent to a different email address',
       );
     }
+    await this.applyInvitation(actor, invitation, accept);
+  }
 
+  async respondMine(actor: AuthenticatedUser, conferenceId: string, accept: boolean) {
+    const invitation = await this.prisma.conferenceInvitation.findFirst({
+      where: {
+        conferenceId,
+        email: actor.email.toLowerCase(),
+        acceptedAt: null,
+        declinedAt: null,
+        expiresAt: { gt: new Date() },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+    if (!invitation) {
+      throw new NotFoundException('Invitation not found');
+    }
+    await this.applyInvitation(actor, invitation, accept);
+  }
+
+  private async applyInvitation(
+    actor: AuthenticatedUser,
+    invitation: { id: string; conferenceId: string; role: ConferenceRole },
+    accept: boolean,
+  ) {
     await this.prisma.$transaction(async (tx) => {
       if (accept) {
         await tx.membership.upsert({
@@ -588,6 +613,16 @@ export class ConferenceService {
               status: item.status,
               firstName: item.user.profile?.firstName ?? '',
               lastName: item.user.profile?.lastName ?? '',
+            }))
+        : [],
+      invitations: canManage
+        ? row.invitations
+            .filter((item) => !item.acceptedAt && !item.declinedAt)
+            .map((item) => ({
+              id: item.id,
+              email: item.email,
+              role: item.role,
+              expiresAt: item.expiresAt.toISOString(),
             }))
         : [],
     };

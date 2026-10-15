@@ -31,9 +31,9 @@ export function useLogout() {
         throw new Error(await apiErrorMessage(response));
       }
     },
-    onSuccess: async () => {
+    onSuccess: () => {
       clearCsrf();
-      await queryClient.invalidateQueries({ queryKey: ['account'] });
+      queryClient.clear();
     },
   });
 }

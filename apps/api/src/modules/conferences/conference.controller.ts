@@ -15,6 +15,7 @@ import { ApiTags } from '@nestjs/swagger';
 import {
   createConferenceSchema,
   deadlineSchema,
+  invitationResponseSchema,
   inviteMemberSchema,
   templateSchema,
   tokenSchema,
@@ -145,6 +146,18 @@ export class ConferenceController {
     body: z.infer<typeof inviteMemberSchema>,
   ) {
     return this.conferences.invite(request.user!, id, body);
+  }
+
+  @Post('conferences/:id/invitation/respond')
+  @HttpCode(204)
+  @UseGuards(AuthGuard)
+  async respondMine(
+    @Req() request: AuthenticatedRequest,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body(new ZodValidationPipe(invitationResponseSchema))
+    body: z.infer<typeof invitationResponseSchema>,
+  ) {
+    await this.conferences.respondMine(request.user!, id, body.accept);
   }
 
   @Post('conferences/:id/members/:membershipId/remove')

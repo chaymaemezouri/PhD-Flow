@@ -245,6 +245,10 @@ export const inviteMemberSchema = z.object({
   role: z.enum(['ADMINISTRATOR', 'COMMITTEE', 'REVIEWER', 'AUTHOR']),
 });
 
+export const invitationResponseSchema = z.object({
+  accept: z.boolean(),
+});
+
 export const membershipStatusSchema = z.object({
   status: z.enum(['REMOVED']),
 });

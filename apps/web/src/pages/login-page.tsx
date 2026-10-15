@@ -47,7 +47,7 @@ export function LoginPage() {
             setError(await apiErrorMessage(response));
             return;
           }
-          await queryClient.invalidateQueries({ queryKey: ['account'] });
+          queryClient.clear();
           void navigate(destination);
         })}
       >
