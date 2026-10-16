@@ -65,7 +65,7 @@ export function DeadlineBell() {
     <div className="relative">
       <button
         type="button"
-        className="relative grid size-10 place-items-center rounded-xl border border-[#e4e7ee] bg-white text-[#3d4fd4] sm:size-11 sm:rounded-2xl"
+        className="relative grid size-11 place-items-center rounded-2xl border border-[#e4e7ee] bg-white text-[#3d4fd4] lg:size-10 lg:rounded-xl"
         aria-label={t('top.notifications')}
         aria-expanded={open}
         onClick={() => setOpen((current) => !current)}

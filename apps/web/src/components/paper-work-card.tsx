@@ -93,35 +93,35 @@ export function PaperWorkCard({ paper }: { paper: WorkPaper }) {
   return (
     <Link
       to={meta.href}
-      className="flex h-full flex-col rounded-lg border border-[#e4e7ee] bg-white p-2.5 text-[#1c2744] no-underline sm:rounded-xl sm:p-3.5"
+      className="flex h-full flex-col rounded-xl border border-[#e4e7ee] bg-white p-4 text-[#1c2744] no-underline lg:p-3"
     >
-      <div className="flex items-center justify-between gap-2">
-        <p className="text-[10px] font-bold tracking-wide text-[#6d7585]">
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-xs font-bold tracking-wide text-[#6d7585]">
           {paper.publicId ?? t('papers.draft')}
         </p>
         <span
-          className={`shrink-0 rounded-md px-1.5 py-0.5 text-[10px] font-bold ${styles.badge}`}
+          className={`shrink-0 rounded-md px-2 py-0.5 text-xs font-bold ${styles.badge}`}
         >
           {meta.statusLabel}
         </span>
       </div>
-      <h3 className="mt-1 truncate text-xs font-extrabold sm:text-sm">{paper.title}</h3>
+      <h3 className="mt-2 truncate text-base font-extrabold lg:text-sm">{paper.title}</h3>
       {meta.label === meta.stepName ? null : (
-        <p className={`mt-0.5 text-[11px] font-semibold sm:text-xs ${styles.text}`}>
+        <p className={`mt-1 text-sm font-semibold lg:text-xs ${styles.text}`}>
           {meta.label}
         </p>
       )}
-      <div className="mt-2.5 flex items-center gap-2 sm:mt-3">
+      <div className="mt-4 flex items-center gap-3 lg:mt-3 lg:gap-2">
         <div className="h-1 flex-1 overflow-hidden rounded-full bg-[#eef1f6]">
           <div
             className={`h-full rounded-full ${styles.bar}`}
             style={{ width: `${meta.progress}%` }}
           />
         </div>
-        <span className="max-w-[45%] shrink-0 truncate text-[10px] font-bold text-[#6d7585] sm:max-w-none">
+        <span className="shrink-0 text-xs font-bold text-[#6d7585]">
           {meta.stepName} · {meta.done}/{meta.total}
         </span>
-        <ArrowUpRight className="size-3.5 shrink-0 text-[#8b909a]" />
+        <ArrowUpRight className="size-4 shrink-0 text-[#8b909a]" />
       </div>
     </Link>
   );

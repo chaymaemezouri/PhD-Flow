@@ -93,25 +93,14 @@
 
   html {
     font-family: var(--font-sans);
-    /* Platform-wide compact base (desktop + mobile) */
-    font-size: 12.5px;
+    /* Mobile / tablet: original comfortable size */
+    font-size: 16px;
   }
 
-  @media (max-width: 1279px) {
+  /* Desktop only: compact scale */
+  @media (min-width: 1024px) {
     html {
-      font-size: 12px;
-    }
-  }
-
-  @media (max-width: 1023px) {
-    html {
-      font-size: 11.5px;
-    }
-  }
-
-  @media (max-width: 639px) {
-    html {
-      font-size: 11px;
+      font-size: 12.5px;
     }
   }
 
@@ -129,37 +118,6 @@
     font-family: var(--font-sans);
     font-weight: 800;
     letter-spacing: -0.03em;
-  }
-
-  @media (max-width: 1023px) {
-    h1 {
-      font-size: 1.3rem;
-      line-height: 1.25;
-    }
-
-    h2 {
-      font-size: 1.05rem;
-      line-height: 1.3;
-    }
-
-    h3 {
-      font-size: 0.95rem;
-      line-height: 1.35;
-    }
-  }
-
-  @media (max-width: 639px) {
-    h1 {
-      font-size: 1.2rem;
-    }
-
-    h2 {
-      font-size: 1rem;
-    }
-
-    h3 {
-      font-size: 0.9rem;
-    }
   }
 
   :focus-visible {
@@ -204,28 +162,8 @@
     height: 0;
   }
 
-  /* Compact metrics + titles across workspace */
-  .workspace-shell .metric-card {
-    padding: 0.45rem 0.55rem;
-    border-radius: 0.65rem;
-  }
-
-  .workspace-shell .metric-card dd {
-    font-size: 1.15rem;
-    line-height: 1.05;
-    margin-top: 0.05rem;
-  }
-
-  .workspace-shell .metric-card dt {
-    font-size: 0.6rem;
-  }
-
-  .workspace-shell .metric-card p {
-    margin-top: 0.15rem;
-    font-size: 0.52rem;
-  }
-
-  @media (min-width: 640px) {
+  /* Compact metrics — desktop only (mobile keeps original sizes) */
+  @media (min-width: 1024px) {
     .workspace-shell .metric-card {
       padding: 0.55rem 0.7rem;
       border-radius: 0.75rem;
@@ -233,6 +171,8 @@
 
     .workspace-shell .metric-card dd {
       font-size: 1.3rem;
+      line-height: 1.1;
+      margin-top: 0.1rem;
     }
 
     .workspace-shell .metric-card dt {
@@ -240,42 +180,8 @@
     }
 
     .workspace-shell .metric-card p {
+      margin-top: 0.2rem;
       font-size: 0.55rem;
-    }
-  }
-
-  @media (max-width: 1023px) {
-    .workspace-shell main .text-4xl {
-      font-size: 1.5rem;
-      line-height: 1.15;
-    }
-
-    .workspace-shell main .text-3xl {
-      font-size: 1.25rem;
-      line-height: 1.25;
-    }
-
-    .workspace-shell main .text-2xl {
-      font-size: 1.1rem;
-      line-height: 1.3;
-    }
-  }
-
-  @media (max-width: 639px) {
-    .workspace-shell .metric-card dd {
-      font-size: 1.35rem;
-    }
-
-    .workspace-shell main .text-4xl {
-      font-size: 1.35rem;
-    }
-
-    .workspace-shell main .text-3xl {
-      font-size: 1.15rem;
-    }
-
-    .workspace-shell main .text-2xl {
-      font-size: 1.05rem;
     }
   }
 }

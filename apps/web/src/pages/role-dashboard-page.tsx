@@ -147,38 +147,38 @@ function AuthorDashboard() {
     : null;
 
   return (
-    <div className="space-y-3 sm:space-y-5">
-      <header className="flex flex-col gap-2.5 rounded-xl border border-[#e4e7ee] bg-white px-3 py-2.5 sm:flex-row sm:items-center sm:justify-between sm:gap-3 sm:rounded-2xl sm:px-4 sm:py-3">
-        <div className="flex min-w-0 items-center gap-2 sm:gap-2.5">
+    <div className="space-y-5 lg:space-y-3">
+      <header className="flex flex-col gap-4 rounded-2xl border border-[#e4e7ee] bg-white px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5 lg:gap-3 lg:px-4 lg:py-3">
+        <div className="flex min-w-0 items-center gap-3 lg:gap-2.5">
           {profile?.photoPath ? (
             <img
               src={profile.photoPath}
               alt=""
-              className="size-9 rounded-full object-cover sm:size-10"
+              className="size-12 rounded-full object-cover lg:size-10"
             />
           ) : (
-            <div className="grid size-9 place-items-center rounded-full bg-[#eef2ff] text-xs font-extrabold text-[#3d4fd4] sm:size-10 sm:text-sm">
+            <div className="grid size-12 place-items-center rounded-full bg-[#eef2ff] text-base font-extrabold text-[#3d4fd4] lg:size-10 lg:text-sm">
               {firstName.slice(0, 1)}
             </div>
           )}
           <div className="min-w-0">
-            <h1 className="truncate text-sm font-extrabold sm:text-base">{fullName}</h1>
-            <p className="truncate text-[11px] text-[#5c6578] sm:text-xs">
+            <h1 className="truncate text-lg font-extrabold lg:text-base">{fullName}</h1>
+            <p className="truncate text-sm text-[#5c6578] lg:text-xs">
               {[profile?.academicTitle, conference?.name, roleLabel]
                 .filter(Boolean)
                 .join(' · ') || t('home.noConference')}
             </p>
           </div>
         </div>
-        <div className="flex flex-wrap items-center gap-1.5">
+        <div className="flex flex-wrap items-center gap-2">
           <Link
             to="/workspace/account"
-            className="rounded-full bg-[#f4f7ff] px-2.5 py-1.5 text-[11px] font-bold text-[#3d4fd4] no-underline sm:text-xs"
+            className="rounded-full bg-[#f4f7ff] px-3 py-2 text-sm font-bold text-[#3d4fd4] no-underline lg:px-2.5 lg:py-1.5 lg:text-xs"
           >
             {t('auth.profileTitle')}
           </Link>
           {canStartSubmission(false, memberships.data) ? (
-            <Button asChild size="sm" className="sm:h-10 sm:px-4 sm:text-sm">
+            <Button asChild>
               <Link to="/workspace/submissions/new">{t('papers.new')}</Link>
             </Button>
           ) : null}
@@ -188,9 +188,9 @@ function AuthorDashboard() {
       {openConferences.some((item) =>
         canSubmitToConference(false, memberships.data ?? [], item),
       ) ? (
-        <section className="rounded-2xl border border-[#e4e7ee] bg-white p-3 sm:p-5">
-          <h2 className="text-base font-extrabold sm:text-lg">{t('home.openConferences')}</h2>
-          <ul className="mt-2 grid gap-2 sm:mt-3">
+        <section className="rounded-2xl border border-[#e4e7ee] bg-white p-4 sm:p-5 lg:p-3">
+          <h2 className="text-lg font-extrabold lg:text-base">{t('home.openConferences')}</h2>
+          <ul className="mt-3 grid gap-2">
             {openConferences
               .filter((item) =>
                 canSubmitToConference(false, memberships.data ?? [], item),
@@ -198,19 +198,19 @@ function AuthorDashboard() {
               .map((item) => (
                 <li
                   key={item.id}
-                  className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-[#f6f7fb] px-3 py-2.5 sm:rounded-2xl sm:px-4 sm:py-3"
+                  className="flex flex-wrap items-center justify-between gap-2 rounded-2xl bg-[#f6f7fb] px-4 py-3 lg:px-3 lg:py-2.5"
                 >
-                  <span className="text-xs font-extrabold sm:text-sm">{item.name}</span>
-                  <span className="flex flex-wrap gap-1.5 sm:gap-2">
+                  <span className="text-sm font-extrabold">{item.name}</span>
+                  <span className="flex flex-wrap gap-2">
                     <Link
                       to={`/workspace/submissions/new?conference=${item.id}`}
-                      className="inline-flex min-h-8 items-center justify-center rounded-full bg-[#5d74ff] px-3 py-1.5 text-xs font-extrabold text-white no-underline shadow-[0_6px_16px_rgba(93,116,255,0.28)] sm:min-h-10 sm:px-4 sm:py-2 sm:text-sm"
+                      className="inline-flex min-h-10 items-center justify-center rounded-full bg-[#5d74ff] px-4 py-2 text-sm font-extrabold text-white no-underline shadow-[0_6px_16px_rgba(93,116,255,0.28)] lg:min-h-8 lg:px-3 lg:py-1.5 lg:text-xs"
                     >
                       {t('home.submitPaper')}
                     </Link>
                     <Link
                       to={`/workspace/conferences/${item.id}`}
-                      className="inline-flex min-h-8 items-center justify-center rounded-full border border-[#c5cad6] bg-white px-2.5 py-1.5 text-xs font-extrabold text-[#3d4fd4] no-underline sm:min-h-10 sm:px-3.5 sm:py-2 sm:text-sm"
+                      className="inline-flex min-h-10 items-center justify-center rounded-full border border-[#c5cad6] bg-white px-3.5 py-2 text-sm font-extrabold text-[#3d4fd4] no-underline lg:min-h-8 lg:px-2.5 lg:py-1.5 lg:text-xs"
                     >
                       {t('home.manage')}
                     </Link>
@@ -221,7 +221,7 @@ function AuthorDashboard() {
         </section>
       ) : null}
 
-      <section className="grid grid-cols-2 gap-2 sm:gap-3 xl:grid-cols-4">
+      <section className="grid grid-cols-2 gap-3 xl:grid-cols-4">
         <Metric
           tone="blue"
           label={t('home.papersCount')}
@@ -252,9 +252,9 @@ function AuthorDashboard() {
         />
       </section>
 
-      <section className="rounded-2xl border border-[#e4e7ee] bg-white p-3 sm:p-5">
-        <div className="flex flex-col gap-2.5 sm:gap-3 lg:flex-row lg:items-center lg:justify-between">
-          <div className="touch-scroll flex gap-1.5 overflow-x-auto pb-0.5 sm:flex-wrap sm:gap-2 sm:overflow-visible">
+      <section className="rounded-2xl border border-[#e4e7ee] bg-white p-4 sm:p-5 lg:p-3">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex flex-wrap gap-2">
             {filters.map(([key, label]) => {
               const active = board === key;
               const tone =
@@ -269,13 +269,13 @@ function AuthorDashboard() {
                 <button
                   key={key}
                   type="button"
-                  className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-extrabold sm:px-3 sm:py-1.5 sm:text-sm ${
+                  className={`rounded-full px-3 py-1.5 text-sm font-extrabold lg:px-2.5 lg:py-1 lg:text-xs ${
                     active ? tone : 'bg-[#f4f7ff] text-[#5c6578]'
                   }`}
                   onClick={() => setBoard(key)}
                 >
                   {t(label)}
-                  <span className="ml-1 tabular-nums opacity-80 sm:ml-1.5">
+                  <span className="ml-1.5 tabular-nums opacity-80">
                     {key === 'all'
                       ? counts.total
                       : key === 'waiting'
@@ -288,33 +288,33 @@ function AuthorDashboard() {
               );
             })}
           </div>
-          <label className="flex items-center gap-2 rounded-full bg-[#f4f7ff] px-2.5 py-1.5 sm:px-3 sm:py-2">
-            <Search className="size-3.5 text-[#8b909a] sm:size-4" />
+          <label className="flex items-center gap-2 rounded-full bg-[#f4f7ff] px-3 py-2">
+            <Search className="size-4 text-[#8b909a]" />
             <span className="sr-only">{t('top.search')}</span>
             <input
               value={query}
               onChange={(event) => setQuery(event.target.value)}
               placeholder={t('home.search')}
-              className="w-full bg-transparent text-xs outline-none placeholder:text-[#a0a6b2] sm:text-sm lg:w-56"
+              className="w-full bg-transparent text-sm outline-none placeholder:text-[#a0a6b2] lg:w-56"
             />
           </label>
         </div>
         {papers.isPending ? (
-          <p className="mt-3 text-xs text-[#8b909a] sm:mt-4 sm:text-sm">{t('common.loading')}</p>
+          <p className="mt-4 text-sm text-[#8b909a]">{t('common.loading')}</p>
         ) : null}
         {papers.isError ? (
-          <p className="mt-3 text-xs text-[#c54545] sm:mt-4 sm:text-sm" role="alert">
+          <p className="mt-4 text-sm text-[#c54545]" role="alert">
             {papers.error.message}
           </p>
         ) : null}
         {boardPapers.length === 0 && !papers.isPending ? (
-          <div className="mt-3 rounded-2xl bg-[#f6f7fb] px-3 py-3 sm:mt-4 sm:rounded-3xl sm:px-5 sm:py-5">
-            <p className="text-xs text-[#5c6370] sm:text-sm">
+          <div className="mt-4 rounded-3xl bg-[#f6f7fb] px-5 py-5">
+            <p className="text-sm text-[#5c6370]">
               {conference ? t('home.empty') : t('home.joinBody')}
             </p>
           </div>
         ) : null}
-        <ul className="mt-3 grid gap-2 sm:mt-4 sm:gap-3 md:grid-cols-2 xl:grid-cols-3">
+        <ul className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
           {boardPapers.map((paper) => (
             <li key={paper.id}>
               <PaperWorkCard paper={paper} />
@@ -440,7 +440,7 @@ function ChairDashboard({ variant = 'admin' }: { variant?: 'admin' | 'committee'
   }
 
   return (
-    <div className="space-y-3 sm:space-y-5">
+    <div className="space-y-5 lg:space-y-3">
       <Identity
         name={fullName}
         photo={profile?.photoPath}
@@ -454,27 +454,27 @@ function ChairDashboard({ variant = 'admin' }: { variant?: 'admin' | 'committee'
         {managed ? (
           <Link
             to={`/workspace/conferences/${managed.id}`}
-            className="rounded-full bg-[#f4f7ff] px-2.5 py-1.5 text-xs font-bold text-[#3d4fd4] no-underline sm:px-3 sm:py-2 sm:text-sm"
+            className="rounded-full bg-[#f4f7ff] px-3 py-2 text-sm font-bold text-[#3d4fd4] no-underline lg:px-2.5 lg:py-1.5 lg:text-xs"
           >
             {t('home.manage')}
           </Link>
         ) : null}
         <Link
           to="/workspace/reviews"
-          className="rounded-full bg-[#f4f7ff] px-2.5 py-1.5 text-xs font-bold text-[#3d4fd4] no-underline sm:px-3 sm:py-2 sm:text-sm"
+          className="rounded-full bg-[#f4f7ff] px-3 py-2 text-sm font-bold text-[#3d4fd4] no-underline lg:px-2.5 lg:py-1.5 lg:text-xs"
         >
           {t('nav.reviews')}
         </Link>
         <button
           type="button"
           onClick={() => setBoard('decisions')}
-          className="rounded-full bg-[#5d74ff] px-2.5 py-1.5 text-xs font-bold text-white sm:px-3 sm:py-2 sm:text-sm"
+          className="rounded-full bg-[#5d74ff] px-3 py-2 text-sm font-bold text-white lg:px-2.5 lg:py-1.5 lg:text-xs"
         >
           {t('home.decisions')}
           {decisionCount > 0 ? ` · ${decisionCount}` : ''}
         </button>
       </Identity>
-      <p className="text-xs text-[#5c6578] sm:text-sm">
+      <p className="text-sm text-[#5c6578]">
         {t(variant === 'committee' ? 'home.committeeIntro' : 'home.chairIntro')}
       </p>
       {managedList.length > 1 ? (
@@ -650,7 +650,7 @@ function ReviewerDashboard() {
   }
 
   return (
-    <div className="space-y-3 sm:space-y-5">
+    <div className="space-y-5 lg:space-y-3">
       <Identity
         name={fullName}
         photo={profile?.photoPath}
@@ -663,12 +663,12 @@ function ReviewerDashboard() {
       >
         <Link
           to="/workspace/reviews"
-          className="rounded-full bg-[#5d74ff] px-2.5 py-1.5 text-xs font-bold text-white no-underline sm:px-3 sm:py-2 sm:text-sm"
+          className="rounded-full bg-[#5d74ff] px-3 py-2 text-sm font-bold text-white no-underline lg:px-2.5 lg:py-1.5 lg:text-xs"
         >
           {t('home.reviewQueue')}
         </Link>
       </Identity>
-      <p className="text-xs text-[#5c6578] sm:text-sm">{t('home.reviewerIntro')}</p>
+      <p className="text-sm text-[#5c6578]">{t('home.reviewerIntro')}</p>
       <section className="grid grid-cols-2 gap-2 sm:gap-3 xl:grid-cols-4">
         <Metric
           tone="blue"
@@ -785,25 +785,25 @@ function Identity({
   children?: ReactNode;
 }) {
   return (
-    <header className="flex flex-col gap-2.5 rounded-xl border border-[#e4e7ee] bg-white px-3 py-2.5 sm:flex-row sm:items-center sm:justify-between sm:gap-3 sm:rounded-2xl sm:px-4 sm:py-3">
-      <div className="flex min-w-0 items-center gap-2 sm:gap-2.5">
+    <header className="flex flex-col gap-4 rounded-2xl border border-[#e4e7ee] bg-white px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5 lg:gap-3 lg:px-4 lg:py-3">
+      <div className="flex min-w-0 items-center gap-3 lg:gap-2.5">
         {photo ? (
           <img
             src={photo}
             alt=""
-            className="size-9 rounded-full object-cover sm:size-10"
+            className="size-12 rounded-full object-cover lg:size-10"
           />
         ) : (
-          <div className="grid size-9 place-items-center rounded-full bg-[#eef2ff] text-xs font-extrabold text-[#3d4fd4] sm:size-10 sm:text-sm">
+          <div className="grid size-12 place-items-center rounded-full bg-[#eef2ff] text-base font-extrabold text-[#3d4fd4] lg:size-10 lg:text-sm">
             {initial}
           </div>
         )}
         <div className="min-w-0">
-          <h1 className="truncate text-sm font-extrabold sm:text-base">{name}</h1>
-          <p className="truncate text-[11px] text-[#5c6578] sm:text-xs">{line}</p>
+          <h1 className="truncate text-lg font-extrabold lg:text-base">{name}</h1>
+          <p className="truncate text-sm text-[#5c6578] lg:text-xs">{line}</p>
         </div>
       </div>
-      <div className="flex flex-wrap items-center gap-1.5">{children}</div>
+      <div className="flex flex-wrap items-center gap-2">{children}</div>
     </header>
   );
 }
@@ -826,12 +826,14 @@ function Metric({
     red: 'bg-[#e35d5d]/12 text-[#c54545]',
   }[tone];
   return (
-    <div className={`metric-card rounded-md px-1.5 py-1.5 sm:rounded-lg sm:px-2.5 sm:py-2 ${color}`}>
-      <dt className="text-[9px] font-extrabold opacity-90 sm:text-[10px]">{label}</dt>
-      <dd className="text-base font-extrabold tracking-tight sm:text-lg lg:text-xl">
+    <div
+      className={`metric-card rounded-[24px] px-5 py-4 lg:rounded-lg lg:px-2.5 lg:py-2 ${color}`}
+    >
+      <dt className="text-sm font-extrabold opacity-90 lg:text-[10px]">{label}</dt>
+      <dd className="mt-1 text-4xl font-extrabold tracking-tight lg:mt-0 lg:text-xl">
         {value}
       </dd>
-      <p className="text-[7px] font-bold opacity-90 sm:text-[9px]">{hint}</p>
+      <p className="mt-2 text-xs font-bold opacity-90 lg:mt-0.5 lg:text-[9px]">{hint}</p>
     </div>
   );
 }

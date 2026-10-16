@@ -171,8 +171,8 @@ function navClass(isActive: boolean, compact = false) {
   return cn(
     'flex items-center gap-3 rounded-2xl font-bold no-underline',
     compact
-      ? 'w-full min-w-0 flex-col gap-0.5 overflow-hidden px-0.5 py-1.5 text-center text-[9px] leading-tight sm:gap-1 sm:px-1 sm:py-2 sm:text-[10px]'
-      : 'min-h-8 px-2 py-1 text-[11px] lg:min-h-9 lg:px-2.5 lg:py-1.5 lg:text-xs',
+      ? 'w-full min-w-0 flex-col gap-1 overflow-hidden px-1 py-2 text-center text-[10px] leading-tight sm:text-[11px]'
+      : 'min-h-11 px-3 py-2.5 text-sm lg:min-h-9 lg:px-2.5 lg:py-1.5 lg:text-xs',
     isActive
       ? 'bg-[#5d74ff]/15 text-[#3d4fd4]'
       : 'text-[#5c6578] hover:bg-[#eef2ff] hover:text-[#3d4fd4]',
@@ -343,18 +343,18 @@ export function AppShell() {
           </div>
         </aside>
 
-        <div className="min-w-0 w-full px-1 pb-[calc(4rem+env(safe-area-inset-bottom))] pt-1 sm:px-2 sm:pt-2 lg:p-2.5 lg:pb-2.5">
-          <header className="mb-1.5 flex items-center gap-1.5 sm:mb-2">
+        <div className="min-w-0 w-full px-3 pb-[calc(5.5rem+env(safe-area-inset-bottom))] pt-3 sm:px-4 sm:pt-4 lg:p-2.5 lg:pb-2.5">
+          <header className="mb-4 flex items-center gap-3 lg:mb-2">
             <button
               type="button"
-              className="grid size-10 shrink-0 place-items-center rounded-xl border border-[#e4e7ee] bg-white text-[#1c2744] lg:hidden"
+              className="grid size-11 shrink-0 place-items-center rounded-2xl border border-[#e4e7ee] bg-white text-[#1c2744] lg:hidden"
               aria-expanded={menuOpen}
               aria-label={menuOpen ? t('nav.close') : t('nav.menu')}
               onClick={() => setMenuOpen((open) => !open)}
             >
-              {menuOpen ? <X className="size-4" /> : <Menu className="size-4" />}
+              {menuOpen ? <X className="size-5" /> : <Menu className="size-5" />}
             </button>
-            <p className="min-w-0 flex-1 truncate text-base font-extrabold tracking-tight text-[#3d4fd4] lg:hidden">
+            <p className="min-w-0 flex-1 truncate text-lg font-extrabold tracking-tight text-[#3d4fd4] lg:hidden">
               {t('brand.name')}
             </p>
             <div className="ml-auto flex shrink-0 items-center gap-2 sm:gap-3">
@@ -509,11 +509,11 @@ export function AppShell() {
       ) : null}
 
       <nav
-        className="fixed inset-x-0 bottom-0 z-50 border-t border-[#e6e8ec] bg-white/95 px-0.5 pt-0.5 backdrop-blur lg:hidden"
-        style={{ paddingBottom: 'max(0.25rem, env(safe-area-inset-bottom))' }}
+        className="fixed inset-x-0 bottom-0 z-50 border-t border-[#e6e8ec] bg-white/95 px-1 pt-1 backdrop-blur lg:hidden"
+        style={{ paddingBottom: 'max(0.35rem, env(safe-area-inset-bottom))' }}
         aria-label={t('nav.workspace')}
       >
-        <ul className="grid grid-cols-5 gap-0">
+        <ul className="grid grid-cols-5 gap-0.5">
           {mobileBar.map((tab) => {
             const Icon = tab.icon;
             return (
@@ -523,10 +523,8 @@ export function AppShell() {
                   end={tab.end}
                   className={({ isActive }) => navClass(isActive, true)}
                 >
-                  <Icon className="size-4 shrink-0" />
-                  <span className="max-w-full truncate text-[9px] leading-tight sm:text-[10px]">
-                    {t(tab.label)}
-                  </span>
+                  <Icon className="size-5 shrink-0" />
+                  <span className="max-w-full truncate">{t(tab.label)}</span>
                 </NavLink>
               </li>
             );
@@ -538,10 +536,8 @@ export function AppShell() {
               aria-expanded={menuOpen}
               onClick={() => setMenuOpen((open) => !open)}
             >
-              {menuOpen ? <X className="size-4" /> : <Menu className="size-4" />}
-              <span className="text-[9px] leading-tight sm:text-[10px]">
-                {menuOpen ? t('nav.close') : t('nav.more')}
-              </span>
+              {menuOpen ? <X className="size-5" /> : <Menu className="size-5" />}
+              <span>{menuOpen ? t('nav.close') : t('nav.more')}</span>
             </button>
           </li>
         </ul>
