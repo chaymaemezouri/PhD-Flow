@@ -59,10 +59,18 @@ describe('review assignments', () => {
     const chair = await account(`chair-${stamp}@review.test`, 'Grace');
     const author = await account(`author-${stamp}@review.test`, 'Mary');
     const reviewer = await account(`reviewer-${stamp}@review.test`, 'Niels');
+    await prisma.user.update({
+      where: { email: `chair-${stamp}@review.test` },
+      data: { platformRole: 'SYSTEM_ADMIN' },
+    });
     const created = await chair.agent
       .post('/api/v1/conferences')
       .set('x-csrf-token', chair.csrf)
       .send({ name: 'Review Colloquium', shortName: `reviews-${stamp}` });
+    await prisma.user.update({
+      where: { email: `chair-${stamp}@review.test` },
+      data: { platformRole: 'RESEARCHER' },
+    });
     const conferenceId = created.body.id as string;
 
     async function join(

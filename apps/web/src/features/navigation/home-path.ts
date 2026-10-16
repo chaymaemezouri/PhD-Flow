@@ -15,5 +15,7 @@ export function homePathFor(roles: string[]): string {
 }
 
 export function isRoleHome(pathname: string): boolean {
-  return /^\/workspace\/(author|reviewer|committee|administrator|system)$/.test(pathname);
+  return /^\/workspace\/(author|reviewer|committee|administrator|system|conference-access)(\/)?$/.test(
+    pathname,
+  );
 }

@@ -14,10 +14,12 @@ import type {
   profileSchema,
   registerSchema,
   resetPasswordSchema,
+  createAdminSchema,
 } from '@scholarflow/validation';
 import { educationStepSchema } from '@scholarflow/validation';
 import type { z } from 'zod';
 import type { Prisma, Profile, User } from '../../generated/prisma/client.js';
+import { PlatformRole as Role } from '../../generated/prisma/client.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import {
   hashSecret,
@@ -32,6 +34,7 @@ import { verifyTotp, newTotpSecret, totpUri } from './totp.js';
 import { PasswordService } from './password.service.js';
 
 type RegisterInput = z.infer<typeof registerSchema>;
+type AdminInput = z.infer<typeof createAdminSchema>;
 type LoginInput = z.infer<typeof loginSchema>;
 type ProfileInput = z.infer<typeof profileSchema>;
 type ResetInput = z.infer<typeof resetPasswordSchema>;
@@ -112,6 +115,9 @@ export class AuthService {
       });
       throw new UnauthorizedException('Invalid email or password');
     }
+    if (user.disabledAt) {
+      throw new ForbiddenException('This account is disabled');
+    }
     if (!user.emailVerifiedAt) {
       throw new ForbiddenException('Verify your email before signing in');
     }
@@ -120,12 +126,23 @@ export class AuthService {
     }
 
     const sessionToken = newSecret();
+    const remembered = await this.prisma.membership.findFirst({
+      where: {
+        userId: user.id,
+        status: 'ACTIVE',
+        role: { in: ['CHAIR', 'ADMINISTRATOR'] },
+        accessGrantedAt: { not: null },
+        conference: { status: 'PUBLISHED' },
+      },
+      orderBy: { accessGrantedAt: 'desc' },
+    });
     await this.prisma.$transaction(async (tx) => {
       await tx.session.create({
         data: {
           userId: user.id,
           tokenHash: hashSecret(sessionToken),
           expiresAt: new Date(Date.now() + SESSION_TTL_MS),
+          unlockedConferenceId: remembered?.conferenceId ?? null,
         },
       });
       await this.audit(tx, user.id, 'auth.login', user.id, {});
@@ -425,6 +442,72 @@ export class AuthService {
     }));
   }
 
+  async createAdmin(input: AdminInput) {
+    const email = input.email.trim().toLowerCase();
+    const existing = await this.prisma.user.findUnique({ where: { email } });
+    if (existing) {
+      throw new ConflictException('An account with this email already exists');
+    }
+    const passwordHash = await this.passwords.hash(input.password);
+    const user = await this.prisma.user.create({
+      data: {
+        email,
+        passwordHash,
+        issuedPassword: input.password,
+        platformRole: Role.RESEARCHER,
+        emailVerifiedAt: new Date(),
+        profile: {
+          create: {
+            firstName: input.firstName.trim(),
+            lastName: input.lastName.trim(),
+            academicTitle: 'Admin',
+            language: 'fr',
+          },
+        },
+      },
+      include: { profile: true },
+    });
+    return {
+      id: user.id,
+      email: user.email,
+      firstName: user.profile?.firstName ?? input.firstName,
+      lastName: user.profile?.lastName ?? input.lastName,
+      loginPassword: input.password,
+      conferences: [] as { id: string; name: string }[],
+    };
+  }
+
+  async listAdmins() {
+    const rows = await this.prisma.user.findMany({
+      where: {
+        platformRole: Role.RESEARCHER,
+        OR: [
+          { memberships: { some: { role: 'CHAIR', status: 'ACTIVE' } } },
+          { profile: { is: { academicTitle: 'Admin' } } },
+        ],
+      },
+      include: {
+        profile: true,
+        memberships: {
+          where: { role: 'CHAIR', status: 'ACTIVE' },
+          include: { conference: { select: { id: true, name: true } } },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+    return rows.map((row) => ({
+      id: row.id,
+      email: row.email,
+      firstName: row.profile?.firstName ?? '',
+      lastName: row.profile?.lastName ?? '',
+      loginPassword: row.issuedPassword,
+      conferences: row.memberships.map((item) => ({
+        id: item.conference.id,
+        name: item.conference.name,
+      })),
+    }));
+  }
+
   private requireProfile(user: User & { profile: Profile | null }): UserWithProfile {
     if (!user.profile) {
       throw new UnauthorizedException('Sign in required');
@@ -439,6 +522,7 @@ export class AuthService {
       platformRole: user.platformRole,
       emailVerified: user.emailVerifiedAt !== null,
       mfaEnabled: user.mfaEnabled,
+      unlockedConferenceId: null,
       profile: {
         firstName: user.profile.firstName,
         lastName: user.profile.lastName,

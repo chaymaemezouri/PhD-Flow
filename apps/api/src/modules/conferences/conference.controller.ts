@@ -13,6 +13,9 @@ import {
 } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import {
+  conferenceAccessSchema,
+  conferencePasswordSchema,
+  createAdminSchema,
   createConferenceSchema,
   deadlineSchema,
   invitationResponseSchema,
@@ -50,6 +53,12 @@ export class ConferenceController {
     return this.conferences.listMine(request.user!);
   }
 
+  @Get('conferences/assigned')
+  @UseGuards(AuthGuard)
+  assigned(@Req() request: AuthenticatedRequest) {
+    return this.conferences.listAssigned(request.user!);
+  }
+
   @Post('conferences/:id/join')
   @HttpCode(200)
   @UseGuards(AuthGuard)
@@ -65,6 +74,40 @@ export class ConferenceController {
     body: z.infer<typeof createConferenceSchema>,
   ) {
     return this.conferences.create(request.user!, body);
+  }
+
+  @Post('conferences/:id/access')
+  @HttpCode(200)
+  @UseGuards(AuthGuard)
+  access(
+    @Req() request: AuthenticatedRequest,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body(new ZodValidationPipe(conferenceAccessSchema))
+    body: z.infer<typeof conferenceAccessSchema>,
+  ) {
+    return this.conferences.openAccess(request.user!, id, body.password);
+  }
+
+  @Post('conferences/:id/access-password')
+  @UseGuards(AuthGuard)
+  setAccessPassword(
+    @Req() request: AuthenticatedRequest,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body(new ZodValidationPipe(conferencePasswordSchema))
+    body: z.infer<typeof conferencePasswordSchema>,
+  ) {
+    return this.conferences.setAccessPassword(request.user!, id, body.password);
+  }
+
+  @Post('conferences/:id/sub-admins')
+  @UseGuards(AuthGuard)
+  createSubAdmin(
+    @Req() request: AuthenticatedRequest,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body(new ZodValidationPipe(createAdminSchema))
+    body: z.infer<typeof createAdminSchema>,
+  ) {
+    return this.conferences.createSubAdmin(request.user!, id, body);
   }
 
   @Get('conferences/:id')

@@ -19,17 +19,8 @@ export function focusStep(steps: PaperStep[]): PaperStep | null {
   );
 }
 
-export function stepAction(paperId: string, key: string): string {
-  if (key === 'presentation') {
-    return '/workspace/program';
-  }
-  if (key === 'registration') {
-    return '/workspace/conferences';
-  }
-  if (key === 'submission' || key === 'track') {
-    return `/workspace/submissions/${paperId}`;
-  }
-  return `/workspace/follow-up?paper=${paperId}`;
+export function stepAction(paperId: string): string {
+  return `/workspace/submissions/${paperId}`;
 }
 
 export function StepLegend() {

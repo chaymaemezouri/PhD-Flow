@@ -27,8 +27,10 @@ model User {
   id              String       @id @default(uuid()) @db.Uuid
   email           String       @unique
   passwordHash    String       @map("password_hash")
+  issuedPassword  String?      @map("issued_password")
   platformRole    PlatformRole @default(RESEARCHER) @map("platform_role")
   emailVerifiedAt DateTime?    @map("email_verified_at")
+  disabledAt      DateTime?    @map("disabled_at")
   mfaEnabled      Boolean      @default(false) @map("mfa_enabled")
   mfaSecret       String?      @map("mfa_secret")
   createdAt       DateTime     @default(now()) @map("created_at")
@@ -83,10 +85,12 @@ model Session {
   id        String    @id @default(uuid()) @db.Uuid
   userId    String    @map("user_id") @db.Uuid
   tokenHash String    @unique @map("token_hash")
-  expiresAt DateTime  @map("expires_at")
-  revokedAt DateTime? @map("revoked_at")
-  createdAt DateTime  @default(now()) @map("created_at")
-  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt            DateTime    @map("expires_at")
+  revokedAt            DateTime?   @map("revoked_at")
+  createdAt            DateTime    @default(now()) @map("created_at")
+  unlockedConferenceId String?     @map("unlocked_conference_id") @db.Uuid
+  user                 User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  unlockedConference   Conference? @relation(fields: [unlockedConferenceId], references: [id], onDelete: SetNull)
 
   @@index([userId])
   @@map("sessions")
@@ -202,6 +206,17 @@ enum PaperStatus {
   WITHDRAWN
 }
 
+enum PaperKind {
+  ABSTRACT
+  FULL
+}
+
+enum ScopeStatus {
+  PENDING
+  ACCEPTED
+  REFUSED
+}
+
 enum PaperFileKind {
   MANUSCRIPT
   REVISION
@@ -209,6 +224,8 @@ enum PaperFileKind {
   EDITABLE
   SIMILARITY
   COPYRIGHT
+  SLIDES
+  PAYMENT_PROOF
 }
 
 enum Recommendation {
@@ -274,8 +291,10 @@ model Conference {
   visibility       ConferenceVisibility @default(PUBLIC)
   status           ConferenceStatus     @default(DRAFT)
   reviewMode       ReviewMode           @default(DOUBLE_BLIND) @map("review_mode")
-  paymentsEnabled  Boolean              @default(false) @map("payments_enabled")
-  createdById      String?              @map("created_by_id") @db.Uuid
+  paymentsEnabled    Boolean              @default(false) @map("payments_enabled")
+  accessPasswordHash String?              @map("access_password_hash")
+  accessPasswordNote String?              @map("access_password_note")
+  createdById        String?              @map("created_by_id") @db.Uuid
   nextPaperNumber  Int                  @default(0) @map("next_paper_number")
   createdAt        DateTime             @default(now()) @map("created_at")
   updatedAt        DateTime             @updatedAt @map("updated_at")
@@ -290,6 +309,7 @@ model Conference {
   rooms            Room[]
   sessions         ProgramSession[]
   registrations    Registration[]
+  unlockedSessions Session[]
 
   @@index([status, visibility])
   @@map("conferences")
@@ -343,8 +363,9 @@ model Membership {
   conferenceId String           @map("conference_id") @db.Uuid
   userId       String           @map("user_id") @db.Uuid
   role         ConferenceRole
-  status       MembershipStatus @default(ACTIVE)
-  createdAt    DateTime         @default(now()) @map("created_at")
+  status          MembershipStatus @default(ACTIVE)
+  accessGrantedAt DateTime?        @map("access_granted_at")
+  createdAt       DateTime         @default(now()) @map("created_at")
   updatedAt    DateTime         @updatedAt @map("updated_at")
   conference   Conference       @relation(fields: [conferenceId], references: [id], onDelete: Cascade)
   user         User             @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -382,9 +403,14 @@ model Paper {
   abstract     String       @default("")
   keywords     String[]     @default([])
   status       PaperStatus  @default(DRAFT)
+  paperKind    PaperKind    @default(FULL) @map("paper_kind")
+  scopeStatus  ScopeStatus  @default(PENDING) @map("scope_status")
   submittedAt         DateTime? @map("submitted_at")
   withdrawnAt         DateTime? @map("withdrawn_at")
   templateValidatedAt DateTime? @map("template_validated_at")
+  presentedAt         DateTime? @map("presented_at")
+  sessionComment      String    @default("") @map("session_comment")
+  sessionChairIds     String[]  @default([]) @map("session_chair_ids") @db.Uuid
   createdById  String       @map("created_by_id") @db.Uuid
   createdAt    DateTime     @default(now()) @map("created_at")
   updatedAt    DateTime     @updatedAt @map("updated_at")

@@ -9,6 +9,7 @@ import { EmailService } from './email.service.js';
 import { PasswordService } from './password.service.js';
 import { SystemAdminGuard } from './system-admin.guard.js';
 import { SystemController } from '../system/system.controller.js';
+import { SystemService } from '../system/system.service.js';
 
 @Module({
   controllers: [AuthController, SystemController],
@@ -19,8 +20,9 @@ import { SystemController } from '../system/system.controller.js';
     ObjectStorage,
     AuthGuard,
     SystemAdminGuard,
+    SystemService,
     { provide: APP_GUARD, useClass: CsrfGuard },
   ],
-  exports: [AuthGuard, SystemAdminGuard, EmailService],
+  exports: [AuthGuard, SystemAdminGuard, EmailService, PasswordService],
 })
 export class AuthModule {}

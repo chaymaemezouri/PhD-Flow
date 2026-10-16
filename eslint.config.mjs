@@ -10,13 +10,14 @@ export default tseslint.config(
       '**/coverage/**',
       '**/node_modules/**',
       'apps/api/src/generated/**',
+      'apps/api/scripts/**',
       'apps/web/dist/**',
     ],
   },
   eslint.configs.recommended,
   ...tseslint.configs.recommended,
   {
-    files: ['**/*.{ts,tsx}'],
+    files: ['**/*.{ts,tsx,mjs,cjs}'],
     languageOptions: {
       globals: {
         ...globals.browser,

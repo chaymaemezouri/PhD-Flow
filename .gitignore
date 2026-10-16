@@ -28,3 +28,5 @@ minio-data/
 *.pem
 *.key
 secrets/
+
+apps/api/NUL

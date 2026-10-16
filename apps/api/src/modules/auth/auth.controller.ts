@@ -221,6 +221,7 @@ export class AuthController {
       platformRole: user.platformRole,
       emailVerified: user.emailVerified,
       mfaEnabled: user.mfaEnabled,
+      unlockedConferenceId: user.unlockedConferenceId,
       profile: {
         firstName: user.profile.firstName,
         lastName: user.profile.lastName,

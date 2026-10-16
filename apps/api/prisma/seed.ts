@@ -69,6 +69,28 @@ async function main(): Promise<void> {
     parallelism: 1,
   });
 
+  await createUser(
+    'superadmin',
+    passwordHash,
+    {
+      firstName: 'Super',
+      lastName: 'Admin',
+      academicTitle: 'Superadmin',
+      institution: 'PapersManagement',
+      laboratory: 'Plateforme',
+      department: 'Accès global',
+      disciplines: ['Publication scientifique'],
+      interests: 'Comptes administrateurs et création des conférences.',
+      biography:
+        'Le superadmin crée les identifiants des admins et les conférences. Les autres rôles ne créent pas de conférence.',
+      photoPath: '',
+      orcid: '',
+      website: '',
+      education: [],
+    },
+    PlatformRole.SYSTEM_ADMIN,
+  );
+
   const admin = await createUser('admin', passwordHash, {
     firstName: 'Camille',
     lastName: 'Martin',
@@ -103,7 +125,7 @@ async function main(): Promise<void> {
     disciplines: ['Systèmes distribués', 'Évaluation par les pairs'],
     interests: 'Relecture en double aveugle, reproductibilité, systèmes de stockage.',
     biography:
-      'Julien Moreau évalue les manuscrits de la piste Systèmes. Son évaluation de l’article DEMO-2027-0001 est acceptée.',
+      'Julien Moreau évalue les manuscrits de la piste Systèmes. Son évaluation de l’article DEMO-2027-0001 est acceptée. Compte créé par l’admin via invitation.',
     photoPath: '/avatars/reviewer.jpg',
     orcid: '0000-0001-2345-6782',
     website: 'https://lip.ens-lyon.fr',
@@ -115,6 +137,26 @@ async function main(): Promise<void> {
         place: 'Université de Lyon',
       },
       { year: '2020', title: 'Chargé de recherche', place: 'CNRS, laboratoire LIP' },
+    ],
+  });
+  const committee = await createUser('committee', passwordHash, {
+    firstName: 'Nora',
+    lastName: 'Benali',
+    academicTitle: 'Professeure',
+    institution: 'INSA Lyon',
+    laboratory: 'CITI',
+    department: 'Informatique',
+    disciplines: ['Réseaux', 'Comité de programme'],
+    interests:
+      'Décisions éditoriales, attribution des évaluateurs, qualité scientifique.',
+    biography:
+      'Nora Benali siège au comité de programme. Elle est invitée par l’admin, décide du scope et des acceptations, sans gérer les réglages de la conférence.',
+    photoPath: '/avatars/committee.jpg',
+    orcid: '0000-0001-2345-6785',
+    website: 'https://www.insa-lyon.fr',
+    education: [
+      { year: '2005', title: 'Doctorat en réseaux', place: 'INSA Lyon' },
+      { year: '2015', title: 'Professeure des universités', place: 'INSA Lyon' },
     ],
   });
   const chercheur = await createUser('chercheur', passwordHash, {
@@ -159,6 +201,8 @@ async function main(): Promise<void> {
       visibility: 'PUBLIC',
       reviewMode: 'DOUBLE_BLIND',
       paymentsEnabled: true,
+      accessPasswordHash: passwordHash,
+      accessPasswordNote: DEMO_PASSWORD,
       createdById: admin.id,
       nextPaperNumber: 11,
       tracks: {
@@ -251,6 +295,11 @@ async function main(): Promise<void> {
           {
             userId: admin.id,
             role: ConferenceRole.CHAIR,
+            status: MembershipStatus.ACTIVE,
+          },
+          {
+            userId: committee.id,
+            role: ConferenceRole.COMMITTEE,
             status: MembershipStatus.ACTIVE,
           },
           {
@@ -906,12 +955,18 @@ interface DemoProfile {
   education: Array<{ year: string; title: string; place: string }>;
 }
 
-async function createUser(localPart: string, passwordHash: string, profile: DemoProfile) {
+async function createUser(
+  localPart: string,
+  passwordHash: string,
+  profile: DemoProfile,
+  platformRole: PlatformRole = PlatformRole.RESEARCHER,
+) {
   return prisma.user.create({
     data: {
       email: `${localPart}${DEMO_DOMAIN}`,
       passwordHash,
-      platformRole: PlatformRole.RESEARCHER,
+      issuedPassword: DEMO_PASSWORD,
+      platformRole,
       emailVerifiedAt: new Date(),
       profile: {
         create: {

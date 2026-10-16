@@ -1,0 +1,7 @@
+CREATE TYPE "PaperKind" AS ENUM ('ABSTRACT', 'FULL');
+
+CREATE TYPE "ScopeStatus" AS ENUM ('PENDING', 'ACCEPTED', 'REFUSED');
+
+ALTER TABLE "papers" ADD COLUMN "paper_kind" "PaperKind" NOT NULL DEFAULT 'FULL';
+
+ALTER TABLE "papers" ADD COLUMN "scope_status" "ScopeStatus" NOT NULL DEFAULT 'PENDING';

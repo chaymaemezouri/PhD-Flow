@@ -65,6 +65,7 @@ export interface CurrentUser {
   platformRole: PlatformRole;
   emailVerified: boolean;
   mfaEnabled: boolean;
+  unlockedConferenceId: string | null;
   profile: AccountProfile;
 }
 

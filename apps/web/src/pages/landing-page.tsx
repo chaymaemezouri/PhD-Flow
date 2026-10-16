@@ -19,16 +19,16 @@ export function LandingPage() {
   return (
     <div className="min-h-screen">
       <header className="border-b border-border bg-card/80">
-        <div className="flex w-full flex-wrap items-center justify-between gap-3 px-4 py-4 sm:px-6 lg:px-10">
+        <div className="flex w-full flex-col gap-3 px-4 py-4 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:px-6 lg:px-10">
           <Wordmark />
-          <div className="flex flex-wrap gap-2">
-            <Button asChild variant="outline">
+          <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:flex-wrap">
+            <Button asChild variant="outline" className="w-full sm:w-auto">
               <Link to="/directory">{t('conferences.directory')}</Link>
             </Button>
-            <Button asChild variant="outline">
+            <Button asChild variant="outline" className="w-full sm:w-auto">
               <Link to="/login">{t('auth.login')}</Link>
             </Button>
-            <Button asChild>
+            <Button asChild className="w-full sm:w-auto">
               <Link to="/register">{t('auth.createAccount')}</Link>
             </Button>
           </div>
@@ -39,10 +39,10 @@ export function LandingPage() {
           <p className="text-xs font-semibold tracking-[0.22em] text-teal uppercase">
             {t('landing.kicker')}
           </p>
-          <h1 className="mt-4 max-w-xl text-3xl text-navy sm:text-5xl">
+          <h1 className="mt-4 max-w-xl text-2xl text-navy sm:text-4xl lg:text-5xl">
             {t('landing.title')}
           </h1>
-          <p className="mt-5 max-w-2xl text-lg leading-relaxed text-muted-foreground">
+          <p className="mt-5 max-w-2xl text-base leading-relaxed text-muted-foreground sm:text-lg">
             {t('landing.lede')}
           </p>
           <div className="mt-8 grid gap-4 sm:grid-cols-3">

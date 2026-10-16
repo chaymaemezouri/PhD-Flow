@@ -14,6 +14,7 @@ import type {
 } from '@scholarflow/validation';
 import type { z } from 'zod';
 import {
+  AssignmentStatus,
   ConferenceRole,
   CopyrightStatus,
   DecisionOutcome,
@@ -25,14 +26,17 @@ import {
   PlatformRole,
   RegistrationStatus,
 } from '../../generated/prisma/client.js';
+import { certificatePdf } from './certificate-pdf.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import type { AuthenticatedUser } from '../auth/auth.types.js';
 import { EmailService } from '../auth/email.service.js';
 import { ObjectStorage } from '../papers/object-storage.js';
 
+/** Conference ops on papers: admin, under-admin, and programme committee. */
 const CHAIRS = new Set<ConferenceRole>([
   ConferenceRole.CHAIR,
   ConferenceRole.ADMINISTRATOR,
+  ConferenceRole.COMMITTEE,
 ]);
 const ACCEPTED = new Set<DecisionOutcome>([
   DecisionOutcome.ACCEPTED,
@@ -152,6 +156,12 @@ export class WorkflowService {
     if (paper.status !== PaperStatus.SUBMITTED) {
       throw new ForbiddenException('Only a submitted paper can receive a decision');
     }
+    const reviews = await this.prisma.reviewForm.count({
+      where: { assignment: { paperId } },
+    });
+    if (reviews < 1) {
+      throw new ForbiddenException('Wait for a review before the decision');
+    }
     const decision = await this.prisma.decision.upsert({
       where: { paperId },
       create: {
@@ -179,7 +189,14 @@ export class WorkflowService {
   async storeFile(
     actor: AuthenticatedUser,
     paperId: string,
-    kind: 'REVISION' | 'CAMERA_READY' | 'EDITABLE' | 'COPYRIGHT' | 'SIMILARITY',
+    kind:
+      | 'REVISION'
+      | 'CAMERA_READY'
+      | 'EDITABLE'
+      | 'COPYRIGHT'
+      | 'SIMILARITY'
+      | 'SLIDES'
+      | 'PAYMENT_PROOF',
     file: Upload,
   ) {
     const paper = await this.loadPaper(paperId);
@@ -189,33 +206,29 @@ export class WorkflowService {
     }
     const outcome =
       paper.decision?.status === DecisionStatus.PUBLISHED ? paper.decision.outcome : null;
-    if (kind === 'REVISION' && outcome !== DecisionOutcome.REVISION_REQUIRED) {
+    if (
+      kind === 'REVISION' &&
+      outcome !== DecisionOutcome.REVISION_REQUIRED &&
+      outcome !== DecisionOutcome.CONDITIONALLY_ACCEPTED
+    ) {
       throw new ForbiddenException(
         'A revision file is allowed after a revision decision',
       );
     }
-    if (
-      (kind === 'CAMERA_READY' ||
-        kind === 'EDITABLE' ||
-        kind === 'COPYRIGHT' ||
-        kind === 'SIMILARITY') &&
-      (!outcome || !ACCEPTED.has(outcome))
-    ) {
+    if (kind !== 'REVISION' && (!outcome || !ACCEPTED.has(outcome))) {
       throw new ForbiddenException('This file is allowed after acceptance');
     }
-    if (!file?.buffer) {
-      throw new BadRequestException('Upload a PDF of at most 20 MB');
-    }
-    this.assertPdf(file);
-    const key = `conferences/${paper.conferenceId}/papers/${paper.id}/${kind.toLowerCase()}-${randomUUID()}.pdf`;
-    await this.storage.put(key, file.buffer, 'application/pdf');
+    this.assertUpload(kind, file);
+    const extension = fileExtension(file.originalname, kind);
+    const key = `conferences/${paper.conferenceId}/papers/${paper.id}/${kind.toLowerCase()}-${randomUUID()}${extension}`;
+    await this.storage.put(key, file.buffer, file.mimetype || 'application/octet-stream');
     await this.prisma.paperFile.create({
       data: {
         paperId,
         kind: PaperFileKind[kind],
         storageKey: key,
-        originalName: 'document.pdf',
-        contentType: 'application/pdf',
+        originalName: safeUploadName(file.originalname),
+        contentType: file.mimetype || 'application/octet-stream',
         sizeBytes: file.size,
         sha256: createHash('sha256').update(file.buffer).digest('hex'),
         uploadedById: actor.id,
@@ -228,6 +241,153 @@ export class WorkflowService {
         update: { status: CopyrightStatus.PENDING },
       });
     }
+    if (kind === 'REVISION') {
+      await this.prisma.reviewAssignment.updateMany({
+        where: { paperId, status: AssignmentStatus.COMPLETED },
+        data: { status: AssignmentStatus.IN_PROGRESS },
+      });
+    }
+  }
+
+  async assignSessionChair(actor: AuthenticatedUser, paperId: string, userId: string) {
+    const paper = await this.loadPaper(paperId);
+    this.assertChair(actor, paper.conference.memberships);
+    const roles = new Set<ConferenceRole>([
+      ConferenceRole.REVIEWER,
+      ConferenceRole.COMMITTEE,
+      ConferenceRole.CHAIR,
+      ConferenceRole.ADMINISTRATOR,
+    ]);
+    const member = paper.conference.memberships.find((item) => item.userId === userId);
+    if (
+      !member ||
+      member.status !== MembershipStatus.ACTIVE ||
+      !roles.has(member.role) ||
+      userId === paper.createdById
+    ) {
+      throw new ForbiddenException('Choose a session chair for this conference');
+    }
+    if (paper.sessionChairIds.includes(userId)) {
+      return { sessionChairIds: paper.sessionChairIds };
+    }
+    const sessionChairIds = [...paper.sessionChairIds, userId];
+    await this.prisma.paper.update({ where: { id: paperId }, data: { sessionChairIds } });
+    return { sessionChairIds };
+  }
+
+  async markPresented(actor: AuthenticatedUser, paperId: string, comment: string) {
+    const paper = await this.loadPaper(paperId);
+    const sessionChair = paper.sessionChairIds.includes(actor.id);
+    if (!sessionChair) {
+      this.assertChair(actor, paper.conference.memberships);
+    }
+    const slides = paper.files.some((file) => file.kind === PaperFileKind.SLIDES);
+    if (!slides) {
+      throw new ForbiddenException(
+        'Upload the slides before marking the paper presented',
+      );
+    }
+    return this.prisma.paper.update({
+      where: { id: paperId },
+      data: { presentedAt: paper.presentedAt ?? new Date(), sessionComment: comment },
+    });
+  }
+
+  async sendPaymentNotice(actor: AuthenticatedUser, paperId: string) {
+    const paper = await this.loadPaper(paperId);
+    this.assertAuthor(actor, paper);
+    if (!paper.files.some((file) => file.kind === PaperFileKind.PAYMENT_PROOF)) {
+      throw new BadRequestException('Upload the payment receipt first');
+    }
+    return this.prisma.registration.upsert({
+      where: {
+        conferenceId_userId: { conferenceId: paper.conferenceId, userId: actor.id },
+      },
+      create: {
+        conferenceId: paper.conferenceId,
+        userId: actor.id,
+        status: RegistrationStatus.REQUESTED,
+        paymentStatus: PaymentStatus.PENDING,
+      },
+      update: {
+        status: RegistrationStatus.REQUESTED,
+        paymentStatus: PaymentStatus.PENDING,
+      },
+    });
+  }
+
+  async verifyPayment(actor: AuthenticatedUser, paperId: string) {
+    const paper = await this.loadPaper(paperId);
+    this.assertChair(actor, paper.conference.memberships);
+    if (!paper.files.some((file) => file.kind === PaperFileKind.PAYMENT_PROOF)) {
+      throw new NotFoundException('Payment receipt not found');
+    }
+    return this.prisma.registration.upsert({
+      where: {
+        conferenceId_userId: {
+          conferenceId: paper.conferenceId,
+          userId: paper.createdById,
+        },
+      },
+      create: {
+        conferenceId: paper.conferenceId,
+        userId: paper.createdById,
+        status: RegistrationStatus.VERIFIED,
+        paymentStatus: PaymentStatus.VERIFIED,
+      },
+      update: {
+        status: RegistrationStatus.VERIFIED,
+        paymentStatus: PaymentStatus.VERIFIED,
+      },
+    });
+  }
+
+  async document(
+    actor: AuthenticatedUser,
+    paperId: string,
+    kind: 'certificate' | 'receipt' | 'attestation',
+  ) {
+    const paper = await this.loadPaper(paperId);
+    const manager = this.isChair(actor, paper.conference.memberships);
+    const author =
+      paper.createdById === actor.id ||
+      paper.authors.some((item) => item.email === actor.email.toLowerCase());
+    if (!manager && !author) {
+      throw new NotFoundException('Paper not found');
+    }
+    const registration = await this.prisma.registration.findUnique({
+      where: {
+        conferenceId_userId: {
+          conferenceId: paper.conferenceId,
+          userId: paper.createdById,
+        },
+      },
+    });
+    const registered =
+      registration?.status === RegistrationStatus.VERIFIED ||
+      registration?.paymentStatus === PaymentStatus.VERIFIED;
+    if ((kind === 'certificate' || kind === 'receipt') && !registered) {
+      throw new ForbiddenException('The registration is not validated yet');
+    }
+    if (kind === 'attestation' && !paper.doi) {
+      throw new ForbiddenException('The final attestation follows publication');
+    }
+    const title =
+      kind === 'certificate'
+        ? 'Certificate of acceptance'
+        : kind === 'receipt'
+          ? 'Payment receipt'
+          : 'Attestation of acceptance for publication';
+    const lines = [
+      paper.conferenceId,
+      paper.publicId ?? paper.id,
+      paper.title,
+      kind === 'attestation' ? (paper.doi ?? '') : registered ? 'Registered' : '',
+    ];
+    return {
+      name: `${paper.publicId ?? 'paper'}-${kind}.pdf`,
+      bytes: certificatePdf(title, lines.filter(Boolean)),
+    };
   }
 
   async saveSimilarity(
@@ -597,6 +757,8 @@ export class WorkflowService {
     similarity: { percentage: number; verifiedAt: Date | null } | null;
     copyright: { status: CopyrightStatus } | null;
     files: { kind: PaperFileKind }[];
+    presentedAt?: Date | null;
+    presentation?: { id: string } | null;
   }) {
     const published = paper.decision?.status === DecisionStatus.PUBLISHED;
     const accepted =
@@ -609,17 +771,20 @@ export class WorkflowService {
       paper.similarity.percentage < 20 &&
       paper.similarity.verifiedAt !== null;
     const copyrightOk = paper.copyright?.status === CopyrightStatus.VALIDATED;
+    const presented = Boolean(paper.presentedAt) || Boolean(paper.presentation);
     return {
       accepted,
       cameraReady,
       similarityOk,
       copyrightOk,
+      presented,
       ready:
         paper.status !== PaperStatus.WITHDRAWN &&
         accepted &&
         cameraReady &&
         similarityOk &&
-        copyrightOk,
+        copyrightOk &&
+        presented,
     };
   }
 
@@ -639,6 +804,36 @@ export class WorkflowService {
     }
   }
 
+  private assertUpload(
+    kind:
+      | 'REVISION'
+      | 'CAMERA_READY'
+      | 'EDITABLE'
+      | 'COPYRIGHT'
+      | 'SIMILARITY'
+      | 'SLIDES'
+      | 'PAYMENT_PROOF',
+    file: Upload,
+  ) {
+    if (!file?.buffer || file.size > 20 * 1024 * 1024) {
+      throw new BadRequestException('Upload a file of at most 20 MB');
+    }
+    const name = file.originalname.toLowerCase();
+    const allowed: Record<string, string[]> = {
+      EDITABLE: ['.pdf', '.doc', '.docx', '.tex', '.zip'],
+      SLIDES: ['.pdf', '.ppt', '.pptx'],
+      PAYMENT_PROOF: ['.pdf', '.png', '.jpg', '.jpeg'],
+    };
+    const extensions = allowed[kind];
+    if (!extensions) {
+      this.assertPdf(file);
+      return;
+    }
+    if (!extensions.some((extension) => name.endsWith(extension))) {
+      throw new BadRequestException('This file type is not allowed for this step');
+    }
+  }
+
   private assertPdf(file: Upload) {
     const pdf = file.buffer.subarray(0, 5).toString('utf8') === '%PDF-';
     if (!pdf || file.size > 20 * 1024 * 1024) {
@@ -655,6 +850,7 @@ export class WorkflowService {
         decision: true,
         similarity: true,
         copyright: true,
+        presentation: { select: { id: true } },
         conference: { include: { memberships: true } },
       },
     });
@@ -726,4 +922,24 @@ export class WorkflowService {
     }
     this.assertAuthor(actor, paper);
   }
+}
+
+function fileExtension(name: string, kind: string): string {
+  const match = name.toLowerCase().match(/\.[a-z0-9]+$/);
+  if (
+    match &&
+    kind !== 'CAMERA_READY' &&
+    kind !== 'COPYRIGHT' &&
+    kind !== 'SIMILARITY' &&
+    kind !== 'REVISION'
+  ) {
+    return match[0];
+  }
+  return '.pdf';
+}
+
+function safeUploadName(value: string): string {
+  const base = value.split(/[/\\]/).pop() ?? 'document';
+  const cleaned = base.replace(/[^A-Za-z0-9._-]/g, '_').slice(0, 180);
+  return cleaned.length > 0 ? cleaned : 'document';
 }

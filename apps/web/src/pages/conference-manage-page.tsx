@@ -2,16 +2,18 @@ import type { PublicConference } from '@scholarflow/types';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Link, useParams } from 'react-router';
+import { Link, Navigate, useParams } from 'react-router';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import { useCurrentUser } from '@/features/auth/use-account';
 import { apiErrorMessage, apiFetch } from '@/services/api';
 
 interface ConferenceDetail extends PublicConference {
   status: string;
   visibility: string;
   paymentsEnabled: boolean;
+  accessLocked: boolean;
   canManage: boolean;
   canViewMembers: boolean;
   myMembership: { id: string; role: string; status: string } | null;
@@ -57,6 +59,7 @@ async function loadConference(id: string): Promise<ConferenceDetail> {
 
 export function ConferenceManagePage() {
   const { t, i18n } = useTranslation();
+  const account = useCurrentUser();
   const { conferenceId = '' } = useParams();
   const queryClient = useQueryClient();
   const [message, setMessage] = useState<string | null>(null);
@@ -104,6 +107,20 @@ export function ConferenceManagePage() {
     return <p>{t('conferences.notPublic')}</p>;
   }
 
+  const manager =
+    conference.myMembership?.role === 'CHAIR' ||
+    conference.myMembership?.role === 'ADMINISTRATOR';
+  if (
+    conference.accessLocked &&
+    manager &&
+    account.data?.platformRole !== 'SYSTEM_ADMIN' &&
+    account.data?.unlockedConferenceId !== conference.id
+  ) {
+    return (
+      <Navigate to={`/workspace/conference-access?conference=${conference.id}`} replace />
+    );
+  }
+
   const place = [conference.city, conference.country].filter(Boolean).join(' · ');
   const when = formatRange(conference.startsOn, conference.endsOn, i18n.language);
   const where = [place, when].filter(Boolean).join(' · ');
@@ -141,20 +158,114 @@ export function ConferenceManagePage() {
             </span>
           ) : null}
         </div>
-        {conference.status === 'PUBLISHED' && conference.visibility === 'PUBLIC' ? (
-          <Link
-            to={`/directory/${conference.slug}`}
-            className="mt-3 inline-block rounded-full bg-[#eef2ff] px-3 py-1 text-sm font-bold text-[#3d4fd4] no-underline"
-          >
-            {t('conferences.viewPublic')}
-          </Link>
-        ) : null}
+        <div className="mt-4 flex flex-wrap gap-2">
+          {conference.canManage ? (
+            <>
+              <Link
+                to={
+                  conference.myMembership?.role === 'COMMITTEE'
+                    ? `/workspace/committee?conference=${conference.id}`
+                    : `/workspace/administrator?conference=${conference.id}`
+                }
+                className="inline-flex min-h-10 items-center rounded-full bg-[#3d4fd4] px-4 text-sm font-extrabold text-white no-underline"
+              >
+                {t('home.chairPapers')}
+              </Link>
+              <Link
+                to="/workspace/reviews"
+                className="inline-flex min-h-10 items-center rounded-full border border-[#c5cad6] bg-white px-4 text-sm font-extrabold text-[#3d4fd4] no-underline"
+              >
+                {t('nav.reviews')}
+              </Link>
+              <Link
+                to="/workspace/program"
+                className="inline-flex min-h-10 items-center rounded-full border border-[#c5cad6] bg-white px-4 text-sm font-extrabold text-[#3d4fd4] no-underline"
+              >
+                {t('nav.program')}
+              </Link>
+              <Link
+                to="/workspace/follow-up"
+                className="inline-flex min-h-10 items-center rounded-full border border-[#c5cad6] bg-white px-4 text-sm font-extrabold text-[#3d4fd4] no-underline"
+              >
+                {t('nav.followUp')}
+              </Link>
+            </>
+          ) : null}
+          {conference.status === 'PUBLISHED' && conference.visibility === 'PUBLIC' ? (
+            <Link
+              to={`/directory/${conference.slug}`}
+              className="inline-flex min-h-10 items-center rounded-full bg-[#eef2ff] px-4 text-sm font-bold text-[#3d4fd4] no-underline"
+            >
+              {t('conferences.viewPublic')}
+            </Link>
+          ) : null}
+        </div>
       </div>
       {message ? <p className="text-sm">{message}</p> : null}
+      {conference.myMembership?.role === 'CHAIR' ? (
+        <form
+          className="grid gap-3 rounded-[28px] border border-[#e4e7ee] bg-white p-4 sm:p-5 md:grid-cols-2"
+          onSubmit={(event) => {
+            event.preventDefault();
+            const data = new FormData(event.currentTarget);
+            const form = event.currentTarget;
+            void send(`/api/v1/conferences/${conferenceId}/sub-admins`, 'POST', {
+              firstName: String(data.get('firstName') ?? ''),
+              lastName: String(data.get('lastName') ?? ''),
+              email: String(data.get('email') ?? ''),
+              password: String(data.get('password') ?? ''),
+            }).then((ok) => {
+              if (ok) {
+                form.reset();
+                setMessage(t('access.subAdminCreated'));
+              }
+            });
+          }}
+        >
+          <h2 className="text-lg font-extrabold text-[#1c2744] md:col-span-2">
+            {t('access.createSubAdmin')}
+          </h2>
+          <p className="text-sm text-[#5c6578] md:col-span-2">
+            {t('access.subAdminHint')}
+          </p>
+          <label className="text-sm font-bold">
+            {t('auth.firstName')}
+            <Input name="firstName" required className="mt-1" />
+          </label>
+          <label className="text-sm font-bold">
+            {t('auth.lastName')}
+            <Input name="lastName" required className="mt-1" />
+          </label>
+          <label className="text-sm font-bold">
+            {t('auth.email')}
+            <Input
+              name="email"
+              type="email"
+              required
+              autoComplete="off"
+              className="mt-1"
+            />
+          </label>
+          <label className="text-sm font-bold">
+            {t('auth.password')}
+            <Input
+              name="password"
+              type="text"
+              required
+              minLength={12}
+              autoComplete="off"
+              className="mt-1"
+            />
+          </label>
+          <div>
+            <Button type="submit">{t('access.createSubAdmin')}</Button>
+          </div>
+        </form>
+      ) : null}
       {conference.canManage ? (
         <form
           key={`${conference.name}-${conference.shortName}-${conference.website}-${conference.city}-${conference.startsOn}-${conference.endsOn}-${conference.paymentsEnabled}`}
-          className="grid gap-3 rounded-2xl border border-[#e4e7ee] bg-white p-5 md:grid-cols-2"
+          className="grid gap-3 rounded-2xl border border-[#e4e7ee] bg-white p-4 sm:p-5 md:grid-cols-2"
           onSubmit={(event) => {
             event.preventDefault();
             const data = new FormData(event.currentTarget);
@@ -291,7 +402,7 @@ export function ConferenceManagePage() {
         </div>
       ) : null}
       {conference.canManage && conference.registrations.length > 0 ? (
-        <section className="rounded-2xl border border-[#e4e7ee] bg-white p-5">
+        <section className="rounded-2xl border border-[#e4e7ee] bg-white p-4 sm:p-5">
           <h2 className="text-lg font-extrabold">{t('workflow.registrations')}</h2>
           <ul className="mt-3 grid gap-2">
             {conference.registrations.map((item) => (
@@ -604,32 +715,53 @@ export function ConferenceManagePage() {
               ))}
             </ul>
             {conference.canManage ? (
-              <form
-                className="flex flex-wrap gap-2"
-                onSubmit={(event) => {
-                  event.preventDefault();
-                  void send(`/api/v1/conferences/${conferenceId}/invitations`, 'POST', {
-                    email: inviteEmail,
-                    role: inviteRole,
-                  }).then(() => setInviteEmail(''));
-                }}
-              >
-                <Input
-                  type="email"
-                  value={inviteEmail}
-                  onChange={(event) => setInviteEmail(event.target.value)}
-                  placeholder={t('auth.email')}
-                />
-                <select
-                  className="rounded-md border border-border bg-card px-2 text-sm"
-                  value={inviteRole}
-                  onChange={(event) => setInviteRole(event.target.value)}
+              <div className="space-y-3">
+                <p className="text-sm leading-relaxed text-[#5c6578]">
+                  {t('conferences.inviteHint')}
+                </p>
+                <form
+                  className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-end"
+                  onSubmit={(event) => {
+                    event.preventDefault();
+                    void send(`/api/v1/conferences/${conferenceId}/invitations`, 'POST', {
+                      email: inviteEmail,
+                      role: inviteRole,
+                    }).then(() => setInviteEmail(''));
+                  }}
                 >
-                  <option value="AUTHOR">{t('conferences.roles.AUTHOR')}</option>
-                  <option value="REVIEWER">{t('conferences.roles.REVIEWER')}</option>
-                </select>
-                <Button type="submit">{t('conferences.invite')}</Button>
-              </form>
+                  <label className="min-w-0 flex-1 text-xs font-extrabold text-[#5c6578]">
+                    {t('auth.email')}
+                    <Input
+                      type="email"
+                      value={inviteEmail}
+                      onChange={(event) => setInviteEmail(event.target.value)}
+                      placeholder={t('auth.email')}
+                      className="mt-1.5"
+                    />
+                  </label>
+                  <label className="text-xs font-extrabold text-[#5c6578]">
+                    {t('conferences.inviteRole')}
+                    <select
+                      className="mt-1.5 block min-h-10 w-full rounded-xl border border-[#c5cad6] bg-white px-3 text-sm font-semibold text-[#1c2744] sm:min-w-[12rem]"
+                      value={inviteRole}
+                      onChange={(event) => setInviteRole(event.target.value)}
+                    >
+                      <option value="AUTHOR">{t('conferences.roles.AUTHOR')}</option>
+                      <option value="REVIEWER">{t('conferences.roles.REVIEWER')}</option>
+                      <option value="COMMITTEE">
+                        {t('conferences.roles.COMMITTEE')}
+                      </option>
+                    </select>
+                  </label>
+                  <Button type="submit">{t('conferences.invite')}</Button>
+                </form>
+                <ul className="grid gap-1.5 text-xs font-semibold text-[#8b909a]">
+                  <li>{t('conferences.createdBy.reviewer')}</li>
+                  <li>{t('conferences.createdBy.committee')}</li>
+                  <li>{t('conferences.createdBy.author')}</li>
+                  <li>{t('conferences.createdBy.subAdmin')}</li>
+                </ul>
+              </div>
             ) : null}
           </CardContent>
         </Card>

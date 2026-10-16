@@ -4,6 +4,7 @@ import { RequireAuth } from '@/features/auth/require-auth';
 import { useCurrentUser } from '@/features/auth/use-account';
 import { AppShell } from '@/layouts/app-shell';
 import { AccountPage } from '@/pages/account-page';
+import { ConferenceAccessPage } from '@/pages/conference-access-page';
 import { ConferenceManagePage } from '@/pages/conference-manage-page';
 import { ConferencesPage } from '@/pages/conferences-page';
 import { DirectoryPage } from '@/pages/directory-page';
@@ -19,6 +20,7 @@ import { FollowUpPage } from '@/pages/follow-up-page';
 import { ProgramPage } from '@/pages/program-page';
 import { ReviewsPage } from '@/pages/reviews-page';
 import { RoleDashboardPage, WorkspaceHome } from '@/pages/role-dashboard-page';
+import { SuperadminPage } from '@/pages/superadmin-page';
 import { SubmissionEditorPage } from '@/pages/submission-editor-page';
 import { SubmissionsPage } from '@/pages/submissions-page';
 import { VerifyEmailPage } from '@/pages/verify-email-page';
@@ -57,7 +59,8 @@ export const routes = [
           { path: 'reviewer', element: <RoleDashboardPage role="reviewer" /> },
           { path: 'committee', element: <RoleDashboardPage role="committee" /> },
           { path: 'administrator', element: <RoleDashboardPage role="administrator" /> },
-          { path: 'system', element: <RoleDashboardPage role="system" /> },
+          { path: 'system/*', element: <SuperadminPage /> },
+          { path: 'conference-access', element: <ConferenceAccessPage /> },
           { path: 'preferences', element: <PreferencesPage /> },
           { path: 'account', element: <AccountPage /> },
           { path: 'conferences', element: <ConferencesPage /> },

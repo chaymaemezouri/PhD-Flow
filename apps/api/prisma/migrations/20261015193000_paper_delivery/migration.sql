@@ -1,0 +1,5 @@
+ALTER TYPE "PaperFileKind" ADD VALUE 'SLIDES';
+ALTER TYPE "PaperFileKind" ADD VALUE 'PAYMENT_PROOF';
+
+ALTER TABLE "papers" ADD COLUMN "presented_at" TIMESTAMP(3);
+ALTER TABLE "papers" ADD COLUMN "session_comment" TEXT NOT NULL DEFAULT '';

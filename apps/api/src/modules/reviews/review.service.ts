@@ -15,6 +15,8 @@ import type { z } from 'zod';
 import {
   AssignmentStatus,
   ConferenceRole,
+  DecisionOutcome,
+  DecisionStatus,
   MembershipStatus,
   PaperStatus,
   PlatformRole,
@@ -71,6 +73,24 @@ export class ReviewService {
       disciplines: item.user.profile?.disciplines ?? [],
       interests: item.user.profile?.interests ?? null,
     }));
+  }
+
+  async chairs(actor: AuthenticatedUser, conferenceId: string) {
+    const conference = await this.loadConference(conferenceId);
+    this.assertManager(actor, conference.memberships);
+    const roles = new Set<ConferenceRole>([
+      ConferenceRole.REVIEWER,
+      ConferenceRole.COMMITTEE,
+      ConferenceRole.CHAIR,
+      ConferenceRole.ADMINISTRATOR,
+    ]);
+    return conference.memberships
+      .filter((item) => item.status === MembershipStatus.ACTIVE && roles.has(item.role))
+      .map((item) => ({
+        userId: item.userId,
+        firstName: item.user.profile?.firstName ?? '',
+        lastName: item.user.profile?.lastName ?? '',
+      }));
   }
 
   async declareConflict(
@@ -265,7 +285,17 @@ export class ReviewService {
   }
 
   async submitReview(actor: AuthenticatedUser, id: string, input: ReviewInput) {
-    const row = await this.prisma.reviewAssignment.findUnique({ where: { id } });
+    const row = await this.prisma.reviewAssignment.findUnique({
+      where: { id },
+      include: {
+        paper: {
+          include: {
+            authors: true,
+            decision: true,
+          },
+        },
+      },
+    });
     if (!row || row.reviewerId !== actor.id) {
       throw new NotFoundException('Assignment not found');
     }
@@ -277,6 +307,7 @@ export class ReviewService {
     if (!open.has(row.status)) {
       throw new ForbiddenException('Accept the invitation before sending a review');
     }
+    const outcome = this.outcomeFromAdvice(input.recommendation);
     await this.prisma.$transaction(async (tx) => {
       await tx.reviewForm.upsert({
         where: { assignmentId: id },
@@ -287,7 +318,43 @@ export class ReviewService {
         where: { id },
         data: { status: AssignmentStatus.COMPLETED },
       });
+      if (!row.paper.decision) {
+        await tx.decision.create({
+          data: {
+            paperId: row.paperId,
+            outcome,
+            letter: input.commentsToAuthor,
+            status: DecisionStatus.PUBLISHED,
+            publishedAt: new Date(),
+            decidedById: actor.id,
+          },
+        });
+      }
     });
+    const recipients = row.paper.authors.filter((item) => item.corresponding);
+    for (const author of recipients) {
+      const outboxId = await this.email.enqueue(author.email, 'review.response');
+      await this.email.deliver(outboxId, {
+        to: author.email,
+        subject: `Review on ${row.paper.publicId ?? row.paper.title}`,
+        text: input.commentsToAuthor,
+      });
+    }
+  }
+
+  private outcomeFromAdvice(
+    recommendation: ReviewInput['recommendation'],
+  ): DecisionOutcome {
+    if (recommendation === 'ACCEPT') {
+      return DecisionOutcome.ACCEPTED;
+    }
+    if (recommendation === 'WEAK_ACCEPT') {
+      return DecisionOutcome.CONDITIONALLY_ACCEPTED;
+    }
+    if (recommendation === 'REJECT') {
+      return DecisionOutcome.REJECTED;
+    }
+    return DecisionOutcome.REVISION_REQUIRED;
   }
 
   async cancel(actor: AuthenticatedUser, id: string) {

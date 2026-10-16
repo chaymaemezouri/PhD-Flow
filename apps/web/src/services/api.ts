@@ -22,6 +22,17 @@ const knownErrors: Record<string, string> = {
   'Payment is not required': 'errors.noPayment',
   'The registration fee is still unpaid': 'errors.unpaid',
   'Only an accepted paper can be scheduled': 'errors.schedule',
+  'Only the superadmin can create a conference': 'errors.superadminOnly',
+  'Choose an admin account': 'errors.chooseAdmin',
+  'The conference password is incorrect': 'errors.conferencePassword',
+  'This conference has no access password': 'errors.conferencePasswordMissing',
+  'Enter the conference password': 'errors.conferencePasswordRequired',
+  'Only the conference admin can create a sub-admin': 'errors.subAdminOnly',
+  'This account is disabled': 'errors.accountDisabled',
+  'Only a draft conference can be deleted': 'errors.draftOnly',
+  'Disable this account instead. It still owns papers.': 'errors.userHasPapers',
+  'Remove the papers before deleting this draft': 'errors.removePapersFirst',
+  'Set the conference password before publishing': 'errors.conferencePasswordRequired',
 };
 
 const base = import.meta.env.VITE_API_URL ?? '';

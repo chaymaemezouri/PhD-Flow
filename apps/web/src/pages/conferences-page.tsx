@@ -1,11 +1,11 @@
 import type { ConferenceRole, MembershipStatus } from '@scholarflow/types';
-import { createConferenceSchema } from '@scholarflow/validation';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useEffect, useState } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
+import { useCurrentUser } from '@/features/auth/use-account';
+import { canSubmitToConference } from '@/features/navigation/can-submit';
 import { apiErrorMessage, apiFetch } from '@/services/api';
 
 interface Mine {
@@ -14,7 +14,7 @@ interface Mine {
   shortName: string;
   status: string;
   role: ConferenceRole;
-  membershipStatus: MembershipStatus;
+  membershipStatus: MembershipStatus | 'OPEN';
   city: string | null;
   country: string | null;
   startsOn: string | null;
@@ -52,26 +52,10 @@ function formatRange(start: string | null, end: string | null, language: string)
 
 export function ConferencesPage() {
   const { t, i18n } = useTranslation();
+  const account = useCurrentUser();
+  const superadmin = account.data?.platformRole === 'SYSTEM_ADMIN';
   const queryClient = useQueryClient();
   const [error, setError] = useState<string | null>(null);
-  const [name, setName] = useState('');
-  const [shortName, setShortName] = useState('');
-  const [description, setDescription] = useState('');
-  const [city, setCity] = useState('');
-  const [country, setCountry] = useState('');
-  const [creating, setCreating] = useState(false);
-  useEffect(() => {
-    if (!creating) {
-      return;
-    }
-    function onKey(event: KeyboardEvent) {
-      if (event.key === 'Escape') {
-        setCreating(false);
-      }
-    }
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [creating]);
   const mine = useQuery({ queryKey: ['conferences'], queryFn: loadMine });
   async function respondInvite(id: string, accept: boolean) {
     setError(null);
@@ -85,27 +69,6 @@ export function ConferencesPage() {
     }
     await queryClient.invalidateQueries({ queryKey: ['conferences'] });
   }
-  const create = useMutation({
-    mutationFn: async (values: unknown) => {
-      const response = await apiFetch('/api/v1/conferences', {
-        method: 'POST',
-        body: JSON.stringify(values),
-      });
-      if (!response.ok) {
-        throw new Error(await apiErrorMessage(response));
-      }
-    },
-    onSuccess: async () => {
-      setName('');
-      setShortName('');
-      setDescription('');
-      setCity('');
-      setCountry('');
-      setCreating(false);
-      await queryClient.invalidateQueries({ queryKey: ['conferences'] });
-    },
-  });
-
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -117,9 +80,11 @@ export function ConferencesPage() {
             {t('conferences.intro')}
           </p>
         </div>
-        <Button type="button" onClick={() => setCreating(true)}>
-          {t('conferences.create')}
-        </Button>
+        {superadmin ? (
+          <Button asChild>
+            <Link to="/workspace/system">{t('conferences.create')}</Link>
+          </Button>
+        ) : null}
       </div>
       {mine.isPending ? (
         <p className="text-sm text-[#8b909a]">{t('common.loading')}</p>
@@ -127,6 +92,7 @@ export function ConferencesPage() {
       {mine.isError ? (
         <p className="text-sm text-[#c54545]">{mine.error.message}</p>
       ) : null}
+      {error ? <p className="text-sm text-[#c54545]">{error}</p> : null}
       {mine.data?.length === 0 ? (
         <p className="text-sm text-[#5c6578]">{t('conferences.empty')}</p>
       ) : null}
@@ -156,9 +122,11 @@ export function ConferencesPage() {
                   {where ? <p className="mt-1 text-sm text-[#5c6578]">{where}</p> : null}
                 </div>
                 <div className="flex flex-wrap gap-2">
-                  <span className="rounded-full bg-[#5d74ff]/12 px-3 py-1 text-xs font-bold text-[#3d4fd4]">
-                    {t(`conferences.roles.${item.role}`, { defaultValue: item.role })}
-                  </span>
+                  {item.membershipStatus === 'OPEN' ? null : (
+                    <span className="rounded-full bg-[#5d74ff]/12 px-3 py-1 text-xs font-bold text-[#3d4fd4]">
+                      {t(`conferences.roles.${item.role}`, { defaultValue: item.role })}
+                    </span>
+                  )}
                   <span className="rounded-full bg-[#2fbf71]/14 px-3 py-1 text-xs font-bold text-[#1c9a57]">
                     {t(`conferences.states.${item.status}`, {
                       defaultValue: item.status,
@@ -171,140 +139,62 @@ export function ConferencesPage() {
                   </span>
                 </div>
               </div>
-              <div className="mt-4 flex flex-wrap gap-2 text-sm font-bold">
+              <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
                 {item.membershipStatus === 'INVITED' ? (
-                  <>
+                  <div className="flex flex-wrap gap-2">
                     <button
                       type="button"
-                      className="rounded-full bg-[#5d74ff]/85 px-3 py-1 text-white"
+                      className="inline-flex min-h-10 items-center justify-center rounded-full bg-[#5d74ff] px-4 py-2 text-sm font-extrabold text-white"
                       onClick={() => void respondInvite(item.id, true)}
                     >
                       {t('conferences.accept')}
                     </button>
                     <button
                       type="button"
-                      className="rounded-full bg-[#f4f7ff] px-3 py-1 text-[#5c6578]"
+                      className="inline-flex min-h-10 items-center justify-center rounded-full border border-[#c5cad6] bg-white px-4 py-2 text-sm font-extrabold text-[#5c6578]"
                       onClick={() => void respondInvite(item.id, false)}
                     >
                       {t('conferences.decline')}
                     </button>
-                  </>
+                  </div>
                 ) : null}
-                <Link
-                  to={`/workspace/conferences/${item.id}`}
-                  className="rounded-full bg-[#eef2ff] px-3 py-1 text-[#3d4fd4] no-underline"
-                >
-                  {t('home.manage')}
-                </Link>
-                <Link
-                  to={`/workspace/program?conference=${item.id}`}
-                  className="rounded-full bg-[#eef2ff] px-3 py-1 text-[#3d4fd4] no-underline"
-                >
-                  {t('home.program')}
-                </Link>
-                <Link
-                  to="/workspace/follow-up"
-                  className="rounded-full bg-[#eef2ff] px-3 py-1 text-[#3d4fd4] no-underline"
-                >
-                  {t('home.publication')}
-                </Link>
+                {canSubmitToConference(superadmin, mine.data ?? [], item) ? (
+                  <Link
+                    to={`/workspace/submissions/new?conference=${item.id}`}
+                    className="inline-flex min-h-10 w-full items-center justify-center rounded-full bg-[#5d74ff] px-4 py-2 text-sm font-extrabold text-white no-underline shadow-[0_6px_16px_rgba(93,116,255,0.28)] sm:w-auto"
+                  >
+                    {t('home.submitPaper')}
+                  </Link>
+                ) : null}
+                <div className="flex flex-wrap gap-2">
+                  <Link
+                    to={`/workspace/conferences/${item.id}`}
+                    className="inline-flex min-h-10 items-center justify-center rounded-full border border-[#c5cad6] bg-white px-3.5 py-2 text-sm font-extrabold text-[#3d4fd4] no-underline"
+                  >
+                    {t('home.manage')}
+                  </Link>
+                  {item.membershipStatus === 'OPEN' ? null : (
+                    <>
+                      <Link
+                        to={`/workspace/program?conference=${item.id}`}
+                        className="inline-flex min-h-10 items-center justify-center rounded-full border border-[#c5cad6] bg-white px-3.5 py-2 text-sm font-extrabold text-[#3d4fd4] no-underline"
+                      >
+                        {t('home.program')}
+                      </Link>
+                      <Link
+                        to="/workspace/follow-up"
+                        className="inline-flex min-h-10 items-center justify-center rounded-full border border-[#c5cad6] bg-white px-3.5 py-2 text-sm font-extrabold text-[#3d4fd4] no-underline"
+                      >
+                        {t('home.publication')}
+                      </Link>
+                    </>
+                  )}
+                </div>
               </div>
             </li>
           );
         })}
       </ul>
-      {creating ? (
-        <div className="fixed inset-0 z-[60] grid place-items-center p-4">
-          <button
-            type="button"
-            className="absolute inset-0 bg-[#243044]/30"
-            aria-label={t('nav.close')}
-            onClick={() => setCreating(false)}
-          />
-          <section
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="create-conference-title"
-            className="relative z-10 w-full max-w-lg rounded-2xl border border-[#e4e7ee] bg-white p-5 shadow-[0_16px_40px_rgba(28,36,48,0.16)]"
-          >
-            <h2 id="create-conference-title" className="text-lg font-extrabold">
-              {t('conferences.create')}
-            </h2>
-            <form
-              className="mt-4 grid gap-3 sm:grid-cols-2"
-              onSubmit={(event) => {
-                event.preventDefault();
-                setError(null);
-                const parsed = createConferenceSchema.safeParse({
-                  name,
-                  shortName,
-                  description,
-                  city,
-                  country,
-                });
-                if (!parsed.success) {
-                  setError(parsed.error.issues[0]?.message ?? t('conferences.loadError'));
-                  return;
-                }
-                void create.mutateAsync(parsed.data).catch((caught: unknown) => {
-                  setError(
-                    caught instanceof Error ? caught.message : t('conferences.loadError'),
-                  );
-                });
-              }}
-            >
-              <label className="text-sm font-bold text-[#1c2744]">
-                {t('conferences.name')}
-                <Input
-                  className="mt-1"
-                  value={name}
-                  onChange={(event) => setName(event.target.value)}
-                />
-              </label>
-              <label className="text-sm font-bold text-[#1c2744]">
-                {t('conferences.shortName')}
-                <Input
-                  className="mt-1"
-                  value={shortName}
-                  onChange={(event) => setShortName(event.target.value)}
-                />
-              </label>
-              <label className="text-sm font-bold text-[#1c2744] sm:col-span-2">
-                {t('conferences.description')}
-                <Input
-                  className="mt-1"
-                  value={description}
-                  onChange={(event) => setDescription(event.target.value)}
-                />
-              </label>
-              <label className="text-sm font-bold text-[#1c2744]">
-                {t('auth.city')}
-                <Input
-                  className="mt-1"
-                  value={city}
-                  onChange={(event) => setCity(event.target.value)}
-                />
-              </label>
-              <label className="text-sm font-bold text-[#1c2744]">
-                {t('auth.country')}
-                <Input
-                  className="mt-1"
-                  value={country}
-                  onChange={(event) => setCountry(event.target.value)}
-                />
-              </label>
-              {error ? (
-                <p className="text-sm text-[#c54545] sm:col-span-2">{error}</p>
-              ) : null}
-              <div>
-                <Button type="submit" disabled={create.isPending}>
-                  {t('conferences.create')}
-                </Button>
-              </div>
-            </form>
-          </section>
-        </div>
-      ) : null}
     </div>
   );
 }

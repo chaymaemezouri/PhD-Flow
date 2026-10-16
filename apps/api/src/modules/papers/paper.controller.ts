@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Get,
@@ -9,6 +10,7 @@ import {
   Put,
   Req,
   Res,
+  StreamableFile,
   UploadedFile,
   UseGuards,
   UseInterceptors,
@@ -18,12 +20,13 @@ import { ApiTags } from '@nestjs/swagger';
 import {
   createPaperSchema,
   replaceAuthorsSchema,
+  scopeDecisionSchema,
   updatePaperSchema,
   withdrawPaperSchema,
 } from '@scholarflow/validation';
 import type { Response } from 'express';
-import { StreamableFile } from '@nestjs/common';
 import type { z } from 'zod';
+import { PaperFileKind } from '../../generated/prisma/client.js';
 import { ZodValidationPipe } from '../../common/pipes/zod-validation.pipe.js';
 import { AuthGuard, type AuthenticatedRequest } from '../auth/auth.guard.js';
 import { CsrfGuard } from '../auth/csrf.guard.js';
@@ -107,10 +110,31 @@ export class PaperController {
     @Res({ passthrough: true }) response: Response,
   ) {
     const file = await this.papers.download(request.user!, id);
-    response.setHeader('Content-Type', 'application/pdf');
+    response.setHeader('Content-Type', file.contentType || 'application/pdf');
     response.setHeader(
       'Content-Disposition',
-      `attachment; filename="${file.name.replace(/"/g, '')}"`,
+      `inline; filename="${file.name.replace(/"/g, '')}"`,
+    );
+    return new StreamableFile(file.bytes);
+  }
+
+  @Get('papers/:id/files/:kind')
+  async downloadKind(
+    @Req() request: AuthenticatedRequest,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('kind') kind: string,
+    @Res({ passthrough: true }) response: Response,
+  ) {
+    const normalized = kind.toUpperCase().replace(/-/g, '_');
+    const matched = Object.values(PaperFileKind).find((value) => value === normalized);
+    if (!matched) {
+      throw new BadRequestException('Unknown file kind');
+    }
+    const file = await this.papers.downloadByKind(request.user!, id, matched);
+    response.setHeader('Content-Type', file.contentType || 'application/octet-stream');
+    response.setHeader(
+      'Content-Disposition',
+      `inline; filename="${file.name.replace(/"/g, '')}"`,
     );
     return new StreamableFile(file.bytes);
   }
@@ -118,6 +142,16 @@ export class PaperController {
   @Post('papers/:id/submit')
   submit(@Req() request: AuthenticatedRequest, @Param('id', ParseUUIDPipe) id: string) {
     return this.papers.submit(request.user!, id);
+  }
+
+  @Post('papers/:id/scope')
+  scope(
+    @Req() request: AuthenticatedRequest,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body(new ZodValidationPipe(scopeDecisionSchema))
+    body: z.infer<typeof scopeDecisionSchema>,
+  ) {
+    return this.papers.decideScope(request.user!, id, body.accept);
   }
 
   @Post('papers/:id/withdraw')

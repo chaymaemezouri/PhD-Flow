@@ -8,4 +8,5 @@ export interface AuthenticatedUser {
   mfaEnabled: boolean;
   profile: Profile;
   sessionId: string;
+  unlockedConferenceId: string | null;
 }
