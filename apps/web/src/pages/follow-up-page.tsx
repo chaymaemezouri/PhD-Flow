@@ -76,7 +76,7 @@ export function FollowUpPage() {
         <p className="text-sm text-[#8b909a]">{t('common.loading')}</p>
       ) : null}
       {!papers.isPending && visible.length === 0 ? (
-        <div className="rounded-[28px] border border-[#e4e7ee] bg-white p-6">
+        <div className="rounded-2xl border border-[#e4e7ee] bg-white p-4 sm:rounded-[28px] sm:p-6">
           <p className="text-sm text-[#5c6578]">{t('followUp.empty')}</p>
           <Link
             to="/workspace/submissions"

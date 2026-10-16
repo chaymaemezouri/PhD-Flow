@@ -134,7 +134,9 @@ export function ConferenceManagePage() {
         >
           {t('conferences.back')}
         </Link>
-        <h1 className="mt-2 text-3xl font-extrabold text-[#1c2744]">{conference.name}</h1>
+        <h1 className="mt-2 text-xl font-extrabold text-[#1c2744] sm:text-2xl lg:text-3xl">
+          {conference.name}
+        </h1>
         {where ? <p className="mt-2 text-sm text-[#5c6578]">{where}</p> : null}
         {conference.description ? (
           <p className="mt-2 max-w-3xl text-sm leading-relaxed text-[#5c6578]">

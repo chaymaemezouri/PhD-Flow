@@ -334,7 +334,7 @@ export function SubmissionEditorPage() {
         {t('papers.back')}
       </Link>
       <div>
-        <h1 className="break-words text-2xl sm:text-3xl">
+        <h1 className="break-words text-xl sm:text-2xl lg:text-3xl">
           {current?.title || t('papers.new')}
         </h1>
         {current ? (

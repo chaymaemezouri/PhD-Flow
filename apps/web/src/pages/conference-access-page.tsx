@@ -76,7 +76,9 @@ export function ConferenceAccessPage() {
   return (
     <div className="space-y-5">
       <div>
-        <h1 className="text-3xl font-extrabold text-[#1c2744]">{t('access.title')}</h1>
+        <h1 className="text-xl font-extrabold text-[#1c2744] sm:text-2xl lg:text-3xl">
+          {t('access.title')}
+        </h1>
         <p className="mt-2 max-w-2xl text-sm leading-relaxed text-[#5c6578]">
           {t('access.intro')}
         </p>

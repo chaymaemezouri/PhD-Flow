@@ -100,12 +100,12 @@ export function AccountPage() {
             </div>
           )}
         </div>
-        <div className="flex flex-col justify-between rounded-[28px] bg-white p-5 sm:p-8">
+        <div className="flex flex-col justify-between rounded-2xl bg-white p-4 sm:rounded-[28px] sm:p-8">
           <div>
             <p className="text-sm font-semibold text-[#8b909a]">
               {profile.academicTitle ?? t('auth.profileTitle')}
             </p>
-            <h1 className="mt-1 text-3xl break-words sm:text-4xl">
+            <h1 className="mt-1 text-xl break-words sm:text-3xl lg:text-4xl">
               {profile.firstName} {profile.lastName}
             </h1>
             <p className="mt-3 max-w-2xl text-sm font-semibold text-[#5c6370]">{place}</p>

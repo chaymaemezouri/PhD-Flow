@@ -147,38 +147,38 @@ function AuthorDashboard() {
     : null;
 
   return (
-    <div className="space-y-5">
-      <header className="flex flex-col gap-4 rounded-2xl border border-[#e4e7ee] bg-white px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5">
-        <div className="flex min-w-0 items-center gap-3">
+    <div className="space-y-3 sm:space-y-5">
+      <header className="flex flex-col gap-2.5 rounded-xl border border-[#e4e7ee] bg-white px-3 py-2.5 sm:flex-row sm:items-center sm:justify-between sm:gap-3 sm:rounded-2xl sm:px-4 sm:py-3">
+        <div className="flex min-w-0 items-center gap-2 sm:gap-2.5">
           {profile?.photoPath ? (
             <img
               src={profile.photoPath}
               alt=""
-              className="size-12 rounded-full object-cover"
+              className="size-9 rounded-full object-cover sm:size-10"
             />
           ) : (
-            <div className="grid size-12 place-items-center rounded-full bg-[#eef2ff] text-base font-extrabold text-[#3d4fd4]">
+            <div className="grid size-9 place-items-center rounded-full bg-[#eef2ff] text-xs font-extrabold text-[#3d4fd4] sm:size-10 sm:text-sm">
               {firstName.slice(0, 1)}
             </div>
           )}
           <div className="min-w-0">
-            <h1 className="truncate text-lg font-extrabold">{fullName}</h1>
-            <p className="truncate text-sm text-[#5c6578]">
+            <h1 className="truncate text-sm font-extrabold sm:text-base">{fullName}</h1>
+            <p className="truncate text-[11px] text-[#5c6578] sm:text-xs">
               {[profile?.academicTitle, conference?.name, roleLabel]
                 .filter(Boolean)
                 .join(' · ') || t('home.noConference')}
             </p>
           </div>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-center gap-1.5">
           <Link
             to="/workspace/account"
-            className="rounded-full bg-[#f4f7ff] px-3 py-2 text-sm font-bold text-[#3d4fd4] no-underline"
+            className="rounded-full bg-[#f4f7ff] px-2.5 py-1.5 text-[11px] font-bold text-[#3d4fd4] no-underline sm:text-xs"
           >
             {t('auth.profileTitle')}
           </Link>
           {canStartSubmission(false, memberships.data) ? (
-            <Button asChild>
+            <Button asChild size="sm" className="sm:h-10 sm:px-4 sm:text-sm">
               <Link to="/workspace/submissions/new">{t('papers.new')}</Link>
             </Button>
           ) : null}
@@ -188,9 +188,9 @@ function AuthorDashboard() {
       {openConferences.some((item) =>
         canSubmitToConference(false, memberships.data ?? [], item),
       ) ? (
-        <section className="rounded-2xl border border-[#e4e7ee] bg-white p-4 sm:p-5">
-          <h2 className="text-lg font-extrabold">{t('home.openConferences')}</h2>
-          <ul className="mt-3 grid gap-2">
+        <section className="rounded-2xl border border-[#e4e7ee] bg-white p-3 sm:p-5">
+          <h2 className="text-base font-extrabold sm:text-lg">{t('home.openConferences')}</h2>
+          <ul className="mt-2 grid gap-2 sm:mt-3">
             {openConferences
               .filter((item) =>
                 canSubmitToConference(false, memberships.data ?? [], item),
@@ -198,19 +198,19 @@ function AuthorDashboard() {
               .map((item) => (
                 <li
                   key={item.id}
-                  className="flex flex-wrap items-center justify-between gap-2 rounded-2xl bg-[#f6f7fb] px-4 py-3"
+                  className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-[#f6f7fb] px-3 py-2.5 sm:rounded-2xl sm:px-4 sm:py-3"
                 >
-                  <span className="text-sm font-extrabold">{item.name}</span>
-                  <span className="flex flex-wrap gap-2">
+                  <span className="text-xs font-extrabold sm:text-sm">{item.name}</span>
+                  <span className="flex flex-wrap gap-1.5 sm:gap-2">
                     <Link
                       to={`/workspace/submissions/new?conference=${item.id}`}
-                      className="inline-flex min-h-10 items-center justify-center rounded-full bg-[#5d74ff] px-4 py-2 text-sm font-extrabold text-white no-underline shadow-[0_6px_16px_rgba(93,116,255,0.28)]"
+                      className="inline-flex min-h-8 items-center justify-center rounded-full bg-[#5d74ff] px-3 py-1.5 text-xs font-extrabold text-white no-underline shadow-[0_6px_16px_rgba(93,116,255,0.28)] sm:min-h-10 sm:px-4 sm:py-2 sm:text-sm"
                     >
                       {t('home.submitPaper')}
                     </Link>
                     <Link
                       to={`/workspace/conferences/${item.id}`}
-                      className="inline-flex min-h-10 items-center justify-center rounded-full border border-[#c5cad6] bg-white px-3.5 py-2 text-sm font-extrabold text-[#3d4fd4] no-underline"
+                      className="inline-flex min-h-8 items-center justify-center rounded-full border border-[#c5cad6] bg-white px-2.5 py-1.5 text-xs font-extrabold text-[#3d4fd4] no-underline sm:min-h-10 sm:px-3.5 sm:py-2 sm:text-sm"
                     >
                       {t('home.manage')}
                     </Link>
@@ -221,7 +221,7 @@ function AuthorDashboard() {
         </section>
       ) : null}
 
-      <section className="grid grid-cols-2 gap-3 xl:grid-cols-4">
+      <section className="grid grid-cols-2 gap-2 sm:gap-3 xl:grid-cols-4">
         <Metric
           tone="blue"
           label={t('home.papersCount')}
@@ -252,9 +252,9 @@ function AuthorDashboard() {
         />
       </section>
 
-      <section className="rounded-2xl border border-[#e4e7ee] bg-white p-4 sm:p-5">
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-          <div className="flex flex-wrap gap-2">
+      <section className="rounded-2xl border border-[#e4e7ee] bg-white p-3 sm:p-5">
+        <div className="flex flex-col gap-2.5 sm:gap-3 lg:flex-row lg:items-center lg:justify-between">
+          <div className="touch-scroll flex gap-1.5 overflow-x-auto pb-0.5 sm:flex-wrap sm:gap-2 sm:overflow-visible">
             {filters.map(([key, label]) => {
               const active = board === key;
               const tone =
@@ -269,13 +269,13 @@ function AuthorDashboard() {
                 <button
                   key={key}
                   type="button"
-                  className={`rounded-full px-3 py-1.5 text-sm font-extrabold ${
+                  className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-extrabold sm:px-3 sm:py-1.5 sm:text-sm ${
                     active ? tone : 'bg-[#f4f7ff] text-[#5c6578]'
                   }`}
                   onClick={() => setBoard(key)}
                 >
                   {t(label)}
-                  <span className="ml-1.5 tabular-nums opacity-80">
+                  <span className="ml-1 tabular-nums opacity-80 sm:ml-1.5">
                     {key === 'all'
                       ? counts.total
                       : key === 'waiting'
@@ -288,33 +288,33 @@ function AuthorDashboard() {
               );
             })}
           </div>
-          <label className="flex items-center gap-2 rounded-full bg-[#f4f7ff] px-3 py-2">
-            <Search className="size-4 text-[#8b909a]" />
+          <label className="flex items-center gap-2 rounded-full bg-[#f4f7ff] px-2.5 py-1.5 sm:px-3 sm:py-2">
+            <Search className="size-3.5 text-[#8b909a] sm:size-4" />
             <span className="sr-only">{t('top.search')}</span>
             <input
               value={query}
               onChange={(event) => setQuery(event.target.value)}
               placeholder={t('home.search')}
-              className="w-full bg-transparent text-sm outline-none placeholder:text-[#a0a6b2] lg:w-56"
+              className="w-full bg-transparent text-xs outline-none placeholder:text-[#a0a6b2] sm:text-sm lg:w-56"
             />
           </label>
         </div>
         {papers.isPending ? (
-          <p className="mt-4 text-sm text-[#8b909a]">{t('common.loading')}</p>
+          <p className="mt-3 text-xs text-[#8b909a] sm:mt-4 sm:text-sm">{t('common.loading')}</p>
         ) : null}
         {papers.isError ? (
-          <p className="mt-4 text-sm text-[#c54545]" role="alert">
+          <p className="mt-3 text-xs text-[#c54545] sm:mt-4 sm:text-sm" role="alert">
             {papers.error.message}
           </p>
         ) : null}
         {boardPapers.length === 0 && !papers.isPending ? (
-          <div className="mt-4 rounded-3xl bg-[#f6f7fb] px-5 py-5">
-            <p className="text-sm text-[#5c6370]">
+          <div className="mt-3 rounded-2xl bg-[#f6f7fb] px-3 py-3 sm:mt-4 sm:rounded-3xl sm:px-5 sm:py-5">
+            <p className="text-xs text-[#5c6370] sm:text-sm">
               {conference ? t('home.empty') : t('home.joinBody')}
             </p>
           </div>
         ) : null}
-        <ul className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+        <ul className="mt-3 grid gap-2 sm:mt-4 sm:gap-3 md:grid-cols-2 xl:grid-cols-3">
           {boardPapers.map((paper) => (
             <li key={paper.id}>
               <PaperWorkCard paper={paper} />
@@ -440,7 +440,7 @@ function ChairDashboard({ variant = 'admin' }: { variant?: 'admin' | 'committee'
   }
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-3 sm:space-y-5">
       <Identity
         name={fullName}
         photo={profile?.photoPath}
@@ -454,37 +454,37 @@ function ChairDashboard({ variant = 'admin' }: { variant?: 'admin' | 'committee'
         {managed ? (
           <Link
             to={`/workspace/conferences/${managed.id}`}
-            className="rounded-full bg-[#f4f7ff] px-3 py-2 text-sm font-bold text-[#3d4fd4] no-underline"
+            className="rounded-full bg-[#f4f7ff] px-2.5 py-1.5 text-xs font-bold text-[#3d4fd4] no-underline sm:px-3 sm:py-2 sm:text-sm"
           >
             {t('home.manage')}
           </Link>
         ) : null}
         <Link
           to="/workspace/reviews"
-          className="rounded-full bg-[#f4f7ff] px-3 py-2 text-sm font-bold text-[#3d4fd4] no-underline"
+          className="rounded-full bg-[#f4f7ff] px-2.5 py-1.5 text-xs font-bold text-[#3d4fd4] no-underline sm:px-3 sm:py-2 sm:text-sm"
         >
           {t('nav.reviews')}
         </Link>
         <button
           type="button"
           onClick={() => setBoard('decisions')}
-          className="rounded-full bg-[#5d74ff] px-3 py-2 text-sm font-bold text-white"
+          className="rounded-full bg-[#5d74ff] px-2.5 py-1.5 text-xs font-bold text-white sm:px-3 sm:py-2 sm:text-sm"
         >
           {t('home.decisions')}
           {decisionCount > 0 ? ` · ${decisionCount}` : ''}
         </button>
       </Identity>
-      <p className="text-sm text-[#5c6578]">
+      <p className="text-xs text-[#5c6578] sm:text-sm">
         {t(variant === 'committee' ? 'home.committeeIntro' : 'home.chairIntro')}
       </p>
       {managedList.length > 1 ? (
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap gap-1.5 sm:gap-2">
           {managedList.map((item) => (
             <button
               key={item.id}
               type="button"
               aria-pressed={item.id === managed?.id}
-              className={`rounded-full px-3 py-2 text-sm font-bold ${
+              className={`rounded-full px-2.5 py-1.5 text-xs font-bold sm:px-3 sm:py-2 sm:text-sm ${
                 item.id === managed?.id
                   ? 'bg-[#5d74ff]/15 text-[#3d4fd4]'
                   : 'bg-white text-[#5c6578]'
@@ -496,7 +496,7 @@ function ChairDashboard({ variant = 'admin' }: { variant?: 'admin' | 'committee'
           ))}
         </div>
       ) : null}
-      <section className="grid grid-cols-2 gap-3 xl:grid-cols-4">
+      <section className="grid grid-cols-2 gap-2 sm:gap-3 xl:grid-cols-4">
         <Metric
           tone="blue"
           label={t('home.submitted')}
@@ -530,30 +530,32 @@ function ChairDashboard({ variant = 'admin' }: { variant?: 'admin' | 'committee'
           hint={t('home.overdueHint')}
         />
       </section>
-      <section className="space-y-4 rounded-2xl border border-[#e4e7ee] bg-white p-4 sm:p-5">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+      <section className="space-y-3 rounded-2xl border border-[#e4e7ee] bg-white p-3 sm:space-y-4 sm:p-5">
+        <div className="flex flex-col gap-2.5 sm:flex-row sm:items-end sm:justify-between sm:gap-3">
           <div>
-            <h2 className="text-lg font-extrabold">{t('home.chairPapers')}</h2>
-            <p className="mt-1 text-sm text-[#5c6578]">{t('home.chairBoardHint')}</p>
+            <h2 className="text-base font-extrabold sm:text-lg">{t('home.chairPapers')}</h2>
+            <p className="mt-0.5 text-xs text-[#5c6578] sm:mt-1 sm:text-sm">
+              {t('home.chairBoardHint')}
+            </p>
           </div>
           <label className="relative block w-full sm:max-w-xs">
-            <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-[#8b909a]" />
+            <Search className="pointer-events-none absolute top-1/2 left-3 size-3.5 -translate-y-1/2 text-[#8b909a] sm:size-4" />
             <input
               value={query}
               onChange={(event) => setQuery(event.target.value)}
               placeholder={t('home.searchPapers')}
-              className="w-full rounded-xl border border-[#d8dce6] bg-[#f6f7fb] py-2.5 pr-3 pl-9 text-sm font-semibold text-[#1c2744] outline-none focus:border-[#3d4fd4]"
+              className="w-full rounded-xl border border-[#d8dce6] bg-[#f6f7fb] py-2 pr-3 pl-8 text-xs font-semibold text-[#1c2744] outline-none focus:border-[#3d4fd4] sm:py-2.5 sm:pl-9 sm:text-sm"
             />
           </label>
         </div>
-        <div className="touch-scroll flex gap-2 overflow-x-auto pb-1">
+        <div className="touch-scroll flex gap-1.5 overflow-x-auto pb-1 sm:gap-2">
           {filters.map(([id, label, count]) => (
             <button
               key={id}
               type="button"
               aria-pressed={board === id}
               onClick={() => setBoard(id)}
-              className={`shrink-0 rounded-full px-3 py-2 text-xs font-extrabold sm:text-sm ${
+              className={`shrink-0 rounded-full px-2.5 py-1.5 text-[11px] font-extrabold sm:px-3 sm:py-2 sm:text-sm ${
                 board === id ? 'bg-[#3d4fd4] text-white' : 'bg-[#f6f7fb] text-[#5c6578]'
               }`}
             >
@@ -562,12 +564,12 @@ function ChairDashboard({ variant = 'admin' }: { variant?: 'admin' | 'committee'
           ))}
         </div>
         {papers.isPending ? (
-          <p className="text-sm text-[#8b909a]">{t('common.loading')}</p>
+          <p className="text-xs text-[#8b909a] sm:text-sm">{t('common.loading')}</p>
         ) : null}
         {!papers.isPending && boardPapers.length === 0 ? (
-          <p className="text-sm text-[#5c6370]">{t('home.chairEmpty')}</p>
+          <p className="text-xs text-[#5c6370] sm:text-sm">{t('home.chairEmpty')}</p>
         ) : null}
-        <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+        <ul className="grid gap-2 sm:grid-cols-2 sm:gap-3 xl:grid-cols-3">
           {boardPapers.map((paper) => (
             <li key={paper.id}>
               <PaperWorkCard paper={paper} />
@@ -648,7 +650,7 @@ function ReviewerDashboard() {
   }
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-3 sm:space-y-5">
       <Identity
         name={fullName}
         photo={profile?.photoPath}
@@ -661,13 +663,13 @@ function ReviewerDashboard() {
       >
         <Link
           to="/workspace/reviews"
-          className="rounded-full bg-[#5d74ff] px-3 py-2 text-sm font-bold text-white no-underline"
+          className="rounded-full bg-[#5d74ff] px-2.5 py-1.5 text-xs font-bold text-white no-underline sm:px-3 sm:py-2 sm:text-sm"
         >
           {t('home.reviewQueue')}
         </Link>
       </Identity>
-      <p className="text-sm text-[#5c6578]">{t('home.reviewerIntro')}</p>
-      <section className="grid grid-cols-2 gap-3 xl:grid-cols-4">
+      <p className="text-xs text-[#5c6578] sm:text-sm">{t('home.reviewerIntro')}</p>
+      <section className="grid grid-cols-2 gap-2 sm:gap-3 xl:grid-cols-4">
         <Metric
           tone="blue"
           label={t('home.invitations')}
@@ -693,19 +695,21 @@ function ReviewerDashboard() {
           hint={t('reviews.statuses.COMPLETED')}
         />
       </section>
-      <section className="space-y-4 rounded-2xl border border-[#e4e7ee] bg-white p-4 sm:p-5">
+      <section className="space-y-3 rounded-2xl border border-[#e4e7ee] bg-white p-3 sm:space-y-4 sm:p-5">
         <div>
-          <h2 className="text-lg font-extrabold">{t('home.reviewQueue')}</h2>
-          <p className="mt-1 text-sm text-[#5c6578]">{t('home.reviewBoardHint')}</p>
+          <h2 className="text-base font-extrabold sm:text-lg">{t('home.reviewQueue')}</h2>
+          <p className="mt-0.5 text-xs text-[#5c6578] sm:mt-1 sm:text-sm">
+            {t('home.reviewBoardHint')}
+          </p>
         </div>
-        <div className="touch-scroll flex gap-2 overflow-x-auto pb-1">
+        <div className="touch-scroll flex gap-1.5 overflow-x-auto pb-1 sm:gap-2">
           {filters.map(([id, label, count]) => (
             <button
               key={id}
               type="button"
               aria-pressed={board === id}
               onClick={() => setBoard(id)}
-              className={`shrink-0 rounded-full px-3 py-2 text-xs font-extrabold sm:text-sm ${
+              className={`shrink-0 rounded-full px-2.5 py-1.5 text-[11px] font-extrabold sm:px-3 sm:py-2 sm:text-sm ${
                 board === id ? 'bg-[#3d4fd4] text-white' : 'bg-[#f6f7fb] text-[#5c6578]'
               }`}
             >
@@ -724,7 +728,7 @@ function ReviewerDashboard() {
             <li key={item.id}>
               <Link
                 to={hrefFor(item)}
-                className="flex h-full flex-col rounded-xl border border-[#e4e7ee] bg-[#f6f7fb] p-4 text-[#1c2744] no-underline"
+                className="flex h-full flex-col rounded-xl border border-[#e4e7ee] bg-[#f6f7fb] p-3 text-[#1c2744] no-underline sm:p-4"
               >
                 <div className="flex items-start justify-between gap-3">
                   <p className="text-xs font-bold tracking-wide text-[#6d7585]">
@@ -781,21 +785,25 @@ function Identity({
   children?: ReactNode;
 }) {
   return (
-    <header className="flex flex-col gap-4 rounded-2xl border border-[#e4e7ee] bg-white px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5">
-      <div className="flex min-w-0 items-center gap-3">
+    <header className="flex flex-col gap-2.5 rounded-xl border border-[#e4e7ee] bg-white px-3 py-2.5 sm:flex-row sm:items-center sm:justify-between sm:gap-3 sm:rounded-2xl sm:px-4 sm:py-3">
+      <div className="flex min-w-0 items-center gap-2 sm:gap-2.5">
         {photo ? (
-          <img src={photo} alt="" className="size-12 rounded-full object-cover" />
+          <img
+            src={photo}
+            alt=""
+            className="size-9 rounded-full object-cover sm:size-10"
+          />
         ) : (
-          <div className="grid size-12 place-items-center rounded-full bg-[#eef2ff] text-base font-extrabold text-[#3d4fd4]">
+          <div className="grid size-9 place-items-center rounded-full bg-[#eef2ff] text-xs font-extrabold text-[#3d4fd4] sm:size-10 sm:text-sm">
             {initial}
           </div>
         )}
         <div className="min-w-0">
-          <h1 className="truncate text-lg font-extrabold">{name}</h1>
-          <p className="truncate text-sm text-[#5c6578]">{line}</p>
+          <h1 className="truncate text-sm font-extrabold sm:text-base">{name}</h1>
+          <p className="truncate text-[11px] text-[#5c6578] sm:text-xs">{line}</p>
         </div>
       </div>
-      <div className="flex flex-wrap items-center gap-2">{children}</div>
+      <div className="flex flex-wrap items-center gap-1.5">{children}</div>
     </header>
   );
 }
@@ -818,10 +826,12 @@ function Metric({
     red: 'bg-[#e35d5d]/12 text-[#c54545]',
   }[tone];
   return (
-    <div className={`rounded-[24px] px-5 py-4 ${color}`}>
-      <dt className="text-sm font-extrabold opacity-90">{label}</dt>
-      <dd className="mt-1 text-4xl font-extrabold tracking-tight">{value}</dd>
-      <p className="mt-2 text-xs font-bold opacity-90">{hint}</p>
+    <div className={`metric-card rounded-md px-1.5 py-1.5 sm:rounded-lg sm:px-2.5 sm:py-2 ${color}`}>
+      <dt className="text-[9px] font-extrabold opacity-90 sm:text-[10px]">{label}</dt>
+      <dd className="text-base font-extrabold tracking-tight sm:text-lg lg:text-xl">
+        {value}
+      </dd>
+      <p className="text-[7px] font-bold opacity-90 sm:text-[9px]">{hint}</p>
     </div>
   );
 }

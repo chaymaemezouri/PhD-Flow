@@ -253,7 +253,7 @@ function Metric({
   return (
     <div className={`rounded-[24px] px-4 py-4 ${wash}`}>
       <p className="text-xs font-bold uppercase tracking-wide opacity-80">{label}</p>
-      <p className="mt-2 text-3xl font-extrabold">{value}</p>
+      <p className="mt-1 text-2xl font-extrabold sm:mt-2 sm:text-3xl">{value}</p>
       <p className="mt-1 text-xs font-bold opacity-70">{hint}</p>
     </div>
   );
@@ -534,7 +534,7 @@ export function SuperadminPage() {
         <p className="text-xs font-extrabold uppercase tracking-[0.16em] text-[#3d4fd4]">
           {t('superadmin.sidebarLabel')}
         </p>
-        <h1 className="mt-2 text-2xl font-extrabold text-[#1c2744] sm:text-3xl lg:text-4xl">
+        <h1 className="mt-2 text-xl font-extrabold text-[#1c2744] sm:text-2xl lg:text-3xl">
           {titles[section]}
         </h1>
         <p className="mt-2 max-w-2xl text-sm leading-relaxed text-[#5c6578]">
