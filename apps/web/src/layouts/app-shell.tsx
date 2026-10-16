@@ -291,7 +291,7 @@ export function AppShell() {
             </p>
           ) : null}
           <nav
-            className="mt-10 flex flex-1 flex-col gap-1 overflow-y-auto"
+            className="sidebar-nav mt-14 flex flex-1 flex-col gap-0.5 overflow-y-auto"
             aria-label={t('nav.workspace')}
           >
             {tabs.map((tab, index) => {
@@ -301,20 +301,20 @@ export function AppShell() {
               return (
                 <div key={tab.to}>
                   {showDivider ? (
-                    <div className="my-3 border-t border-[#eef1f8]" aria-hidden />
+                    <div className="my-1.5 border-t border-[#eef1f8]" aria-hidden />
                   ) : null}
                   {platformAdmin && index === 0 ? (
-                    <p className="mb-2 px-3 text-[11px] font-extrabold uppercase tracking-[0.14em] text-[#9aa3b5]">
+                    <p className="mb-1 px-2.5 text-[10px] font-extrabold uppercase tracking-[0.14em] text-[#9aa3b5]">
                       {t('superadmin.navPlatform')}
                     </p>
                   ) : null}
                   {platformAdmin && tab.id === 'submissions' ? (
-                    <p className="mb-2 px-3 text-[11px] font-extrabold uppercase tracking-[0.14em] text-[#9aa3b5]">
+                    <p className="mb-1 px-2.5 text-[10px] font-extrabold uppercase tracking-[0.14em] text-[#9aa3b5]">
                       {t('superadmin.navContent')}
                     </p>
                   ) : null}
                   {platformAdmin && tab.id === 'account' ? (
-                    <p className="mb-2 px-3 text-[11px] font-extrabold uppercase tracking-[0.14em] text-[#9aa3b5]">
+                    <p className="mb-1 px-2.5 text-[10px] font-extrabold uppercase tracking-[0.14em] text-[#9aa3b5]">
                       {t('superadmin.navAccount')}
                     </p>
                   ) : null}
