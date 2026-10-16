@@ -56,6 +56,7 @@ describe('conferences', () => {
 
   it('hides drafts, publishes a public directory entry, and isolates members', async () => {
     const chair = await account(chairAddress, 'Grace');
+    await prisma.user.update({ where: { email: chairAddress }, data: { platformRole: 'SYSTEM_ADMIN' } });
     const created = await chair.agent
       .post('/api/v1/conferences')
       .set('x-csrf-token', chair.csrf)
@@ -66,6 +67,7 @@ describe('conferences', () => {
         city: 'Lyon',
         country: 'France',
       });
+    await prisma.user.update({ where: { email: chairAddress }, data: { platformRole: 'RESEARCHER' } });
     expect(created.status).toBe(201);
     expect(created.body.myMembership.role).toBe('CHAIR');
     expect(created.body.status).toBe('DRAFT');

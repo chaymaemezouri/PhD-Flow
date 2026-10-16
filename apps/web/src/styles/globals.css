@@ -118,11 +118,26 @@
 
   input,
   select,
-  textarea {
+  textarea,
+  button {
     max-width: 100%;
   }
 
   select {
     min-width: 0;
+  }
+
+  img,
+  video,
+  canvas,
+  svg {
+    max-width: 100%;
+  }
+}
+
+@layer utilities {
+  .touch-scroll {
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-x: contain;
   }
 }

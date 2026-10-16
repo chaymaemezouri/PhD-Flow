@@ -96,6 +96,10 @@ export const assessmentSchema = z.object({
   comment: z.string().trim().max(1000).default(''),
 });
 
+export const presentationNoteSchema = z.object({
+  comment: z.string().trim().max(2000).default(''),
+});
+
 export const mfaConfirmSchema = z.object({
   code: z
     .string()
@@ -158,6 +162,7 @@ export const currentUserSchema = z.object({
   platformRole: z.enum(['RESEARCHER', 'SYSTEM_ADMIN']),
   emailVerified: z.boolean(),
   mfaEnabled: z.boolean(),
+  unlockedConferenceId: z.uuid().nullable().default(null),
   profile: z.object({
     firstName: z.string(),
     lastName: z.string(),
@@ -194,6 +199,8 @@ const conferenceFieldsSchema = z.object({
   visibility: z.enum(['PUBLIC', 'UNLISTED']).default('PUBLIC'),
   reviewMode: z.enum(['SINGLE_BLIND', 'DOUBLE_BLIND', 'OPEN']).default('DOUBLE_BLIND'),
   paymentsEnabled: z.boolean().default(false),
+  chairUserId: z.uuid().optional(),
+  accessPassword: passwordSchema.optional(),
 });
 
 function datesInOrder(value: {
@@ -202,6 +209,33 @@ function datesInOrder(value: {
 }): boolean {
   return !value.startsOn || !value.endsOn || value.endsOn >= value.startsOn;
 }
+
+export const conferenceAccessSchema = z.object({
+  password: z.string().min(1).max(128).optional(),
+});
+
+export const conferencePasswordSchema = z.object({
+  password: passwordSchema,
+});
+
+export const createAdminSchema = z.object({
+  email: z.email(),
+  password: passwordSchema,
+  firstName: z.string().trim().min(1).max(80),
+  lastName: z.string().trim().min(1).max(80),
+});
+
+export const resetAdminPasswordSchema = z.object({
+  password: passwordSchema,
+});
+
+export const assignConferenceChairSchema = z.object({
+  chairUserId: z.uuid(),
+});
+
+export const setConferenceStatusSchema = z.object({
+  status: z.enum(['DRAFT', 'PUBLISHED', 'ARCHIVED']),
+});
 
 export const createConferenceSchema = conferenceFieldsSchema.refine(datesInOrder, {
   path: ['endsOn'],
@@ -275,11 +309,14 @@ const paperAuthorSchema = z.object({
   corresponding: z.boolean().default(false),
 });
 
+export const paperKindSchema = z.enum(['ABSTRACT', 'FULL']);
+
 export const createPaperSchema = z.object({
   title: z.string().trim().min(3).max(300),
   abstract: z.string().trim().max(5000).default(''),
   keywords: z.array(z.string().trim().min(1).max(40)).max(12).default([]),
   trackId: z.uuid().nullable().default(null),
+  paperKind: paperKindSchema.default('FULL'),
   authors: z.array(paperAuthorSchema).max(20).default([]),
 });
 
@@ -288,6 +325,11 @@ export const updatePaperSchema = z.object({
   abstract: z.string().trim().max(5000).optional(),
   keywords: z.array(z.string().trim().min(1).max(40)).max(12).optional(),
   trackId: z.uuid().nullable().optional(),
+  paperKind: paperKindSchema.optional(),
+});
+
+export const scopeDecisionSchema = z.object({
+  accept: z.boolean(),
 });
 
 export const replaceAuthorsSchema = z.object({
@@ -300,6 +342,10 @@ export const withdrawPaperSchema = z.object({
 
 export const assignReviewerSchema = z.object({
   reviewerId: z.uuid(),
+});
+
+export const sessionChairSchema = z.object({
+  userId: z.uuid(),
 });
 
 export const conflictSchema = z

@@ -46,6 +46,7 @@ export class AuthGuard implements CanActivate {
       mfaEnabled: session.user.mfaEnabled,
       profile: session.user.profile,
       sessionId: session.id,
+      unlockedConferenceId: session.unlockedConferenceId,
     };
     return true;
   }

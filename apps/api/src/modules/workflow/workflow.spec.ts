@@ -60,10 +60,18 @@ describe('publication workflow', () => {
     const chair = await account(`chair-${stamp}@workflow.test`, 'Ada');
     const author = await account(`author-${stamp}@workflow.test`, 'Grace');
     const reviewer = await account(`reviewer-${stamp}@workflow.test`, 'Niels');
+    await prisma.user.update({
+      where: { email: `chair-${stamp}@workflow.test` },
+      data: { platformRole: 'SYSTEM_ADMIN' },
+    });
     const created = await chair.agent
       .post('/api/v1/conferences')
       .set('x-csrf-token', chair.csrf)
       .send({ name: 'Workflow Colloquium', shortName: `workflow-${stamp}` });
+    await prisma.user.update({
+      where: { email: `chair-${stamp}@workflow.test` },
+      data: { platformRole: 'RESEARCHER' },
+    });
     expect(created.status).toBe(201);
     const conferenceId = created.body.id as string;
 

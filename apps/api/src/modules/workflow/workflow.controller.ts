@@ -8,6 +8,8 @@ import {
   Post,
   Query,
   Req,
+  Res,
+  StreamableFile,
   UploadedFile,
   UseGuards,
   UseInterceptors,
@@ -16,12 +18,15 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiTags } from '@nestjs/swagger';
 import {
   decisionSchema,
+  presentationNoteSchema,
+  sessionChairSchema,
   presentationSchema,
   roomSchema,
   sessionSchema,
   assessmentSchema,
   similaritySchema,
 } from '@scholarflow/validation';
+import type { Response } from 'express';
 import type { z } from 'zod';
 import { ZodValidationPipe } from '../../common/pipes/zod-validation.pipe.js';
 import { AuthGuard, type AuthenticatedRequest } from '../auth/auth.guard.js';
@@ -171,6 +176,83 @@ export class WorkflowController {
     return this.workflow.pay(request.user!, id);
   }
 
+  @Post('papers/:id/slides')
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 20 * 1024 * 1024 } }))
+  slides(
+    @Req() request: AuthenticatedRequest,
+    @Param('id', ParseUUIDPipe) id: string,
+    @UploadedFile() file: Express.Multer.File,
+  ) {
+    return this.workflow.storeFile(request.user!, id, 'SLIDES', file);
+  }
+
+  @Post('papers/:id/payment-proof')
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 20 * 1024 * 1024 } }))
+  paymentProof(
+    @Req() request: AuthenticatedRequest,
+    @Param('id', ParseUUIDPipe) id: string,
+    @UploadedFile() file: Express.Multer.File,
+  ) {
+    return this.workflow.storeFile(request.user!, id, 'PAYMENT_PROOF', file);
+  }
+
+  @Post('papers/:id/payment-notice')
+  paymentNotice(@Req() request: AuthenticatedRequest, @Param('id', ParseUUIDPipe) id: string) {
+    return this.workflow.sendPaymentNotice(request.user!, id);
+  }
+
+  @Post('papers/:id/payment/verify')
+  verifyPayment(@Req() request: AuthenticatedRequest, @Param('id', ParseUUIDPipe) id: string) {
+    return this.workflow.verifyPayment(request.user!, id);
+  }
+
+  @Post('papers/:id/session-chair')
+  sessionChair(
+    @Req() request: AuthenticatedRequest,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body(new ZodValidationPipe(sessionChairSchema))
+    body: z.infer<typeof sessionChairSchema>,
+  ) {
+    return this.workflow.assignSessionChair(request.user!, id, body.userId);
+  }
+
+  @Post('papers/:id/presented')
+  presented(
+    @Req() request: AuthenticatedRequest,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body(new ZodValidationPipe(presentationNoteSchema))
+    body: z.infer<typeof presentationNoteSchema>,
+  ) {
+    return this.workflow.markPresented(request.user!, id, body.comment);
+  }
+
+  @Get('papers/:id/certificate')
+  certificate(
+    @Req() request: AuthenticatedRequest,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Res({ passthrough: true }) response: Response,
+  ) {
+    return this.sendDocument(request, id, 'certificate', response);
+  }
+
+  @Get('papers/:id/receipt')
+  receipt(
+    @Req() request: AuthenticatedRequest,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Res({ passthrough: true }) response: Response,
+  ) {
+    return this.sendDocument(request, id, 'receipt', response);
+  }
+
+  @Get('papers/:id/attestation')
+  attestation(
+    @Req() request: AuthenticatedRequest,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Res({ passthrough: true }) response: Response,
+  ) {
+    return this.sendDocument(request, id, 'attestation', response);
+  }
+
   @Post('papers/:id/publish')
   publish(@Req() request: AuthenticatedRequest, @Param('id', ParseUUIDPipe) id: string) {
     return this.workflow.publishDoi(request.user!, id);
@@ -227,5 +309,20 @@ export class WorkflowController {
   @Header('Content-Type', 'text/csv; charset=utf-8')
   export(@Req() request: AuthenticatedRequest, @Param('id', ParseUUIDPipe) id: string) {
     return this.workflow.exportMetadata(request.user!, id);
+  }
+
+  private async sendDocument(
+    request: AuthenticatedRequest,
+    id: string,
+    kind: 'certificate' | 'receipt' | 'attestation',
+    response: Response,
+  ) {
+    const file = await this.workflow.document(request.user!, id, kind);
+    response.setHeader('Content-Type', 'application/pdf');
+    response.setHeader(
+      'Content-Disposition',
+      `attachment; filename="${file.name.replace(/"/g, '')}"`,
+    );
+    return new StreamableFile(file.bytes);
   }
 }

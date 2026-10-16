@@ -104,6 +104,7 @@ export function LoginPage() {
               <li>{t('auth.demoAdmin')}</li>
               <li>{t('auth.demoReviewer')}</li>
               <li>{t('auth.demoChercheur')}</li>
+              <li>{t('auth.demoSuperadmin')}</li>
             </ul>
           </div>
         ) : null}

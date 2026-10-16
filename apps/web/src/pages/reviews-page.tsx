@@ -1,7 +1,10 @@
 ﻿import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Link } from 'react-router';
+import { Link, useLocation } from 'react-router';
+import { PaperFileThumb } from '@/components/paper-file-preview';
+import { ReviewAssignmentForm } from '@/components/review-assignment-form';
+import { StagePanel, stageField } from '@/components/stage-panel';
 import { Button } from '@/components/ui/button';
 import { apiErrorMessage, apiFetch } from '@/services/api';
 
@@ -38,6 +41,15 @@ interface ReviewerRow {
   email: string;
 }
 
+interface PaperDetail {
+  id: string;
+  manuscript: {
+    originalName: string;
+    contentType?: string | null;
+    sizeBytes?: number | null;
+  } | null;
+}
+
 async function loadMine(): Promise<Assignment[]> {
   const response = await apiFetch('/api/v1/reviews/mine');
   if (!response.ok) {
@@ -54,8 +66,32 @@ async function loadJson<T>(path: string): Promise<T> {
   return response.json() as Promise<T>;
 }
 
+function ManuscriptPreview({ paperId }: { paperId: string }) {
+  const paper = useQuery({
+    queryKey: ['paper', paperId],
+    queryFn: () => loadJson<PaperDetail>(`/api/v1/papers/${paperId}`),
+  });
+  if (!paper.data?.manuscript) {
+    return null;
+  }
+  return (
+    <PaperFileThumb
+      paperId={paperId}
+      file={{
+        kind: 'MANUSCRIPT',
+        originalName: paper.data.manuscript.originalName,
+        contentType: paper.data.manuscript.contentType ?? 'application/pdf',
+        sizeBytes: paper.data.manuscript.sizeBytes,
+      }}
+      compact
+      className="max-w-sm"
+    />
+  );
+}
+
 export function ReviewsPage() {
   const { t } = useTranslation();
+  const location = useLocation();
   const queryClient = useQueryClient();
   const [message, setMessage] = useState<string | null>(null);
   const [conferenceId, setConferenceId] = useState('');
@@ -86,6 +122,15 @@ export function ReviewsPage() {
     enabled: conferenceId.length > 0,
   });
 
+  useEffect(() => {
+    const id = location.hash.replace(/^#/, '');
+    if (!id) {
+      return;
+    }
+    const node = document.getElementById(`review-${id}`);
+    node?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, [location.hash, mine.data]);
+
   async function respond(id: string, accept: boolean) {
     setMessage(null);
     const response = await apiFetch(
@@ -102,19 +147,43 @@ export function ReviewsPage() {
     await queryClient.invalidateQueries({ queryKey: ['reviews'] });
   }
 
-  const field =
-    'mt-1 block w-full rounded-2xl border border-[#e4e7ee] bg-[#f6f7fb] px-3 py-2 text-sm';
+  async function submitReview(
+    id: string,
+    payload: {
+      recommendation: string;
+      score: number;
+      confidence: number;
+      commentsToAuthor: string;
+      commentsToCommittee: string;
+    },
+  ) {
+    setMessage(null);
+    const response = await apiFetch(`/api/v1/assignments/${id}/review`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+    if (!response.ok) {
+      setMessage(await apiErrorMessage(response));
+      return;
+    }
+    setMessage(t('reviews.sent'));
+    await queryClient.invalidateQueries({ queryKey: ['reviews'] });
+  }
 
   return (
     <div className="space-y-5">
       <div>
-        <h1 className="text-3xl font-extrabold text-[#1c2744]">{t('reviews.title')}</h1>
+        <h1 className="text-2xl font-extrabold text-[#1c2744] sm:text-3xl">
+          {t('reviews.title')}
+        </h1>
         <p className="mt-2 max-w-2xl text-sm leading-relaxed text-[#5c6578]">
           {t('reviews.intro')}
         </p>
       </div>
       {message ? (
-        <p className="text-sm font-extrabold text-[#1c2744]">{message}</p>
+        <p className="rounded-2xl bg-[#2fbf71]/12 px-4 py-3 text-sm font-extrabold text-[#1c9a57]">
+          {message}
+        </p>
       ) : null}
       {mine.isPending ? <p>{t('common.loading')}</p> : null}
       {mine.data?.length === 0 ? (
@@ -122,231 +191,155 @@ export function ReviewsPage() {
           {t('reviews.empty')}
         </p>
       ) : null}
-      <ul className="grid gap-3">
-        {mine.data?.map((item) => (
-          <li
-            key={item.id}
-            className="rounded-[28px] border border-[#e4e7ee] bg-white p-5"
-          >
-            <p className="text-xs font-extrabold tracking-wide text-[#8b909a]">
-              {item.publicId ?? t('reviews.title')}
-            </p>
-            <h2 className="mt-1 text-lg font-extrabold leading-snug text-[#1c2744]">
-              {item.paperTitle}
-            </h2>
-            <p className="mt-2 text-sm text-[#5c6578]">
-              {t(`reviews.statuses.${item.status}`, { defaultValue: item.status })}
-              {item.expiresAt
-                ? ` · ${new Date(item.expiresAt).toLocaleDateString()}`
-                : ''}
-            </p>
-            {item.score !== null ? (
-              <p className="mt-3 text-sm font-extrabold text-[#1c2744]">
-                {item.score}/10 ·{' '}
-                {t(`reviews.recommendations.${item.recommendation ?? ''}`, {
-                  defaultValue: item.recommendation ?? '',
-                })}
-              </p>
-            ) : null}
-            {item.commentsToAuthor ? (
-              <p className="mt-2 text-sm leading-relaxed text-[#5c6578]">
-                {item.commentsToAuthor}
-              </p>
-            ) : null}
-            {item.status === 'ACCEPTED' ||
+      <ul className="grid gap-4">
+        {mine.data?.map((item) => {
+          const canOpen =
+            item.status === 'ACCEPTED' ||
             item.status === 'IN_PROGRESS' ||
-            item.status === 'OVERDUE' ? (
-              <Link
-                className="mt-3 inline-block text-sm font-extrabold text-[#3d4fd4] no-underline"
-                to={`/workspace/submissions/${item.paperId}`}
-              >
-                {t('reviews.openPaper')}
-              </Link>
-            ) : null}
-            {item.status === 'ACCEPTED' ||
-            item.status === 'IN_PROGRESS' ||
-            item.status === 'OVERDUE' ? (
-              <form
-                className="mt-4 grid gap-3"
-                onSubmit={(event) => {
-                  event.preventDefault();
-                  const data = new FormData(event.currentTarget);
-                  setMessage(null);
-                  void apiFetch(`/api/v1/assignments/${item.id}/review`, {
-                    method: 'POST',
-                    body: JSON.stringify({
-                      recommendation: String(data.get('recommendation')),
-                      score: Number(data.get('score')),
-                      confidence: Number(data.get('confidence')),
-                      commentsToAuthor: String(data.get('comments')),
-                      commentsToCommittee: String(data.get('committee') ?? ''),
-                    }),
-                  }).then(async (response) => {
-                    if (!response.ok) {
-                      setMessage(await apiErrorMessage(response));
-                      return;
-                    }
-                    setMessage(t('reviews.sent'));
-                    await queryClient.invalidateQueries({ queryKey: ['reviews'] });
-                  });
-                }}
-              >
-                <label className="text-sm font-bold">
-                  {t('reviews.recommendation')}
-                  <select name="recommendation" className={field} defaultValue="ACCEPT">
-                    {(
-                      [
-                        'ACCEPT',
-                        'WEAK_ACCEPT',
-                        'BORDERLINE',
-                        'WEAK_REJECT',
-                        'REJECT',
-                      ] as const
-                    ).map((value) => (
-                      <option key={value} value={value}>
-                        {t(`reviews.recommendations.${value}`)}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <label className="text-sm font-bold">
-                    {t('reviews.score')}
-                    <input
-                      name="score"
-                      type="number"
-                      min={1}
-                      max={10}
-                      defaultValue={8}
-                      required
-                      className={field}
-                    />
-                  </label>
-                  <label className="text-sm font-bold">
-                    {t('reviews.confidence')}
-                    <input
-                      name="confidence"
-                      type="number"
-                      min={1}
-                      max={5}
-                      defaultValue={4}
-                      required
-                      className={field}
-                    />
-                  </label>
+            item.status === 'OVERDUE' ||
+            item.status === 'COMPLETED';
+          return (
+            <li
+              key={item.id}
+              id={`review-${item.id}`}
+              className="space-y-3 rounded-[28px] border border-[#e4e7ee] bg-white p-4 sm:p-5"
+            >
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-xs font-extrabold tracking-wide text-[#8b909a]">
+                    {item.publicId ?? t('reviews.title')}
+                  </p>
+                  <h2 className="mt-1 text-lg font-extrabold leading-snug text-[#1c2744]">
+                    {item.paperTitle}
+                  </h2>
+                  <p className="mt-2 text-sm text-[#5c6578]">
+                    {t(`reviews.statuses.${item.status}`, { defaultValue: item.status })}
+                    {item.expiresAt
+                      ? ` · ${new Date(item.expiresAt).toLocaleDateString()}`
+                      : ''}
+                  </p>
                 </div>
-                <label className="text-sm font-bold">
-                  {t('reviews.comments')}
-                  <textarea
-                    name="comments"
-                    required
-                    minLength={10}
-                    className={`${field} min-h-24 py-2`}
-                  />
-                </label>
-                <label className="text-sm font-bold">
-                  {t('reviews.committee')}
-                  <textarea name="committee" className={`${field} min-h-16 py-2`} />
-                </label>
-                <div>
-                  <Button type="submit">{t('reviews.send')}</Button>
-                </div>
-              </form>
-            ) : null}
-            {item.status === 'INVITED' ? (
-              <div className="mt-4 flex gap-2">
-                <Button type="button" onClick={() => void respond(item.id, true)}>
-                  {t('reviews.accept')}
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => void respond(item.id, false)}
-                >
-                  {t('reviews.decline')}
-                </Button>
+                {canOpen ? (
+                  <Link
+                    to={`/workspace/submissions/${item.paperId}`}
+                    className="inline-flex min-h-10 items-center rounded-full bg-[#3d4fd4] px-4 text-sm font-extrabold text-white no-underline"
+                  >
+                    {t('reviews.openPaper')}
+                  </Link>
+                ) : null}
               </div>
-            ) : null}
-          </li>
-        ))}
+
+              {canOpen ? <ManuscriptPreview paperId={item.paperId} /> : null}
+
+              {item.score !== null ? (
+                <StagePanel
+                  title={t('reviews.sent')}
+                  status={`${item.score}/10`}
+                  statusTone="ok"
+                >
+                  <p className="text-sm font-semibold text-[#5c6578]">
+                    {t(`reviews.recommendations.${item.recommendation ?? ''}`, {
+                      defaultValue: item.recommendation ?? '',
+                    })}
+                  </p>
+                  {item.commentsToAuthor ? (
+                    <p className="mt-2 text-sm leading-relaxed text-[#5c6578]">
+                      {item.commentsToAuthor}
+                    </p>
+                  ) : null}
+                </StagePanel>
+              ) : (
+                <ReviewAssignmentForm
+                  assignmentId={item.id}
+                  status={item.status}
+                  onAccept={() => void respond(item.id, true)}
+                  onDecline={() => void respond(item.id, false)}
+                  onSubmit={(payload) => void submitReview(item.id, payload)}
+                />
+              )}
+            </li>
+          );
+        })}
       </ul>
+
       {managed.length > 0 ? (
-        <form
-          className="grid gap-3 rounded-[28px] border border-[#e4e7ee] bg-white p-5"
-          onSubmit={(event) => {
-            event.preventDefault();
-            setMessage(null);
-            void apiFetch(`/api/v1/papers/${paperId}/assignments`, {
-              method: 'POST',
-              body: JSON.stringify({ reviewerId }),
-            }).then(async (response) => {
-              if (!response.ok) {
-                setMessage(await apiErrorMessage(response));
-                return;
-              }
-              setMessage(t('reviews.assigned'));
-            });
-          }}
+        <StagePanel
+          title={t('reviews.assignTitle')}
+          hint={t('reviews.assignIntro')}
+          status={t('dossier.assigned')}
+          statusTone="neutral"
         >
-          <h2 className="text-lg font-extrabold text-[#1c2744]">
-            {t('reviews.assignTitle')}
-          </h2>
-          <p className="text-sm leading-relaxed text-[#5c6578]">
-            {t('reviews.assignIntro')}
-          </p>
-          <label className="text-sm font-bold">
-            {t('reviews.chooseConference')}
-            <select
-              className={field}
-              value={conferenceId}
-              onChange={(event) => setConferenceId(event.target.value)}
-            >
-              <option value="">{t('reviews.chooseConference')}</option>
-              {managed.map((item) => (
-                <option key={item.id} value={item.id}>
-                  {item.name}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="text-sm font-bold">
-            {t('reviews.choosePaper')}
-            <select
-              className={field}
-              value={paperId}
-              onChange={(event) => setPaperId(event.target.value)}
-            >
-              <option value="">{t('reviews.choosePaper')}</option>
-              {papers.data
-                ?.filter((item) => item.status === 'SUBMITTED')
-                .map((item) => (
+          <form
+            className="grid gap-3 sm:grid-cols-2"
+            onSubmit={(event) => {
+              event.preventDefault();
+              setMessage(null);
+              void apiFetch(`/api/v1/papers/${paperId}/assignments`, {
+                method: 'POST',
+                body: JSON.stringify({ reviewerId }),
+              }).then(async (response) => {
+                if (!response.ok) {
+                  setMessage(await apiErrorMessage(response));
+                  return;
+                }
+                setMessage(t('reviews.assigned'));
+              });
+            }}
+          >
+            <label className="text-xs font-extrabold text-[#5c6578] sm:col-span-2">
+              {t('reviews.chooseConference')}
+              <select
+                className={stageField}
+                value={conferenceId}
+                onChange={(event) => setConferenceId(event.target.value)}
+              >
+                <option value="">{t('reviews.chooseConference')}</option>
+                {managed.map((item) => (
                   <option key={item.id} value={item.id}>
-                    {item.publicId ? `${item.publicId} · ${item.title}` : item.title}
+                    {item.name}
                   </option>
                 ))}
-            </select>
-          </label>
-          <label className="text-sm font-bold">
-            {t('reviews.chooseReviewer')}
-            <select
-              className={field}
-              value={reviewerId}
-              onChange={(event) => setReviewerId(event.target.value)}
-            >
-              <option value="">{t('reviews.chooseReviewer')}</option>
-              {reviewers.data?.map((item) => (
-                <option key={item.userId} value={item.userId}>
-                  {item.firstName} {item.lastName} · {item.email}
-                </option>
-              ))}
-            </select>
-          </label>
-          <div>
-            <Button type="submit" disabled={!paperId || !reviewerId}>
-              {t('reviews.assign')}
-            </Button>
-          </div>
-        </form>
+              </select>
+            </label>
+            <label className="text-xs font-extrabold text-[#5c6578]">
+              {t('reviews.choosePaper')}
+              <select
+                className={stageField}
+                value={paperId}
+                onChange={(event) => setPaperId(event.target.value)}
+              >
+                <option value="">{t('reviews.choosePaper')}</option>
+                {papers.data
+                  ?.filter((item) => item.status === 'SUBMITTED')
+                  .map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {item.publicId ? `${item.publicId} · ${item.title}` : item.title}
+                    </option>
+                  ))}
+              </select>
+            </label>
+            <label className="text-xs font-extrabold text-[#5c6578]">
+              {t('reviews.chooseReviewer')}
+              <select
+                className={stageField}
+                value={reviewerId}
+                onChange={(event) => setReviewerId(event.target.value)}
+              >
+                <option value="">{t('reviews.chooseReviewer')}</option>
+                {reviewers.data?.map((item) => (
+                  <option key={item.userId} value={item.userId}>
+                    {item.firstName} {item.lastName} · {item.email}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <div className="sm:col-span-2">
+              <Button type="submit" disabled={!paperId || !reviewerId}>
+                {t('reviews.assign')}
+              </Button>
+            </div>
+          </form>
+        </StagePanel>
       ) : null}
     </div>
   );

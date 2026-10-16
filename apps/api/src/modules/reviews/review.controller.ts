@@ -42,6 +42,11 @@ export class ReviewController {
     return this.reviews.directory(request.user!, id);
   }
 
+  @Get('conferences/:id/session-chairs')
+  chairs(@Req() request: AuthenticatedRequest, @Param('id', ParseUUIDPipe) id: string) {
+    return this.reviews.chairs(request.user!, id);
+  }
+
   @Get('conferences/:id/conflicts')
   conflicts(
     @Req() request: AuthenticatedRequest,

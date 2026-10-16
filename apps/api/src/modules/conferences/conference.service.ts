@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type {
+  createAdminSchema,
   createConferenceSchema,
   deadlineSchema,
   inviteMemberSchema,
@@ -24,6 +25,7 @@ import { PrismaService } from '../../prisma/prisma.service.js';
 import { hashSecret, newSecret } from '../auth/auth.constants.js';
 import type { AuthenticatedUser } from '../auth/auth.types.js';
 import { EmailService } from '../auth/email.service.js';
+import { PasswordService } from '../auth/password.service.js';
 
 const INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const MANAGERS = new Set<ConferenceRole>([
@@ -65,6 +67,7 @@ export class ConferenceService {
     private readonly prisma: PrismaService,
     private readonly email: EmailService,
     private readonly config: ConfigService,
+    private readonly passwords: PasswordService,
   ) {}
 
   async listPublic() {
@@ -88,6 +91,25 @@ export class ConferenceService {
   }
 
   async listMine(actor: AuthenticatedUser) {
+    if (actor.platformRole === PlatformRole.SYSTEM_ADMIN) {
+      const conferences = await this.prisma.conference.findMany({
+        orderBy: { createdAt: 'desc' },
+      });
+      return conferences.map((conference) => ({
+        id: conference.id,
+        slug: conference.slug,
+        name: conference.name,
+        shortName: conference.shortName,
+        status: conference.status,
+        visibility: conference.visibility,
+        city: conference.city,
+        country: conference.country,
+        startsOn: day(conference.startsOn),
+        endsOn: day(conference.endsOn),
+        role: ConferenceRole.CHAIR,
+        membershipStatus: MembershipStatus.ACTIVE,
+      }));
+    }
     const rows = await this.prisma.membership.findMany({
       where: {
         userId: actor.id,
@@ -96,24 +118,34 @@ export class ConferenceService {
       include: { conference: true },
       orderBy: { createdAt: 'desc' },
     });
-    return rows.map((row) => ({
-      id: row.conference.id,
-      slug: row.conference.slug,
-      name: row.conference.name,
-      shortName: row.conference.shortName,
-      status: row.conference.status,
-      visibility: row.conference.visibility,
-      city: row.conference.city,
-      country: row.conference.country,
-      startsOn: day(row.conference.startsOn),
-      endsOn: day(row.conference.endsOn),
-      role: row.role,
-      membershipStatus: row.status,
+    const mine = rows.map((row) => this.listed(row.conference, row.role, row.status));
+    const memberIds = mine.map((item) => item.id);
+    const published = await this.prisma.conference.findMany({
+      where: {
+        status: 'PUBLISHED',
+        visibility: 'PUBLIC',
+        ...(memberIds.length > 0 ? { id: { notIn: memberIds } } : {}),
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+    const open = published.map((conference) => ({
+      ...this.listed(conference, ConferenceRole.AUTHOR, MembershipStatus.ACTIVE),
+      membershipStatus: 'OPEN' as const,
     }));
+    return [...open, ...mine];
   }
 
   async create(actor: AuthenticatedUser, input: CreateInput) {
+    if (actor.platformRole !== PlatformRole.SYSTEM_ADMIN) {
+      throw new ForbiddenException('Only the superadmin can create a conference');
+    }
+    const chairId = input.chairUserId
+      ? await this.chairAccount(input.chairUserId)
+      : actor.id;
     const slug = await this.uniqueSlug(input.shortName);
+    const accessPasswordHash = input.accessPassword
+      ? await this.passwords.hash(input.accessPassword)
+      : null;
     const created = await this.prisma.$transaction(async (tx) => {
       const conference = await tx.conference.create({
         data: {
@@ -129,11 +161,14 @@ export class ConferenceService {
           visibility: input.visibility,
           reviewMode: input.reviewMode,
           paymentsEnabled: input.paymentsEnabled,
+          accessPasswordHash,
+          accessPasswordNote: input.accessPassword ?? null,
+          status: accessPasswordHash ? 'PUBLISHED' : 'DRAFT',
           slug,
           createdById: actor.id,
           memberships: {
             create: {
-              userId: actor.id,
+              userId: chairId,
               role: ConferenceRole.CHAIR,
               status: MembershipStatus.ACTIVE,
             },
@@ -152,6 +187,122 @@ export class ConferenceService {
       return conference;
     });
     return this.getOne(actor, created.id);
+  }
+
+  async listAssigned(actor: AuthenticatedUser) {
+    const rows = await this.prisma.membership.findMany({
+      where: {
+        userId: actor.id,
+        status: MembershipStatus.ACTIVE,
+        role: { in: [ConferenceRole.CHAIR, ConferenceRole.ADMINISTRATOR] },
+        conference: { status: 'PUBLISHED' },
+      },
+      include: { conference: true },
+      orderBy: { createdAt: 'desc' },
+    });
+    return rows.map((row) => ({
+      id: row.conference.id,
+      name: row.conference.name,
+      shortName: row.conference.shortName,
+      city: row.conference.city,
+      country: row.conference.country,
+      startsOn: day(row.conference.startsOn),
+      endsOn: day(row.conference.endsOn),
+      role: row.role,
+      granted: row.accessGrantedAt !== null,
+    }));
+  }
+
+  async openAccess(actor: AuthenticatedUser, id: string, password?: string) {
+    const row = await this.load(id);
+    if (row.status !== 'PUBLISHED') {
+      throw new NotFoundException('Conference not found');
+    }
+    const membership = this.membershipOf(actor, row);
+    if (
+      !membership ||
+      membership.status !== MembershipStatus.ACTIVE ||
+      !MANAGERS.has(membership.role)
+    ) {
+      throw new NotFoundException('Conference not found');
+    }
+    if (!row.accessPasswordHash) {
+      throw new ForbiddenException('This conference has no access password');
+    }
+    if (!membership.accessGrantedAt) {
+      if (!password) {
+        throw new ForbiddenException('Enter the conference password');
+      }
+      const matches = await this.passwords.verify(row.accessPasswordHash, password);
+      if (!matches) {
+        throw new ForbiddenException('The conference password is incorrect');
+      }
+      await this.prisma.membership.update({
+        where: { id: membership.id },
+        data: { accessGrantedAt: new Date() },
+      });
+    }
+    await this.prisma.session.update({
+      where: { id: actor.sessionId },
+      data: { unlockedConferenceId: row.id },
+    });
+    return { id: row.id, name: row.name };
+  }
+
+  async setAccessPassword(actor: AuthenticatedUser, id: string, password: string) {
+    if (actor.platformRole !== PlatformRole.SYSTEM_ADMIN) {
+      throw new ForbiddenException('Only the superadmin can create a conference');
+    }
+    await this.load(id);
+    const accessPasswordHash = await this.passwords.hash(password);
+    await this.prisma.conference.update({
+      where: { id },
+      data: { accessPasswordHash, accessPasswordNote: password, status: 'PUBLISHED' },
+    });
+    return { id };
+  }
+
+  async createSubAdmin(
+    actor: AuthenticatedUser,
+    conferenceId: string,
+    input: z.infer<typeof createAdminSchema>,
+  ) {
+    const row = await this.load(conferenceId);
+    this.assertManager(actor, row);
+    const membership = this.membershipOf(actor, row);
+    if (actor.platformRole !== PlatformRole.SYSTEM_ADMIN && membership?.role !== ConferenceRole.CHAIR) {
+      throw new ForbiddenException('Only the conference admin can create a sub-admin');
+    }
+    const email = input.email.trim().toLowerCase();
+    const existing = await this.prisma.user.findUnique({ where: { email } });
+    if (existing) {
+      throw new ConflictException('An account with this email already exists');
+    }
+    const passwordHash = await this.passwords.hash(input.password);
+    const user = await this.prisma.user.create({
+      data: {
+        email,
+        passwordHash,
+        issuedPassword: input.password,
+        emailVerifiedAt: new Date(),
+        profile: {
+          create: {
+            firstName: input.firstName.trim(),
+            lastName: input.lastName.trim(),
+            academicTitle: 'Sous-admin',
+            language: 'fr',
+          },
+        },
+        memberships: {
+          create: {
+            conferenceId,
+            role: ConferenceRole.ADMINISTRATOR,
+            status: MembershipStatus.ACTIVE,
+          },
+        },
+      },
+    });
+    return { id: user.id, email: user.email };
   }
 
   async getOne(actor: AuthenticatedUser, id: string) {
@@ -511,12 +662,55 @@ export class ConferenceService {
     return row;
   }
 
+  private async chairAccount(userId: string): Promise<string> {
+    const chair = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!chair || !chair.emailVerifiedAt || chair.platformRole === PlatformRole.SYSTEM_ADMIN) {
+      throw new NotFoundException('Choose an admin account');
+    }
+    return chair.id;
+  }
+
   private membershipOf(actor: AuthenticatedUser, row: ConferenceRecord) {
     return row.memberships.find((item) => item.userId === actor.id) ?? null;
   }
 
+  private listed(
+    conference: {
+      id: string;
+      slug: string;
+      name: string;
+      shortName: string;
+      status: string;
+      visibility: string;
+      city: string | null;
+      country: string | null;
+      startsOn: Date | null;
+      endsOn: Date | null;
+    },
+    role: ConferenceRole,
+    membershipStatus: MembershipStatus,
+  ) {
+    return {
+      id: conference.id,
+      slug: conference.slug,
+      name: conference.name,
+      shortName: conference.shortName,
+      status: conference.status,
+      visibility: conference.visibility,
+      city: conference.city,
+      country: conference.country,
+      startsOn: day(conference.startsOn),
+      endsOn: day(conference.endsOn),
+      role,
+      membershipStatus,
+    };
+  }
+
   private assertReadable(actor: AuthenticatedUser, row: ConferenceRecord): void {
     if (actor.platformRole === PlatformRole.SYSTEM_ADMIN) {
+      return;
+    }
+    if (row.status === 'PUBLISHED' && row.visibility === 'PUBLIC') {
       return;
     }
     const membership = this.membershipOf(actor, row);
@@ -536,13 +730,15 @@ export class ConferenceService {
     }
     const membership = this.membershipOf(actor, row);
     if (
-      membership &&
-      membership.status === MembershipStatus.ACTIVE &&
-      MANAGERS.has(membership.role)
+      !membership ||
+      membership.status !== MembershipStatus.ACTIVE ||
+      !MANAGERS.has(membership.role)
     ) {
-      return;
+      throw new ForbiddenException('You cannot change this conference');
     }
-    throw new ForbiddenException('You cannot change this conference');
+    if (row.accessPasswordHash && actor.unlockedConferenceId !== row.id) {
+      throw new ForbiddenException('Enter the conference password');
+    }
   }
 
   private toPublic(row: ConferenceRecord) {
@@ -590,6 +786,7 @@ export class ConferenceService {
       status: row.status,
       visibility: row.visibility,
       paymentsEnabled: row.paymentsEnabled,
+      accessLocked: Boolean(row.accessPasswordHash),
       canManage,
       canViewMembers,
       myMembership: membership

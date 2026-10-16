@@ -59,6 +59,7 @@ describe('papers', () => {
 
   it('assigns a stable public id on submit and hides the file from other roles', async () => {
     const author = await account(authorAddress, 'Mary');
+    await prisma.user.update({ where: { email: authorAddress }, data: { platformRole: 'SYSTEM_ADMIN' } });
     const created = await author.agent
       .post('/api/v1/conferences')
       .set('x-csrf-token', author.csrf)
@@ -78,6 +79,18 @@ describe('papers', () => {
       .post('/api/v1/invitations/accept')
       .set('x-csrf-token', reviewer.csrf)
       .send({ token: invite });
+
+    await prisma.user.update({
+      where: { email: authorAddress },
+      data: { platformRole: 'RESEARCHER' },
+    });
+    const authorUser = await prisma.user.findUniqueOrThrow({ where: { email: authorAddress } });
+    await prisma.membership.update({
+      where: {
+        conferenceId_userId: { conferenceId, userId: authorUser.id },
+      },
+      data: { role: 'AUTHOR' },
+    });
 
     const draft = await author.agent
       .post(`/api/v1/conferences/${conferenceId}/papers`)
@@ -162,16 +175,33 @@ describe('papers', () => {
   });
 
   it('refuses submission after the deadline', async () => {
-    const author = await account(`late-${stamp}@paper.test`, 'Late');
+    const lateAddress = `late-${stamp}@paper.test`;
+    const author = await account(lateAddress, 'Late');
+    await prisma.user.update({
+      where: { email: lateAddress },
+      data: { platformRole: 'SYSTEM_ADMIN' },
+    });
     const created = await author.agent
       .post('/api/v1/conferences')
       .set('x-csrf-token', author.csrf)
       .send({ name: 'Closed Colloquium', shortName: `papers-${stamp}-late` });
+    expect(created.status).toBe(201);
     const conferenceId = created.body.id as string;
     await author.agent
       .post(`/api/v1/conferences/${conferenceId}/deadlines`)
       .set('x-csrf-token', author.csrf)
       .send({ kind: 'SUBMISSION', dueAt: '2020-01-01T00:00:00.000Z', trackId: null });
+    await prisma.user.update({
+      where: { email: lateAddress },
+      data: { platformRole: 'RESEARCHER' },
+    });
+    const lateUser = await prisma.user.findUniqueOrThrow({ where: { email: lateAddress } });
+    await prisma.membership.update({
+      where: {
+        conferenceId_userId: { conferenceId, userId: lateUser.id },
+      },
+      data: { role: 'AUTHOR' },
+    });
     const draft = await author.agent
       .post(`/api/v1/conferences/${conferenceId}/papers`)
       .set('x-csrf-token', author.csrf)
@@ -179,6 +209,7 @@ describe('papers', () => {
         title: 'Too late',
         abstract: 'This abstract is long enough to submit.',
       });
+    expect(draft.status).toBe(201);
     const paperId = draft.body.id as string;
     await author.agent
       .post(`/api/v1/papers/${paperId}/manuscript`)

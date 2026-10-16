@@ -91,10 +91,10 @@ export function AccountPage() {
             <img
               src={profile.photoPath}
               alt={`${profile.firstName} ${profile.lastName}`}
-              className="h-72 w-full object-cover"
+              className="h-52 w-full object-cover sm:h-72"
             />
           ) : (
-            <div className="grid h-72 place-items-center bg-[#eef2ff] text-3xl font-extrabold text-[#5d74ff]">
+            <div className="grid h-52 place-items-center bg-[#eef2ff] text-3xl font-extrabold text-[#5d74ff] sm:h-72">
               {profile.firstName.slice(0, 1)}
               {profile.lastName.slice(0, 1)}
             </div>

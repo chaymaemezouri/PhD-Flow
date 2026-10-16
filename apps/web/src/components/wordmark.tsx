@@ -13,7 +13,7 @@ export function Wordmark({ light = false }: { light?: boolean }) {
           color: light ? brandColors.navy : brandColors.paper,
         }}
       >
-        SF
+        PM
       </span>
       <span className="leading-tight">
         <span

@@ -65,7 +65,7 @@ export function DeadlineBell() {
     <div className="relative">
       <button
         type="button"
-        className="relative grid size-9 place-items-center rounded-full bg-white text-[#3d4fd4]"
+        className="relative grid size-11 place-items-center rounded-2xl border border-[#e4e7ee] bg-white text-[#3d4fd4]"
         aria-label={t('top.notifications')}
         aria-expanded={open}
         onClick={() => setOpen((current) => !current)}
@@ -85,7 +85,7 @@ export function DeadlineBell() {
             aria-label={t('nav.close')}
             onClick={() => setOpen(false)}
           />
-          <div className="absolute right-0 z-30 mt-2 w-72 max-w-[calc(100vw-1.5rem)] rounded-2xl border border-[#e4e7ee] bg-white p-3 shadow-[0_12px_32px_rgba(28,36,48,0.12)]">
+          <div className="fixed inset-x-3 top-16 z-30 max-h-[min(70vh,28rem)] overflow-y-auto rounded-2xl border border-[#e4e7ee] bg-white p-3 shadow-[0_12px_32px_rgba(28,36,48,0.12)] sm:absolute sm:inset-x-auto sm:right-0 sm:top-auto sm:mt-2 sm:w-72 sm:max-w-[calc(100vw-1.5rem)]">
             <p className="px-2 text-sm font-extrabold">{t('workflow.messages')}</p>
             {messages.data && messages.data.length > 0 ? (
               <ul className="mt-1 max-h-48 overflow-y-auto">
