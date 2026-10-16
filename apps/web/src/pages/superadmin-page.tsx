@@ -348,16 +348,6 @@ export function SuperadminPage() {
     },
   });
 
-  if (account.isPending) {
-    return <p className="text-sm text-[#8b909a]">{t('common.loading')}</p>;
-  }
-  if (account.data?.platformRole !== 'SYSTEM_ADMIN') {
-    return <Navigate to="/workspace" replace />;
-  }
-  if (!sectionValid) {
-    return <Navigate to="/workspace/system" replace />;
-  }
-
   async function refreshAll() {
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: ['system-admins'] }),
@@ -495,6 +485,16 @@ export function SuperadminPage() {
       }) ?? [],
     [sessions.data, needle],
   );
+
+  if (account.isPending) {
+    return <p className="text-sm text-[#8b909a]">{t('common.loading')}</p>;
+  }
+  if (account.data?.platformRole !== 'SYSTEM_ADMIN') {
+    return <Navigate to="/workspace" replace />;
+  }
+  if (!sectionValid) {
+    return <Navigate to="/workspace/system" replace />;
+  }
 
   const managingAdmin = admins.data?.find((item) => item.id === managingAdminId) ?? null;
   const managingConference =
