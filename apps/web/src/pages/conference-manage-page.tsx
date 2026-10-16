@@ -116,7 +116,9 @@ export function ConferenceManagePage() {
     account.data?.platformRole !== 'SYSTEM_ADMIN' &&
     account.data?.unlockedConferenceId !== conference.id
   ) {
-    return <Navigate to={`/workspace/conference-access?conference=${conference.id}`} replace />;
+    return (
+      <Navigate to={`/workspace/conference-access?conference=${conference.id}`} replace />
+    );
   }
 
   const place = [conference.city, conference.country].filter(Boolean).join(' · ');
@@ -223,7 +225,9 @@ export function ConferenceManagePage() {
           <h2 className="text-lg font-extrabold text-[#1c2744] md:col-span-2">
             {t('access.createSubAdmin')}
           </h2>
-          <p className="text-sm text-[#5c6578] md:col-span-2">{t('access.subAdminHint')}</p>
+          <p className="text-sm text-[#5c6578] md:col-span-2">
+            {t('access.subAdminHint')}
+          </p>
           <label className="text-sm font-bold">
             {t('auth.firstName')}
             <Input name="firstName" required className="mt-1" />
@@ -234,11 +238,24 @@ export function ConferenceManagePage() {
           </label>
           <label className="text-sm font-bold">
             {t('auth.email')}
-            <Input name="email" type="email" required autoComplete="off" className="mt-1" />
+            <Input
+              name="email"
+              type="email"
+              required
+              autoComplete="off"
+              className="mt-1"
+            />
           </label>
           <label className="text-sm font-bold">
             {t('auth.password')}
-            <Input name="password" type="text" required minLength={12} autoComplete="off" className="mt-1" />
+            <Input
+              name="password"
+              type="text"
+              required
+              minLength={12}
+              autoComplete="off"
+              className="mt-1"
+            />
           </label>
           <div>
             <Button type="submit">{t('access.createSubAdmin')}</Button>
@@ -731,7 +748,9 @@ export function ConferenceManagePage() {
                     >
                       <option value="AUTHOR">{t('conferences.roles.AUTHOR')}</option>
                       <option value="REVIEWER">{t('conferences.roles.REVIEWER')}</option>
-                      <option value="COMMITTEE">{t('conferences.roles.COMMITTEE')}</option>
+                      <option value="COMMITTEE">
+                        {t('conferences.roles.COMMITTEE')}
+                      </option>
                     </select>
                   </label>
                   <Button type="submit">{t('conferences.invite')}</Button>

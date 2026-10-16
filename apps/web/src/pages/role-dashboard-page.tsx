@@ -7,7 +7,10 @@ import { PaperWorkCard, type WorkPaper } from '@/components/paper-work-card';
 import { Button } from '@/components/ui/button';
 import { focusStep, type PaperStep } from '@/components/step-bar';
 import { useCurrentUser } from '@/features/auth/use-account';
-import { canStartSubmission, canSubmitToConference } from '@/features/navigation/can-submit';
+import {
+  canStartSubmission,
+  canSubmitToConference,
+} from '@/features/navigation/can-submit';
 import { homePathFor } from '@/features/navigation/home-path';
 import { pickConference } from '@/features/navigation/pick-conference';
 import type { WorkspaceRole } from '@/features/navigation/modules';
@@ -189,29 +192,31 @@ function AuthorDashboard() {
           <h2 className="text-lg font-extrabold">{t('home.openConferences')}</h2>
           <ul className="mt-3 grid gap-2">
             {openConferences
-              .filter((item) => canSubmitToConference(false, memberships.data ?? [], item))
+              .filter((item) =>
+                canSubmitToConference(false, memberships.data ?? [], item),
+              )
               .map((item) => (
-              <li
-                key={item.id}
-                className="flex flex-wrap items-center justify-between gap-2 rounded-2xl bg-[#f6f7fb] px-4 py-3"
-              >
-                <span className="text-sm font-extrabold">{item.name}</span>
-                <span className="flex flex-wrap gap-2">
-                  <Link
-                    to={`/workspace/submissions/new?conference=${item.id}`}
-                    className="inline-flex min-h-10 items-center justify-center rounded-full bg-[#5d74ff] px-4 py-2 text-sm font-extrabold text-white no-underline shadow-[0_6px_16px_rgba(93,116,255,0.28)]"
-                  >
-                    {t('home.submitPaper')}
-                  </Link>
-                  <Link
-                    to={`/workspace/conferences/${item.id}`}
-                    className="inline-flex min-h-10 items-center justify-center rounded-full border border-[#c5cad6] bg-white px-3.5 py-2 text-sm font-extrabold text-[#3d4fd4] no-underline"
-                  >
-                    {t('home.manage')}
-                  </Link>
-                </span>
-              </li>
-            ))}
+                <li
+                  key={item.id}
+                  className="flex flex-wrap items-center justify-between gap-2 rounded-2xl bg-[#f6f7fb] px-4 py-3"
+                >
+                  <span className="text-sm font-extrabold">{item.name}</span>
+                  <span className="flex flex-wrap gap-2">
+                    <Link
+                      to={`/workspace/submissions/new?conference=${item.id}`}
+                      className="inline-flex min-h-10 items-center justify-center rounded-full bg-[#5d74ff] px-4 py-2 text-sm font-extrabold text-white no-underline shadow-[0_6px_16px_rgba(93,116,255,0.28)]"
+                    >
+                      {t('home.submitPaper')}
+                    </Link>
+                    <Link
+                      to={`/workspace/conferences/${item.id}`}
+                      className="inline-flex min-h-10 items-center justify-center rounded-full border border-[#c5cad6] bg-white px-3.5 py-2 text-sm font-extrabold text-[#3d4fd4] no-underline"
+                    >
+                      {t('home.manage')}
+                    </Link>
+                  </span>
+                </li>
+              ))}
           </ul>
         </section>
       ) : null}
@@ -498,7 +503,7 @@ function ChairDashboard({ variant = 'admin' }: { variant?: 'admin' | 'committee'
           value={
             stats.data
               ? (byStatus.SUBMITTED ?? 0)
-              : (rows.filter((paper) => paper.status === 'SUBMITTED').length || '—')
+              : rows.filter((paper) => paper.status === 'SUBMITTED').length || '—'
           }
           hint={t('home.chairPapers')}
         />
@@ -508,7 +513,7 @@ function ChairDashboard({ variant = 'admin' }: { variant?: 'admin' | 'committee'
           value={
             stats.data
               ? (byStatus.DRAFT ?? 0)
-              : (rows.filter((paper) => paper.status === 'DRAFT').length || '—')
+              : rows.filter((paper) => paper.status === 'DRAFT').length || '—'
           }
           hint={managed?.name ?? '—'}
         />
@@ -549,9 +554,7 @@ function ChairDashboard({ variant = 'admin' }: { variant?: 'admin' | 'committee'
               aria-pressed={board === id}
               onClick={() => setBoard(id)}
               className={`shrink-0 rounded-full px-3 py-2 text-xs font-extrabold sm:text-sm ${
-                board === id
-                  ? 'bg-[#3d4fd4] text-white'
-                  : 'bg-[#f6f7fb] text-[#5c6578]'
+                board === id ? 'bg-[#3d4fd4] text-white' : 'bg-[#f6f7fb] text-[#5c6578]'
               }`}
             >
               {t(label)} · {count}
@@ -703,9 +706,7 @@ function ReviewerDashboard() {
               aria-pressed={board === id}
               onClick={() => setBoard(id)}
               className={`shrink-0 rounded-full px-3 py-2 text-xs font-extrabold sm:text-sm ${
-                board === id
-                  ? 'bg-[#3d4fd4] text-white'
-                  : 'bg-[#f6f7fb] text-[#5c6578]'
+                board === id ? 'bg-[#3d4fd4] text-white' : 'bg-[#f6f7fb] text-[#5c6578]'
               }`}
             >
               {t(label)} · {count}
@@ -743,7 +744,9 @@ function ReviewerDashboard() {
                     {t(`reviews.statuses.${item.status}`, { defaultValue: item.status })}
                   </span>
                 </div>
-                <h3 className="mt-2 truncate text-base font-extrabold">{item.paperTitle}</h3>
+                <h3 className="mt-2 truncate text-base font-extrabold">
+                  {item.paperTitle}
+                </h3>
                 <p className="mt-1 text-xs font-semibold text-[#8b909a]">
                   {new Date(item.expiresAt).toLocaleDateString()}
                   {item.score !== null ? ` · ${item.score}/10` : ''}

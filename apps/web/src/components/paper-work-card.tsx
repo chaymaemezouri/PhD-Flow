@@ -99,7 +99,9 @@ export function PaperWorkCard({ paper }: { paper: WorkPaper }) {
         <p className="text-xs font-bold tracking-wide text-[#6d7585]">
           {paper.publicId ?? t('papers.draft')}
         </p>
-        <span className={`shrink-0 rounded-md px-2 py-0.5 text-xs font-bold ${styles.badge}`}>
+        <span
+          className={`shrink-0 rounded-md px-2 py-0.5 text-xs font-bold ${styles.badge}`}
+        >
           {meta.statusLabel}
         </span>
       </div>
@@ -143,7 +145,9 @@ export function PaperWorkListRow({ paper }: { paper: WorkPaper }) {
           {paper.title}
         </Link>
         {meta.label === meta.stepName ? null : (
-          <p className={`mt-0.5 truncate text-xs font-semibold ${styles.text}`}>{meta.label}</p>
+          <p className={`mt-0.5 truncate text-xs font-semibold ${styles.text}`}>
+            {meta.label}
+          </p>
         )}
       </td>
       <td className="hidden px-3 py-3 align-middle md:table-cell">
@@ -163,7 +167,9 @@ export function PaperWorkListRow({ paper }: { paper: WorkPaper }) {
         </div>
       </td>
       <td className="px-3 py-3 align-middle">
-        <span className={`inline-block rounded-md px-2 py-0.5 text-xs font-bold ${styles.badge}`}>
+        <span
+          className={`inline-block rounded-md px-2 py-0.5 text-xs font-bold ${styles.badge}`}
+        >
           {meta.statusLabel}
         </span>
       </td>

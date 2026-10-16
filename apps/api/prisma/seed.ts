@@ -147,7 +147,8 @@ async function main(): Promise<void> {
     laboratory: 'CITI',
     department: 'Informatique',
     disciplines: ['Réseaux', 'Comité de programme'],
-    interests: 'Décisions éditoriales, attribution des évaluateurs, qualité scientifique.',
+    interests:
+      'Décisions éditoriales, attribution des évaluateurs, qualité scientifique.',
     biography:
       'Nora Benali siège au comité de programme. Elle est invitée par l’admin, décide du scope et des acceptations, sans gérer les réglages de la conférence.',
     photoPath: '/avatars/committee.jpg',

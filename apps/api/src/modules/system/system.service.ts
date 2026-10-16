@@ -1,8 +1,4 @@
-import {
-  ForbiddenException,
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
+import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import type {
   assignConferenceChairSchema,
   resetAdminPasswordSchema,
@@ -45,7 +41,9 @@ export class SystemService {
       submitted,
       activeSessions,
     ] = await Promise.all([
-      this.prisma.user.count({ where: { platformRole: { not: PlatformRole.SYSTEM_ADMIN } } }),
+      this.prisma.user.count({
+        where: { platformRole: { not: PlatformRole.SYSTEM_ADMIN } },
+      }),
       this.prisma.conference.count(),
       this.prisma.paper.count(),
       this.prisma.reviewAssignment.count(),
@@ -327,11 +325,16 @@ export class SystemService {
       throw new NotFoundException('Conference not found');
     }
     const chair = await this.prisma.user.findUnique({ where: { id: input.chairUserId } });
-    if (!chair || !chair.emailVerifiedAt || chair.platformRole === PlatformRole.SYSTEM_ADMIN) {
+    if (
+      !chair ||
+      !chair.emailVerifiedAt ||
+      chair.platformRole === PlatformRole.SYSTEM_ADMIN
+    ) {
       throw new NotFoundException('Choose an admin account');
     }
     const previous = conference.memberships.filter(
-      (item) => item.role === ConferenceRole.CHAIR && item.status === MembershipStatus.ACTIVE,
+      (item) =>
+        item.role === ConferenceRole.CHAIR && item.status === MembershipStatus.ACTIVE,
     );
     await this.prisma.$transaction(async (tx) => {
       for (const item of previous) {
@@ -359,10 +362,18 @@ export class SystemService {
         },
       });
     });
-    await this.writeAudit(actor.id, 'conference.assign_chair', 'conference', conferenceId, {
-      chairUserId: input.chairUserId,
-    });
-    return this.conferences().then((rows) => rows.find((item) => item.id === conferenceId));
+    await this.writeAudit(
+      actor.id,
+      'conference.assign_chair',
+      'conference',
+      conferenceId,
+      {
+        chairUserId: input.chairUserId,
+      },
+    );
+    return this.conferences().then((rows) =>
+      rows.find((item) => item.id === conferenceId),
+    );
   }
 
   async setConferenceStatus(
@@ -370,7 +381,9 @@ export class SystemService {
     conferenceId: string,
     input: SetStatusInput,
   ) {
-    const conference = await this.prisma.conference.findUnique({ where: { id: conferenceId } });
+    const conference = await this.prisma.conference.findUnique({
+      where: { id: conferenceId },
+    });
     if (!conference) {
       throw new NotFoundException('Conference not found');
     }
@@ -384,7 +397,9 @@ export class SystemService {
     await this.writeAudit(actor.id, 'conference.set_status', 'conference', conferenceId, {
       status: input.status,
     });
-    return this.conferences().then((rows) => rows.find((item) => item.id === conferenceId));
+    return this.conferences().then((rows) =>
+      rows.find((item) => item.id === conferenceId),
+    );
   }
 
   async deleteConference(actor: AuthenticatedUser, conferenceId: string) {

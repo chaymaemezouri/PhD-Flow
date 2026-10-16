@@ -35,7 +35,9 @@ export function StagePanel({
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div className="min-w-0">
           <p className="text-sm font-extrabold text-[#1c2744]">{title}</p>
-          {hint ? <p className="mt-0.5 text-xs font-semibold text-[#8b909a]">{hint}</p> : null}
+          {hint ? (
+            <p className="mt-0.5 text-xs font-semibold text-[#8b909a]">{hint}</p>
+          ) : null}
         </div>
         {status ? (
           <span className={`rounded-full px-2.5 py-1 text-[11px] font-extrabold ${tone}`}>

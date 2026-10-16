@@ -1,9 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import {
-  PAPERS_LAYOUT_KEY,
-  readPapersLayout,
-  writePapersLayout,
-} from './papers-layout';
+import { PAPERS_LAYOUT_KEY, readPapersLayout, writePapersLayout } from './papers-layout';
 
 describe('papers layout preference', () => {
   beforeEach(() => {

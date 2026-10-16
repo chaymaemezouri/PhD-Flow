@@ -48,7 +48,13 @@ export function ReviewAssignmentForm({
             : t('home.inProgress')
       }
       statusTone={
-        invited ? 'wait' : status === 'COMPLETED' ? 'ok' : status === 'OVERDUE' ? 'missing' : 'ok'
+        invited
+          ? 'wait'
+          : status === 'COMPLETED'
+            ? 'ok'
+            : status === 'OVERDUE'
+              ? 'missing'
+              : 'ok'
       }
     >
       {invited ? (
@@ -59,7 +65,12 @@ export function ReviewAssignmentForm({
             </Button>
           ) : null}
           {onDecline ? (
-            <Button type="button" variant="outline" className="border-[#c5cad6]" onClick={() => void onDecline()}>
+            <Button
+              type="button"
+              variant="outline"
+              className="border-[#c5cad6]"
+              onClick={() => void onDecline()}
+            >
               {t('reviews.decline')}
             </Button>
           ) : null}
@@ -80,7 +91,9 @@ export function ReviewAssignmentForm({
             });
           }}
         >
-          <label className={`text-xs font-extrabold text-[#5c6578] ${compact ? '' : 'sm:col-span-2'}`}>
+          <label
+            className={`text-xs font-extrabold text-[#5c6578] ${compact ? '' : 'sm:col-span-2'}`}
+          >
             {t('reviews.recommendation')}
             <select name="recommendation" className={stageField} defaultValue="ACCEPT">
               {RECOMMENDATIONS.map((value) => (
@@ -114,7 +127,9 @@ export function ReviewAssignmentForm({
               className={stageField}
             />
           </label>
-          <label className={`text-xs font-extrabold text-[#5c6578] ${compact ? '' : 'sm:col-span-2'}`}>
+          <label
+            className={`text-xs font-extrabold text-[#5c6578] ${compact ? '' : 'sm:col-span-2'}`}
+          >
             {t('reviews.comments')}
             <textarea
               name="comments"
@@ -123,7 +138,9 @@ export function ReviewAssignmentForm({
               className={`${stageField} min-h-24`}
             />
           </label>
-          <label className={`text-xs font-extrabold text-[#5c6578] ${compact ? '' : 'sm:col-span-2'}`}>
+          <label
+            className={`text-xs font-extrabold text-[#5c6578] ${compact ? '' : 'sm:col-span-2'}`}
+          >
             {t('reviews.committee')}
             <textarea name="committee" className={`${stageField} min-h-16`} />
           </label>

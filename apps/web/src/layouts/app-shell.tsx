@@ -179,13 +179,7 @@ function navClass(isActive: boolean, compact = false) {
   );
 }
 
-function MobileNavLink({
-  tab,
-  onNavigate,
-}: {
-  tab: NavTab;
-  onNavigate?: () => void;
-}) {
+function MobileNavLink({ tab, onNavigate }: { tab: NavTab; onNavigate?: () => void }) {
   const { t } = useTranslation();
   const Icon = tab.icon;
   return (
@@ -413,7 +407,9 @@ export function AppShell() {
           >
             <div className="flex items-center justify-between gap-3 border-b border-[#eef1f8] px-4 py-3">
               <div className="min-w-0">
-                <p className="truncate text-sm font-extrabold text-[#1c2744]">{displayName}</p>
+                <p className="truncate text-sm font-extrabold text-[#1c2744]">
+                  {displayName}
+                </p>
                 <p className="truncate text-xs text-[#8b909a]">{account.data?.email}</p>
               </div>
               <button
@@ -459,7 +455,9 @@ export function AppShell() {
                     </p>
                     <div className="grid gap-1">
                       {tabs
-                        .filter((tab) => tab.id === 'submissions' || tab.id === 'followUp')
+                        .filter(
+                          (tab) => tab.id === 'submissions' || tab.id === 'followUp',
+                        )
                         .map((tab) => (
                           <MobileNavLink
                             key={tab.to}

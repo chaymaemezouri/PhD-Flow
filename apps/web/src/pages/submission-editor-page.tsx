@@ -385,8 +385,12 @@ export function SubmissionEditorPage() {
         <div className="space-y-4">
           <div className="flex flex-wrap items-end justify-between gap-2">
             <div>
-              <h2 className="text-lg font-extrabold text-[#1c2744]">{t('papers.depositEditor')}</h2>
-              <p className="mt-1 text-sm text-[#5c6578]">{t('papers.depositEditorHint')}</p>
+              <h2 className="text-lg font-extrabold text-[#1c2744]">
+                {t('papers.depositEditor')}
+              </h2>
+              <p className="mt-1 text-sm text-[#5c6578]">
+                {t('papers.depositEditorHint')}
+              </p>
             </div>
           </div>
 
@@ -414,7 +418,11 @@ export function SubmissionEditorPage() {
           </div>
 
           {step > 0 && !current ? (
-            <StagePanel title={t('papers.stepDetails')} status={t('dossier.waiting')} statusTone="wait">
+            <StagePanel
+              title={t('papers.stepDetails')}
+              status={t('dossier.waiting')}
+              statusTone="wait"
+            >
               <p className="text-sm text-[#5c6578]">{t('papers.needDraft')}</p>
             </StagePanel>
           ) : null}

@@ -270,7 +270,10 @@ export class ConferenceService {
     const row = await this.load(conferenceId);
     this.assertManager(actor, row);
     const membership = this.membershipOf(actor, row);
-    if (actor.platformRole !== PlatformRole.SYSTEM_ADMIN && membership?.role !== ConferenceRole.CHAIR) {
+    if (
+      actor.platformRole !== PlatformRole.SYSTEM_ADMIN &&
+      membership?.role !== ConferenceRole.CHAIR
+    ) {
       throw new ForbiddenException('Only the conference admin can create a sub-admin');
     }
     const email = input.email.trim().toLowerCase();
@@ -664,7 +667,11 @@ export class ConferenceService {
 
   private async chairAccount(userId: string): Promise<string> {
     const chair = await this.prisma.user.findUnique({ where: { id: userId } });
-    if (!chair || !chair.emailVerifiedAt || chair.platformRole === PlatformRole.SYSTEM_ADMIN) {
+    if (
+      !chair ||
+      !chair.emailVerifiedAt ||
+      chair.platformRole === PlatformRole.SYSTEM_ADMIN
+    ) {
       throw new NotFoundException('Choose an admin account');
     }
     return chair.id;

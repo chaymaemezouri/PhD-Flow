@@ -683,44 +683,58 @@ export class PaperService {
 
   private async dossier(row: PaperRecord, actor: AuthenticatedUser) {
     const manager = this.isManager(actor, row);
-    const [files, similarity, copyright, presentation, registration, assignments, track, chairUsers] =
-      await Promise.all([
-        this.prisma.paperFile.findMany({
-          where: { paperId: row.id },
-          select: {
-            kind: true,
-            originalName: true,
-            contentType: true,
-            sizeBytes: true,
+    const [
+      files,
+      similarity,
+      copyright,
+      presentation,
+      registration,
+      assignments,
+      track,
+      chairUsers,
+    ] = await Promise.all([
+      this.prisma.paperFile.findMany({
+        where: { paperId: row.id },
+        select: {
+          kind: true,
+          originalName: true,
+          contentType: true,
+          sizeBytes: true,
+        },
+        orderBy: { createdAt: 'desc' },
+      }),
+      this.prisma.similarityReport.findUnique({ where: { paperId: row.id } }),
+      this.prisma.copyrightRecord.findUnique({ where: { paperId: row.id } }),
+      this.prisma.presentation.findFirst({
+        where: { paperId: row.id },
+        select: { id: true },
+      }),
+      this.prisma.registration.findUnique({
+        where: {
+          conferenceId_userId: {
+            conferenceId: row.conferenceId,
+            userId: row.createdById,
           },
-          orderBy: { createdAt: 'desc' },
-        }),
-        this.prisma.similarityReport.findUnique({ where: { paperId: row.id } }),
-        this.prisma.copyrightRecord.findUnique({ where: { paperId: row.id } }),
-        this.prisma.presentation.findFirst({ where: { paperId: row.id }, select: { id: true } }),
-        this.prisma.registration.findUnique({
-          where: {
-            conferenceId_userId: { conferenceId: row.conferenceId, userId: row.createdById },
-          },
-        }),
-        this.prisma.reviewAssignment.findMany({
-          where: { paperId: row.id },
-          include: {
-            reviewer: { include: { profile: true } },
-            form: true,
-          },
-          orderBy: { createdAt: 'asc' },
-        }),
-        row.trackId
-          ? this.prisma.track.findUnique({ where: { id: row.trackId } })
-          : Promise.resolve(null),
-        (row.sessionChairIds ?? []).length > 0
-          ? this.prisma.user.findMany({
-              where: { id: { in: row.sessionChairIds ?? [] } },
-              include: { profile: true },
-            })
-          : Promise.resolve([]),
-      ]);
+        },
+      }),
+      this.prisma.reviewAssignment.findMany({
+        where: { paperId: row.id },
+        include: {
+          reviewer: { include: { profile: true } },
+          form: true,
+        },
+        orderBy: { createdAt: 'asc' },
+      }),
+      row.trackId
+        ? this.prisma.track.findUnique({ where: { id: row.trackId } })
+        : Promise.resolve(null),
+      (row.sessionChairIds ?? []).length > 0
+        ? this.prisma.user.findMany({
+            where: { id: { in: row.sessionChairIds ?? [] } },
+            include: { profile: true },
+          })
+        : Promise.resolve([]),
+    ]);
     return {
       paperKind: row.paperKind,
       scopeStatus: row.scopeStatus,

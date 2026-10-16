@@ -197,12 +197,18 @@ export class WorkflowController {
   }
 
   @Post('papers/:id/payment-notice')
-  paymentNotice(@Req() request: AuthenticatedRequest, @Param('id', ParseUUIDPipe) id: string) {
+  paymentNotice(
+    @Req() request: AuthenticatedRequest,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
     return this.workflow.sendPaymentNotice(request.user!, id);
   }
 
   @Post('papers/:id/payment/verify')
-  verifyPayment(@Req() request: AuthenticatedRequest, @Param('id', ParseUUIDPipe) id: string) {
+  verifyPayment(
+    @Req() request: AuthenticatedRequest,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
     return this.workflow.verifyPayment(request.user!, id);
   }
 

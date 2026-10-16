@@ -50,7 +50,9 @@ export function SubmissionsPage() {
   const isManager = memberships.data?.some(
     (item) =>
       item.membershipStatus === 'ACTIVE' &&
-      (item.role === 'CHAIR' || item.role === 'ADMINISTRATOR' || item.role === 'COMMITTEE'),
+      (item.role === 'CHAIR' ||
+        item.role === 'ADMINISTRATOR' ||
+        item.role === 'COMMITTEE'),
   );
   const isReviewerOnly =
     !isManager &&

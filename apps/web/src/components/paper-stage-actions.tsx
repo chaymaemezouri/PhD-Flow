@@ -44,7 +44,9 @@ export function usePaperStageExtras(
     queryKey: ['session-chairs', paper?.conferenceId],
     enabled: Boolean(paper?.dossier?.canManage && open),
     queryFn: async () => {
-      const response = await apiFetch(`/api/v1/conferences/${paper!.conferenceId}/session-chairs`);
+      const response = await apiFetch(
+        `/api/v1/conferences/${paper!.conferenceId}/session-chairs`,
+      );
       if (!response.ok) {
         throw new Error(await apiErrorMessage(response));
       }
@@ -55,9 +57,13 @@ export function usePaperStageExtras(
   });
   const reviewers = useQuery({
     queryKey: ['reviewers', paper?.conferenceId],
-    enabled: Boolean(paper?.dossier?.canManage && paper.dossier.scopeStatus === 'ACCEPTED'),
+    enabled: Boolean(
+      paper?.dossier?.canManage && paper.dossier.scopeStatus === 'ACCEPTED',
+    ),
     queryFn: async () => {
-      const response = await apiFetch(`/api/v1/conferences/${paper!.conferenceId}/reviewers`);
+      const response = await apiFetch(
+        `/api/v1/conferences/${paper!.conferenceId}/reviewers`,
+      );
       if (!response.ok) {
         throw new Error(await apiErrorMessage(response));
       }
@@ -127,9 +133,7 @@ export function usePaperStageExtras(
           title={t('reviews.assignTitle')}
           hint={t('dossier.assignReviewerHint')}
           status={
-            dossier.reviews.length > 0
-              ? t('dossier.assigned')
-              : t('dossier.notAssigned')
+            dossier.reviews.length > 0 ? t('dossier.assigned') : t('dossier.notAssigned')
           }
           statusTone={dossier.reviews.length > 0 ? 'ok' : 'missing'}
         >
@@ -137,7 +141,9 @@ export function usePaperStageExtras(
             className="flex flex-col gap-2 sm:flex-row sm:items-end"
             onSubmit={(event) => {
               event.preventDefault();
-              const reviewerId = String(new FormData(event.currentTarget).get('reviewerId'));
+              const reviewerId = String(
+                new FormData(event.currentTarget).get('reviewerId'),
+              );
               void send(
                 `/api/v1/papers/${paper.id}/assignments`,
                 { reviewerId } as unknown as BodyInit,
@@ -186,7 +192,11 @@ export function usePaperStageExtras(
                 <Button
                   type="button"
                   onClick={() =>
-                    void send(`/api/v1/assignments/${mine!.id}/accept`, {} as BodyInit, true)
+                    void send(
+                      `/api/v1/assignments/${mine!.id}/accept`,
+                      {} as BodyInit,
+                      true,
+                    )
                   }
                 >
                   {t('reviews.accept')}
@@ -224,9 +234,7 @@ export function usePaperStageExtras(
         <StagePanel
           title={t('dossier.myReview')}
           hint={t('reviews.formOnReviewsPage')}
-          status={
-            mine!.status === 'INVITED' ? t('home.toAccept') : t('home.inProgress')
-          }
+          status={mine!.status === 'INVITED' ? t('home.toAccept') : t('home.inProgress')}
           statusTone={mine!.status === 'INVITED' ? 'wait' : 'ok'}
         >
           {mine!.status === 'INVITED' ? (
@@ -234,7 +242,11 @@ export function usePaperStageExtras(
               <Button
                 type="button"
                 onClick={() =>
-                  void send(`/api/v1/assignments/${mine!.id}/accept`, {} as BodyInit, true)
+                  void send(
+                    `/api/v1/assignments/${mine!.id}/accept`,
+                    {} as BodyInit,
+                    true,
+                  )
                 }
               >
                 {t('reviews.accept')}
@@ -300,7 +312,9 @@ export function usePaperStageExtras(
                 defaultValue={paper.decision?.outcome ?? 'ACCEPTED'}
               >
                 <option value="ACCEPTED">{t('dossier.adviceAccept')}</option>
-                <option value="CONDITIONALLY_ACCEPTED">{t('dossier.adviceChanges')}</option>
+                <option value="CONDITIONALLY_ACCEPTED">
+                  {t('dossier.adviceChanges')}
+                </option>
                 <option value="REVISION_REQUIRED">{t('workflow.outcomeRevision')}</option>
                 <option value="REJECTED">{t('dossier.adviceReject')}</option>
               </select>
@@ -369,9 +383,7 @@ export function usePaperStageExtras(
                 ? t('dossier.registrationSent')
                 : t('dossier.notRegistered')
           }
-          statusTone={
-            registeredNow ? 'ok' : dossier.registration ? 'wait' : 'missing'
-          }
+          statusTone={registeredNow ? 'ok' : dossier.registration ? 'wait' : 'missing'}
         >
           <div className="flex flex-wrap gap-2">
             {!manager && !dossier.registration ? (
@@ -412,7 +424,10 @@ export function usePaperStageExtras(
                   variant="outline"
                   className="border-[#c5cad6]"
                   onClick={() =>
-                    void download(`/api/v1/papers/${paper.id}/certificate`, 'certificate.pdf')
+                    void download(
+                      `/api/v1/papers/${paper.id}/certificate`,
+                      'certificate.pdf',
+                    )
                   }
                 >
                   {t('dossier.downloadCertificate')}
@@ -516,7 +531,9 @@ export function usePaperStageExtras(
           kind="SLIDES"
           file={dossier.files.find((item) => item.kind === 'SLIDES') ?? null}
           accept=".ppt,.pptx,application/pdf"
-          uploadLabel={dossier.slides ? t('dossier.replaceSlides') : t('dossier.sendSlides')}
+          uploadLabel={
+            dossier.slides ? t('dossier.replaceSlides') : t('dossier.sendSlides')
+          }
           onUpload={
             manager
               ? undefined
@@ -581,7 +598,9 @@ export function usePaperStageExtras(
                 className="grid gap-2"
                 onSubmit={(event) => {
                   event.preventDefault();
-                  const comment = String(new FormData(event.currentTarget).get('comment') ?? '');
+                  const comment = String(
+                    new FormData(event.currentTarget).get('comment') ?? '',
+                  );
                   void send(
                     `/api/v1/papers/${paper.id}/presented`,
                     { comment } as unknown as BodyInit,
@@ -666,11 +685,7 @@ export function usePaperStageExtras(
                 : t('dossier.missing')
           }
           statusTone={
-            dossier.similarity?.verified
-              ? 'ok'
-              : dossier.similarity
-                ? 'wait'
-                : 'missing'
+            dossier.similarity?.verified ? 'ok' : dossier.similarity ? 'wait' : 'missing'
           }
         >
           {!manager ? (
@@ -678,7 +693,9 @@ export function usePaperStageExtras(
               className="flex flex-wrap items-end gap-2"
               onSubmit={(event) => {
                 event.preventDefault();
-                const percentage = Number(new FormData(event.currentTarget).get('percentage'));
+                const percentage = Number(
+                  new FormData(event.currentTarget).get('percentage'),
+                );
                 void send(
                   `/api/v1/papers/${paper.id}/similarity`,
                   { percentage, note: '' } as unknown as BodyInit,
@@ -709,7 +726,11 @@ export function usePaperStageExtras(
                 variant="outline"
                 className="border-[#c5cad6]"
                 onClick={() =>
-                  void send(`/api/v1/papers/${paper.id}/template/validate`, {} as BodyInit, true)
+                  void send(
+                    `/api/v1/papers/${paper.id}/template/validate`,
+                    {} as BodyInit,
+                    true,
+                  )
                 }
               >
                 {t('workflow.templateOk')}
@@ -750,9 +771,10 @@ export function usePaperStageExtras(
               ? undefined
               : (file) => upload(`/api/v1/papers/${paper.id}/copyright`, file)
           }
-          done={dossier.copyrightStatus === 'VALIDATED' || Boolean(
-            dossier.files.find((item) => item.kind === 'COPYRIGHT'),
-          )}
+          done={
+            dossier.copyrightStatus === 'VALIDATED' ||
+            Boolean(dossier.files.find((item) => item.kind === 'COPYRIGHT'))
+          }
         />
         <StagePanel
           title={t('workflow.model')}
@@ -793,7 +815,9 @@ export function usePaperStageExtras(
           ) : (
             <p className="text-sm text-[#8b909a]">{t('dossier.noModel')}</p>
           )}
-          {manager && dossier.copyrightStatus && dossier.copyrightStatus !== 'VALIDATED' ? (
+          {manager &&
+          dossier.copyrightStatus &&
+          dossier.copyrightStatus !== 'VALIDATED' ? (
             <div className="mt-3">
               <Button
                 type="button"
@@ -833,7 +857,14 @@ export function usePaperStageExtras(
         <PaperFilesStrip
           paperId={paper.id}
           files={dossier.files}
-          kinds={['MANUSCRIPT', 'CAMERA_READY', 'EDITABLE', 'SIMILARITY', 'COPYRIGHT', 'SLIDES']}
+          kinds={[
+            'MANUSCRIPT',
+            'CAMERA_READY',
+            'EDITABLE',
+            'SIMILARITY',
+            'COPYRIGHT',
+            'SLIDES',
+          ]}
         />
         <StagePanel
           title={t('dossier.final')}

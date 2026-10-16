@@ -77,10 +77,12 @@ export function PaperWorkflow({
     dossier?.scopeStatus === 'PENDING' && progressed
       ? 'ACCEPTED'
       : (dossier?.scopeStatus ?? 'PENDING');
-  const stopped = withdrawn || scope === 'REFUSED' || paper?.decision?.outcome === 'REJECTED';
+  const stopped =
+    withdrawn || scope === 'REFUSED' || paper?.decision?.outcome === 'REJECTED';
   const accepted =
     paper?.decision?.status === 'PUBLISHED' &&
-    (paper.decision.outcome === 'ACCEPTED' || paper.decision.outcome === 'CONDITIONALLY_ACCEPTED');
+    (paper.decision.outcome === 'ACCEPTED' ||
+      paper.decision.outcome === 'CONDITIONALLY_ACCEPTED');
   const registered =
     dossier?.registration?.status === 'VERIFIED' ||
     dossier?.registration?.paymentStatus === 'VERIFIED';
@@ -129,7 +131,10 @@ export function PaperWorkflow({
       title: t('dossier.deposit'),
       actor: t('dossier.depositActor'),
       tone: !paper || paper.status === 'DRAFT' ? 'current' : withdrawn ? 'stop' : 'done',
-      status: !paper || paper.status === 'DRAFT' ? t('dossier.notCompleted') : t('dossier.completed'),
+      status:
+        !paper || paper.status === 'DRAFT'
+          ? t('dossier.notCompleted')
+          : t('dossier.completed'),
       lines: [],
       extra: null,
     },
@@ -137,7 +142,13 @@ export function PaperWorkflow({
       key: 'scope',
       title: t('dossier.scope'),
       actor: t('dossier.scopeActor'),
-      tone: !submitted ? 'later' : scope === 'REFUSED' ? 'stop' : scope === 'ACCEPTED' ? 'done' : 'current',
+      tone: !submitted
+        ? 'later'
+        : scope === 'REFUSED'
+          ? 'stop'
+          : scope === 'ACCEPTED'
+            ? 'done'
+            : 'current',
       status: !submitted
         ? t('dossier.later')
         : scope === 'ACCEPTED'
@@ -154,7 +165,9 @@ export function PaperWorkflow({
           : scope === 'REFUSED'
             ? t('dossier.scopeRefused')
             : `${t('dossier.accept')} : ${t('dossier.scopeAccepted')}`,
-        scope === 'PENDING' && submitted ? `${t('dossier.refuse')} : ${t('dossier.scopeRefused')}` : '',
+        scope === 'PENDING' && submitted
+          ? `${t('dossier.refuse')} : ${t('dossier.scopeRefused')}`
+          : '',
       ].filter(Boolean),
       extra:
         submitted && scope === 'PENDING' && dossier?.canManage && onScope ? (
@@ -214,7 +227,14 @@ export function PaperWorkflow({
       key: 'decision',
       title: t('dossier.decision'),
       actor: t('dossier.decisionActor'),
-      tone: stopped && paper?.decision?.outcome === 'REJECTED' ? 'stop' : accepted ? 'done' : scope === 'ACCEPTED' ? 'wait' : 'later',
+      tone:
+        stopped && paper?.decision?.outcome === 'REJECTED'
+          ? 'stop'
+          : accepted
+            ? 'done'
+            : scope === 'ACCEPTED'
+              ? 'wait'
+              : 'later',
       status:
         paper?.decision?.outcome === 'REJECTED'
           ? t('dossier.ended')
@@ -266,7 +286,13 @@ export function PaperWorkflow({
       key: 'presentation',
       title: t('dossier.presentation'),
       actor: t('dossier.presentationActor'),
-      tone: dossier?.presented ? 'done' : dossier?.slides ? 'wait' : accepted ? 'current' : 'later',
+      tone: dossier?.presented
+        ? 'done'
+        : dossier?.slides
+          ? 'wait'
+          : accepted
+            ? 'current'
+            : 'later',
       status: !accepted
         ? t('dossier.later')
         : dossier?.presented
@@ -321,7 +347,14 @@ export function PaperWorkflow({
       key: 'copyright',
       title: t('dossier.copyright'),
       actor: t('dossier.copyrightActor'),
-      tone: dossier?.copyrightStatus === 'VALIDATED' ? 'done' : dossier?.copyrightStatus === 'REJECTED' ? 'stop' : accepted ? 'wait' : 'later',
+      tone:
+        dossier?.copyrightStatus === 'VALIDATED'
+          ? 'done'
+          : dossier?.copyrightStatus === 'REJECTED'
+            ? 'stop'
+            : accepted
+              ? 'wait'
+              : 'later',
       status: !accepted
         ? t('dossier.later')
         : dossier?.copyrightStatus === 'VALIDATED'
@@ -376,7 +409,10 @@ export function PaperWorkflow({
         {stages.map((item, index) => {
           const active = index === selected;
           return (
-            <li key={item.key} className="w-[min(70vw,11rem)] shrink-0 snap-start sm:min-w-36 sm:flex-1 sm:w-auto">
+            <li
+              key={item.key}
+              className="w-[min(70vw,11rem)] shrink-0 snap-start sm:min-w-36 sm:flex-1 sm:w-auto"
+            >
               <button
                 type="button"
                 aria-expanded={active}
@@ -413,7 +449,9 @@ export function PaperWorkflow({
             <div className="mt-4 space-y-3">
               <div className="flex flex-wrap gap-2">
                 <span className="rounded-full border border-[#d8dce6] bg-[#f6f7fb] px-3 py-1 text-xs font-extrabold text-[#1c2744]">
-                  {dossier?.paperKind === 'ABSTRACT' ? t('dossier.abstract') : t('dossier.full')}
+                  {dossier?.paperKind === 'ABSTRACT'
+                    ? t('dossier.abstract')
+                    : t('dossier.full')}
                 </span>
                 <span className="rounded-full border border-[#d8dce6] bg-[#f6f7fb] px-3 py-1 text-xs font-extrabold text-[#1c2744]">
                   {paper.publicId ?? t('dossier.noId')}

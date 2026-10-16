@@ -26,7 +26,14 @@ function filePath(paperId: string, kind: string) {
 function isPdf(file: PaperFileInfo) {
   const type = (file.contentType ?? '').toLowerCase();
   const name = file.originalName.toLowerCase();
-  return type.includes('pdf') || name.endsWith('.pdf') || file.kind === 'CAMERA_READY' || file.kind === 'SIMILARITY' || file.kind === 'MANUSCRIPT' || file.kind === 'COPYRIGHT';
+  return (
+    type.includes('pdf') ||
+    name.endsWith('.pdf') ||
+    file.kind === 'CAMERA_READY' ||
+    file.kind === 'SIMILARITY' ||
+    file.kind === 'MANUSCRIPT' ||
+    file.kind === 'COPYRIGHT'
+  );
 }
 
 function isImage(file: PaperFileInfo) {
@@ -212,7 +219,9 @@ export function PaperFileThumb({
             ) : url ? (
               <div className="grid place-items-center gap-3 px-4 py-10 text-center">
                 <FileText className="size-10 text-[#3d4fd4]" />
-                <p className="text-sm font-bold text-[#5c6578]">{t('dossier.fileOpenHint')}</p>
+                <p className="text-sm font-bold text-[#5c6578]">
+                  {t('dossier.fileOpenHint')}
+                </p>
               </div>
             ) : (
               <div className="grid place-items-center gap-3 px-4 py-10 text-center">
@@ -282,7 +291,11 @@ export function PaperFilesStrip({
       </p>
       <div className="touch-scroll mt-2 flex gap-3 overflow-x-auto pb-1">
         {visible.map((file) => (
-          <PaperFileThumb key={`${file.kind}-${file.originalName}`} paperId={paperId} file={file} />
+          <PaperFileThumb
+            key={`${file.kind}-${file.originalName}`}
+            paperId={paperId}
+            file={file}
+          />
         ))}
       </div>
     </div>
@@ -315,13 +328,13 @@ export function PaperFileSlot({
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div className="min-w-0">
           <p className="text-sm font-extrabold text-[#1c2744]">{title}</p>
-          {hint ? <p className="mt-0.5 text-xs font-semibold text-[#8b909a]">{hint}</p> : null}
+          {hint ? (
+            <p className="mt-0.5 text-xs font-semibold text-[#8b909a]">{hint}</p>
+          ) : null}
         </div>
         <span
           className={`rounded-full px-2.5 py-1 text-[11px] font-extrabold ${
-            done || file
-              ? 'bg-[#2fbf71]/14 text-[#1c9a57]'
-              : 'bg-white text-[#8b909a]'
+            done || file ? 'bg-[#2fbf71]/14 text-[#1c9a57]' : 'bg-white text-[#8b909a]'
           }`}
         >
           {done || file ? t('dossier.ready') : t('dossier.missing')}

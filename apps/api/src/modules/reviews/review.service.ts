@@ -342,7 +342,9 @@ export class ReviewService {
     }
   }
 
-  private outcomeFromAdvice(recommendation: ReviewInput['recommendation']): DecisionOutcome {
+  private outcomeFromAdvice(
+    recommendation: ReviewInput['recommendation'],
+  ): DecisionOutcome {
     if (recommendation === 'ACCEPT') {
       return DecisionOutcome.ACCEPTED;
     }

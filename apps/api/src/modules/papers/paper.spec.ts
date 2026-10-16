@@ -59,7 +59,10 @@ describe('papers', () => {
 
   it('assigns a stable public id on submit and hides the file from other roles', async () => {
     const author = await account(authorAddress, 'Mary');
-    await prisma.user.update({ where: { email: authorAddress }, data: { platformRole: 'SYSTEM_ADMIN' } });
+    await prisma.user.update({
+      where: { email: authorAddress },
+      data: { platformRole: 'SYSTEM_ADMIN' },
+    });
     const created = await author.agent
       .post('/api/v1/conferences')
       .set('x-csrf-token', author.csrf)
@@ -84,7 +87,9 @@ describe('papers', () => {
       where: { email: authorAddress },
       data: { platformRole: 'RESEARCHER' },
     });
-    const authorUser = await prisma.user.findUniqueOrThrow({ where: { email: authorAddress } });
+    const authorUser = await prisma.user.findUniqueOrThrow({
+      where: { email: authorAddress },
+    });
     await prisma.membership.update({
       where: {
         conferenceId_userId: { conferenceId, userId: authorUser.id },
@@ -195,7 +200,9 @@ describe('papers', () => {
       where: { email: lateAddress },
       data: { platformRole: 'RESEARCHER' },
     });
-    const lateUser = await prisma.user.findUniqueOrThrow({ where: { email: lateAddress } });
+    const lateUser = await prisma.user.findUniqueOrThrow({
+      where: { email: lateAddress },
+    });
     await prisma.membership.update({
       where: {
         conferenceId_userId: { conferenceId, userId: lateUser.id },

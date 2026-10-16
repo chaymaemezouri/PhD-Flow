@@ -215,10 +215,7 @@ export class WorkflowService {
         'A revision file is allowed after a revision decision',
       );
     }
-    if (
-      kind !== 'REVISION' &&
-      (!outcome || !ACCEPTED.has(outcome))
-    ) {
+    if (kind !== 'REVISION' && (!outcome || !ACCEPTED.has(outcome))) {
       throw new ForbiddenException('This file is allowed after acceptance');
     }
     this.assertUpload(kind, file);
@@ -286,7 +283,9 @@ export class WorkflowService {
     }
     const slides = paper.files.some((file) => file.kind === PaperFileKind.SLIDES);
     if (!slides) {
-      throw new ForbiddenException('Upload the slides before marking the paper presented');
+      throw new ForbiddenException(
+        'Upload the slides before marking the paper presented',
+      );
     }
     return this.prisma.paper.update({
       where: { id: paperId },
@@ -806,7 +805,14 @@ export class WorkflowService {
   }
 
   private assertUpload(
-    kind: 'REVISION' | 'CAMERA_READY' | 'EDITABLE' | 'COPYRIGHT' | 'SIMILARITY' | 'SLIDES' | 'PAYMENT_PROOF',
+    kind:
+      | 'REVISION'
+      | 'CAMERA_READY'
+      | 'EDITABLE'
+      | 'COPYRIGHT'
+      | 'SIMILARITY'
+      | 'SLIDES'
+      | 'PAYMENT_PROOF',
     file: Upload,
   ) {
     if (!file?.buffer || file.size > 20 * 1024 * 1024) {
@@ -920,7 +926,13 @@ export class WorkflowService {
 
 function fileExtension(name: string, kind: string): string {
   const match = name.toLowerCase().match(/\.[a-z0-9]+$/);
-  if (match && kind !== 'CAMERA_READY' && kind !== 'COPYRIGHT' && kind !== 'SIMILARITY' && kind !== 'REVISION') {
+  if (
+    match &&
+    kind !== 'CAMERA_READY' &&
+    kind !== 'COPYRIGHT' &&
+    kind !== 'SIMILARITY' &&
+    kind !== 'REVISION'
+  ) {
     return match[0];
   }
   return '.pdf';

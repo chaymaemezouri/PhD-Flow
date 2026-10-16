@@ -1,4 +1,8 @@
-import { PaperWorkCard, PaperWorkListRow, type WorkPaper } from '@/components/paper-work-card';
+import {
+  PaperWorkCard,
+  PaperWorkListRow,
+  type WorkPaper,
+} from '@/components/paper-work-card';
 import type { PapersLayout } from '@/features/papers/papers-layout';
 import { useTranslation } from 'react-i18next';
 
@@ -49,7 +53,9 @@ export function PapersLayoutView({
                 {t('papers.colProgress')}
               </th>
               <th className="px-3 pb-1 font-extrabold">{t('papers.colStatus')}</th>
-              <th className="px-3 pb-1 text-right font-extrabold">{t('papers.colOpen')}</th>
+              <th className="px-3 pb-1 text-right font-extrabold">
+                {t('papers.colOpen')}
+              </th>
             </tr>
           </thead>
           <tbody>

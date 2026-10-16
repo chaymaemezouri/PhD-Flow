@@ -19,7 +19,9 @@ export function AuthLayout({
             <Wordmark />
           </div>
         ) : null}
-        <div className="rounded-2xl border border-[#e6e8ec] bg-white p-4 sm:p-6">{children}</div>
+        <div className="rounded-2xl border border-[#e6e8ec] bg-white p-4 sm:p-6">
+          {children}
+        </div>
         <p className="mt-6 text-center text-sm">
           <Link to="/" className="text-teal">
             {t('brand.name')}

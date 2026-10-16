@@ -113,7 +113,9 @@ function csvEscape(value: string) {
 
 function downloadCsv(filename: string, headers: string[], rows: string[][]) {
   const lines = [headers, ...rows].map((row) => row.map(csvEscape).join(','));
-  const blob = new Blob([`\uFEFF${lines.join('\n')}`], { type: 'text/csv;charset=utf-8' });
+  const blob = new Blob([`\uFEFF${lines.join('\n')}`], {
+    type: 'text/csv;charset=utf-8',
+  });
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement('a');
   anchor.href = url;
@@ -132,7 +134,12 @@ function pdfSafe(value: string) {
     .replace(/\)/g, '\\)');
 }
 
-function downloadPdf(filename: string, title: string, headers: string[], rows: string[][]) {
+function downloadPdf(
+  filename: string,
+  title: string,
+  headers: string[],
+  rows: string[][],
+) {
   const pageWidth = 595;
   const pageHeight = 842;
   const margin = 40;
@@ -360,7 +367,11 @@ export function SuperadminPage() {
     ]);
   }
 
-  async function postAction(path: string, okMessage: string, method: 'POST' | 'DELETE' = 'POST') {
+  async function postAction(
+    path: string,
+    okMessage: string,
+    method: 'POST' | 'DELETE' = 'POST',
+  ) {
     setNotice(null);
     const response = await apiFetch(path, { method });
     if (!response.ok) {
@@ -532,7 +543,10 @@ export function SuperadminPage() {
       </header>
 
       {notice ? (
-        <p className="rounded-2xl bg-[#2fbf71]/12 px-4 py-3 text-sm font-extrabold text-[#1c9a57]" role="status">
+        <p
+          className="rounded-2xl bg-[#2fbf71]/12 px-4 py-3 text-sm font-extrabold text-[#1c9a57]"
+          role="status"
+        >
           {notice}
         </p>
       ) : null}
@@ -564,13 +578,17 @@ export function SuperadminPage() {
               tone="green"
               label={t('superadmin.metricConferences')}
               value={status.data?.conferences ?? '—'}
-              hint={t('superadmin.metricPublished', { count: status.data?.published ?? 0 })}
+              hint={t('superadmin.metricPublished', {
+                count: status.data?.published ?? 0,
+              })}
             />
             <Metric
               tone="amber"
               label={t('superadmin.metricPapers')}
               value={status.data?.papers ?? '—'}
-              hint={t('superadmin.metricSubmitted', { count: status.data?.submitted ?? 0 })}
+              hint={t('superadmin.metricSubmitted', {
+                count: status.data?.submitted ?? 0,
+              })}
             />
             <Metric
               tone="slate"
@@ -615,12 +633,16 @@ export function SuperadminPage() {
                       </p>
                     </div>
                     <span className="text-xs font-extrabold text-[#5c6578]">
-                      {t(`conferences.states.${item.status}`, { defaultValue: item.status })}
+                      {t(`conferences.states.${item.status}`, {
+                        defaultValue: item.status,
+                      })}
                     </span>
                   </li>
                 ))}
                 {(conferences.data?.length ?? 0) === 0 ? (
-                  <p className="text-sm text-[#5c6578]">{t('superadmin.noConferences')}</p>
+                  <p className="text-sm text-[#5c6578]">
+                    {t('superadmin.noConferences')}
+                  </p>
                 ) : null}
               </ul>
             </div>
@@ -633,14 +655,22 @@ export function SuperadminPage() {
                 <ul className="mt-3 grid gap-1">
                   {(
                     [
-                      ['admins', t('superadmin.tabAdmins'), t('superadmin.overviewAdmins')],
+                      [
+                        'admins',
+                        t('superadmin.tabAdmins'),
+                        t('superadmin.overviewAdmins'),
+                      ],
                       [
                         'conferences',
                         t('superadmin.tabConferences'),
                         t('superadmin.overviewConferences'),
                       ],
                       ['users', t('superadmin.tabUsers'), t('superadmin.overviewUsers')],
-                      ['sessions', t('superadmin.tabSessions'), t('superadmin.overviewSessions')],
+                      [
+                        'sessions',
+                        t('superadmin.tabSessions'),
+                        t('superadmin.overviewSessions'),
+                      ],
                       ['audit', t('superadmin.tabAudit'), t('superadmin.overviewAudit')],
                     ] as const
                   ).map(([path, title, body]) => (
@@ -649,8 +679,12 @@ export function SuperadminPage() {
                         to={`/workspace/system/${path}`}
                         className="block rounded-2xl px-3 py-3 no-underline transition hover:bg-[#f6f7fb]"
                       >
-                        <span className="block text-sm font-extrabold text-[#1c2744]">{title}</span>
-                        <span className="mt-0.5 block text-xs text-[#8b909a]">{body}</span>
+                        <span className="block text-sm font-extrabold text-[#1c2744]">
+                          {title}
+                        </span>
+                        <span className="mt-0.5 block text-xs text-[#8b909a]">
+                          {body}
+                        </span>
                       </Link>
                     </li>
                   ))}
@@ -672,9 +706,12 @@ export function SuperadminPage() {
                 <ul className="mt-4 grid gap-2">
                   {(audit.data ?? []).slice(0, 5).map((row) => (
                     <li key={row.id} className="rounded-2xl bg-[#f6f7fb] px-3 py-2.5">
-                      <p className="text-sm font-extrabold text-[#1c2744]">{row.action}</p>
+                      <p className="text-sm font-extrabold text-[#1c2744]">
+                        {row.action}
+                      </p>
                       <p className="mt-0.5 text-xs text-[#8b909a]">
-                        {row.actor?.email ?? '—'} · {new Date(row.createdAt).toLocaleString()}
+                        {row.actor?.email ?? '—'} ·{' '}
+                        {new Date(row.createdAt).toLocaleString()}
                       </p>
                     </li>
                   ))}
@@ -692,12 +729,18 @@ export function SuperadminPage() {
         <section className="rounded-[28px] border border-[#e4e7ee] bg-white p-4 sm:p-5">
           <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end sm:justify-between">
             <div>
-              <h2 className="text-lg font-extrabold text-[#1c2744]">{t('superadmin.admins')}</h2>
+              <h2 className="text-lg font-extrabold text-[#1c2744]">
+                {t('superadmin.admins')}
+              </h2>
               <p className="mt-1 text-xs font-bold text-[#8b909a]">
                 {filteredAdmins.length} / {admins.data?.length ?? 0}
               </p>
             </div>
-            <Button type="button" className="w-full sm:w-auto" onClick={() => setCreateAdminOpen(true)}>
+            <Button
+              type="button"
+              className="w-full sm:w-auto"
+              onClick={() => setCreateAdminOpen(true)}
+            >
               {t('superadmin.createAdmin')}
             </Button>
           </div>
@@ -734,7 +777,13 @@ export function SuperadminPage() {
                 </label>
                 <label className="text-sm font-bold sm:col-span-2">
                   {t('auth.email')}
-                  <input name="email" type="email" required autoComplete="off" className={field} />
+                  <input
+                    name="email"
+                    type="email"
+                    required
+                    autoComplete="off"
+                    className={field}
+                  />
                 </label>
                 <label className="text-sm font-bold sm:col-span-2">
                   {t('superadmin.loginPassword')}
@@ -796,7 +845,9 @@ export function SuperadminPage() {
                   <table className="w-full min-w-[28rem] border-separate border-spacing-y-2 text-left">
                     <thead>
                       <tr className="text-xs font-extrabold uppercase tracking-wide text-[#8b909a]">
-                        <th className="px-3 pb-1 font-extrabold">{t('superadmin.colAdmin')}</th>
+                        <th className="px-3 pb-1 font-extrabold">
+                          {t('superadmin.colAdmin')}
+                        </th>
                         <th className="px-3 pb-1 font-extrabold">{t('auth.email')}</th>
                         <th className="px-3 pb-1 text-right font-extrabold">
                           {t('superadmin.colActions')}
@@ -887,16 +938,23 @@ export function SuperadminPage() {
                       const data = new FormData(event.currentTarget);
                       const form = event.currentTarget;
                       setNotice(null);
-                      void apiFetch(`/api/v1/system/admins/${managingAdmin.id}/password`, {
-                        method: 'POST',
-                        body: JSON.stringify({ password: String(data.get('password') ?? '') }),
-                      }).then(async (response) => {
+                      void apiFetch(
+                        `/api/v1/system/admins/${managingAdmin.id}/password`,
+                        {
+                          method: 'POST',
+                          body: JSON.stringify({
+                            password: String(data.get('password') ?? ''),
+                          }),
+                        },
+                      ).then(async (response) => {
                         if (!response.ok) {
                           setNotice(await apiErrorMessage(response));
                           return;
                         }
                         form.reset();
-                        setNotice(t('superadmin.passwordReset', { email: managingAdmin.email }));
+                        setNotice(
+                          t('superadmin.passwordReset', { email: managingAdmin.email }),
+                        );
                         setManagingAdminId(null);
                         await refreshAll();
                       });
@@ -998,7 +1056,12 @@ export function SuperadminPage() {
                     String(item.memberCount),
                     item.chair?.email ?? '',
                   ]);
-                  downloadPdf('conferences.pdf', 'PapersManagement — Conferences', headers, rows);
+                  downloadPdf(
+                    'conferences.pdf',
+                    'PapersManagement — Conferences',
+                    headers,
+                    rows,
+                  );
                   setNotice(t('superadmin.exportedPdf'));
                 }}
               >
@@ -1041,7 +1104,13 @@ export function SuperadminPage() {
                 </label>
                 <label className="text-sm font-bold">
                   {t('conferences.shortName')}
-                  <input name="shortName" required minLength={2} maxLength={40} className={field} />
+                  <input
+                    name="shortName"
+                    required
+                    minLength={2}
+                    maxLength={40}
+                    className={field}
+                  />
                 </label>
                 <label className="text-sm font-bold">
                   {t('superadmin.chair')}
@@ -1088,7 +1157,9 @@ export function SuperadminPage() {
                 <div className="sm:col-span-2">
                   <Button
                     type="submit"
-                    disabled={createConference.isPending || (admins.data?.length ?? 0) === 0}
+                    disabled={
+                      createConference.isPending || (admins.data?.length ?? 0) === 0
+                    }
                   >
                     {t('superadmin.createConference')}
                   </Button>
@@ -1123,7 +1194,9 @@ export function SuperadminPage() {
                         ? `${item.chair.firstName} ${item.chair.lastName}`
                         : t('superadmin.passwordMissing')}
                       {' · '}
-                      {t(`conferences.states.${item.status}`, { defaultValue: item.status })}
+                      {t(`conferences.states.${item.status}`, {
+                        defaultValue: item.status,
+                      })}
                     </p>
                     <p className="mt-1 text-xs font-bold text-[#8b909a]">
                       {t('superadmin.paperMembers', {
@@ -1147,10 +1220,18 @@ export function SuperadminPage() {
                 <table className="w-full min-w-[40rem] border-separate border-spacing-y-2 text-left">
                   <thead>
                     <tr className="text-xs font-extrabold uppercase tracking-wide text-[#8b909a]">
-                      <th className="px-3 pb-1 font-extrabold">{t('superadmin.colConference')}</th>
-                      <th className="px-3 pb-1 font-extrabold">{t('superadmin.colAdmin')}</th>
-                      <th className="px-3 pb-1 font-extrabold">{t('superadmin.colStatus')}</th>
-                      <th className="px-3 pb-1 font-extrabold">{t('superadmin.colStats')}</th>
+                      <th className="px-3 pb-1 font-extrabold">
+                        {t('superadmin.colConference')}
+                      </th>
+                      <th className="px-3 pb-1 font-extrabold">
+                        {t('superadmin.colAdmin')}
+                      </th>
+                      <th className="px-3 pb-1 font-extrabold">
+                        {t('superadmin.colStatus')}
+                      </th>
+                      <th className="px-3 pb-1 font-extrabold">
+                        {t('superadmin.colStats')}
+                      </th>
                       <th className="px-3 pb-1 text-right font-extrabold">
                         {t('superadmin.colActions')}
                       </th>
@@ -1179,7 +1260,9 @@ export function SuperadminPage() {
                         </td>
                         <td className="px-3 py-3 align-middle">
                           <span className="rounded-full bg-white px-3 py-1 text-xs font-extrabold text-[#1c2744]">
-                            {t(`conferences.states.${item.status}`, { defaultValue: item.status })}
+                            {t(`conferences.states.${item.status}`, {
+                              defaultValue: item.status,
+                            })}
                           </span>
                         </td>
                         <td className="px-3 py-3 align-middle text-xs font-bold text-[#5c6578]">
@@ -1225,11 +1308,15 @@ export function SuperadminPage() {
 
                 <div className="mt-5 space-y-5">
                   <div className="rounded-2xl bg-[#f6f7fb] px-4 py-3">
-                    <p className="text-sm font-extrabold text-[#1c2744]">{managingConference.name}</p>
+                    <p className="text-sm font-extrabold text-[#1c2744]">
+                      {managingConference.name}
+                    </p>
                     <p className="mt-1 text-xs text-[#8b909a]">
                       {managingConference.shortName}
                       {managingConference.city ? ` · ${managingConference.city}` : ''}
-                      {managingConference.country ? `, ${managingConference.country}` : ''}
+                      {managingConference.country
+                        ? `, ${managingConference.country}`
+                        : ''}
                     </p>
                     <p className="mt-2 text-xs font-bold text-[#5c6578]">
                       {t('superadmin.paperMembers', {
@@ -1253,19 +1340,24 @@ export function SuperadminPage() {
                         const data = new FormData(event.currentTarget);
                         const form = event.currentTarget;
                         setNotice(null);
-                        void apiFetch(`/api/v1/conferences/${managingConference.id}/access-password`, {
-                          method: 'POST',
-                          body: JSON.stringify({
-                            password: String(data.get('password') ?? ''),
-                          }),
-                        }).then(async (response) => {
+                        void apiFetch(
+                          `/api/v1/conferences/${managingConference.id}/access-password`,
+                          {
+                            method: 'POST',
+                            body: JSON.stringify({
+                              password: String(data.get('password') ?? ''),
+                            }),
+                          },
+                        ).then(async (response) => {
                           if (!response.ok) {
                             setNotice(await apiErrorMessage(response));
                             return;
                           }
                           form.reset();
                           setNotice(
-                            t('superadmin.passwordSaved', { name: managingConference.name }),
+                            t('superadmin.passwordSaved', {
+                              name: managingConference.name,
+                            }),
                           );
                           await refreshAll();
                         });
@@ -1296,17 +1388,22 @@ export function SuperadminPage() {
                       event.preventDefault();
                       const data = new FormData(event.currentTarget);
                       setNotice(null);
-                      void apiFetch(`/api/v1/system/conferences/${managingConference.id}/chair`, {
-                        method: 'POST',
-                        body: JSON.stringify({
-                          chairUserId: String(data.get('chairUserId') ?? ''),
-                        }),
-                      }).then(async (response) => {
+                      void apiFetch(
+                        `/api/v1/system/conferences/${managingConference.id}/chair`,
+                        {
+                          method: 'POST',
+                          body: JSON.stringify({
+                            chairUserId: String(data.get('chairUserId') ?? ''),
+                          }),
+                        },
+                      ).then(async (response) => {
                         if (!response.ok) {
                           setNotice(await apiErrorMessage(response));
                           return;
                         }
-                        setNotice(t('superadmin.chairUpdated', { name: managingConference.name }));
+                        setNotice(
+                          t('superadmin.chairUpdated', { name: managingConference.name }),
+                        );
                         await refreshAll();
                       });
                     }}
@@ -1335,46 +1432,52 @@ export function SuperadminPage() {
                   </form>
 
                   <div>
-                    <p className="text-sm font-bold text-[#1c2744]">{t('superadmin.setStatus')}</p>
+                    <p className="text-sm font-bold text-[#1c2744]">
+                      {t('superadmin.setStatus')}
+                    </p>
                     <div className="mt-2 flex flex-wrap gap-2">
-                      {(['DRAFT', 'PUBLISHED', 'ARCHIVED'] as const).map((statusValue) => (
-                        <Button
-                          key={statusValue}
-                          type="button"
-                          size="sm"
-                          variant={
-                            managingConference.status === statusValue ? 'default' : 'outline'
-                          }
-                          onClick={() => {
-                            setNotice(null);
-                            void apiFetch(
-                              `/api/v1/system/conferences/${managingConference.id}/status`,
-                              {
-                                method: 'POST',
-                                body: JSON.stringify({ status: statusValue }),
-                              },
-                            ).then(async (response) => {
-                              if (!response.ok) {
-                                setNotice(await apiErrorMessage(response));
-                                return;
-                              }
-                              setNotice(
-                                t('superadmin.statusUpdated', {
-                                  name: managingConference.name,
-                                  status: t(`conferences.states.${statusValue}`, {
-                                    defaultValue: statusValue,
+                      {(['DRAFT', 'PUBLISHED', 'ARCHIVED'] as const).map(
+                        (statusValue) => (
+                          <Button
+                            key={statusValue}
+                            type="button"
+                            size="sm"
+                            variant={
+                              managingConference.status === statusValue
+                                ? 'default'
+                                : 'outline'
+                            }
+                            onClick={() => {
+                              setNotice(null);
+                              void apiFetch(
+                                `/api/v1/system/conferences/${managingConference.id}/status`,
+                                {
+                                  method: 'POST',
+                                  body: JSON.stringify({ status: statusValue }),
+                                },
+                              ).then(async (response) => {
+                                if (!response.ok) {
+                                  setNotice(await apiErrorMessage(response));
+                                  return;
+                                }
+                                setNotice(
+                                  t('superadmin.statusUpdated', {
+                                    name: managingConference.name,
+                                    status: t(`conferences.states.${statusValue}`, {
+                                      defaultValue: statusValue,
+                                    }),
                                   }),
-                                }),
-                              );
-                              await refreshAll();
-                            });
-                          }}
-                        >
-                          {t(`conferences.states.${statusValue}`, {
-                            defaultValue: statusValue,
-                          })}
-                        </Button>
-                      ))}
+                                );
+                                await refreshAll();
+                              });
+                            }}
+                          >
+                            {t(`conferences.states.${statusValue}`, {
+                              defaultValue: statusValue,
+                            })}
+                          </Button>
+                        ),
+                      )}
                     </div>
                   </div>
 
@@ -1421,7 +1524,9 @@ export function SuperadminPage() {
         <section className="rounded-[28px] border border-[#e4e7ee] bg-white p-4 sm:p-5">
           <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end sm:justify-between">
             <div>
-              <h2 className="text-lg font-extrabold text-[#1c2744]">{t('superadmin.users')}</h2>
+              <h2 className="text-lg font-extrabold text-[#1c2744]">
+                {t('superadmin.users')}
+              </h2>
               <p className="mt-1 text-sm text-[#5c6578]">{t('superadmin.usersIntro')}</p>
             </div>
             <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:flex-wrap sm:items-center">
@@ -1486,7 +1591,12 @@ export function SuperadminPage() {
                     item.disabled ? 'yes' : 'no',
                     item.createdAt,
                   ]);
-                  downloadPdf('accounts.pdf', 'PapersManagement — Accounts', headers, rows);
+                  downloadPdf(
+                    'accounts.pdf',
+                    'PapersManagement — Accounts',
+                    headers,
+                    rows,
+                  );
                   setNotice(t('superadmin.exportedPdf'));
                 }}
               >
@@ -1494,7 +1604,9 @@ export function SuperadminPage() {
               </Button>
             </div>
           </div>
-          {users.isPending ? <p className="mt-4 text-sm text-[#8b909a]">{t('common.loading')}</p> : null}
+          {users.isPending ? (
+            <p className="mt-4 text-sm text-[#8b909a]">{t('common.loading')}</p>
+          ) : null}
           {filteredUsers.length === 0 && !users.isPending ? (
             <p className="mt-4 text-sm text-[#5c6578]">{t('superadmin.noUsers')}</p>
           ) : null}
@@ -1560,7 +1672,9 @@ export function SuperadminPage() {
                       )
                     }
                   >
-                    {user.disabled ? t('superadmin.enableUser') : t('superadmin.disableUser')}
+                    {user.disabled
+                      ? t('superadmin.enableUser')
+                      : t('superadmin.disableUser')}
                   </Button>
                   <Button
                     type="button"
@@ -1600,14 +1714,18 @@ export function SuperadminPage() {
         <section className="rounded-[28px] border border-[#e4e7ee] bg-white p-4 sm:p-5">
           <div className="flex flex-wrap items-end justify-between gap-2">
             <div>
-              <h2 className="text-lg font-extrabold text-[#1c2744]">{t('superadmin.audit')}</h2>
+              <h2 className="text-lg font-extrabold text-[#1c2744]">
+                {t('superadmin.audit')}
+              </h2>
               <p className="mt-1 text-sm text-[#5c6578]">{t('superadmin.auditIntro')}</p>
             </div>
             <p className="text-xs font-bold text-[#8b909a]">
               {filteredAudit.length} / {audit.data?.length ?? 0}
             </p>
           </div>
-          {audit.isPending ? <p className="mt-4 text-sm text-[#8b909a]">{t('common.loading')}</p> : null}
+          {audit.isPending ? (
+            <p className="mt-4 text-sm text-[#8b909a]">{t('common.loading')}</p>
+          ) : null}
           {filteredAudit.length === 0 && !audit.isPending ? (
             <p className="mt-4 text-sm text-[#5c6578]">{t('superadmin.noAudit')}</p>
           ) : null}
@@ -1628,7 +1746,10 @@ export function SuperadminPage() {
                       {row.resourceId ? ` · ${row.resourceId.slice(0, 8)}…` : ''}
                     </p>
                   </div>
-                  <time className="text-xs font-bold text-[#8b909a]" dateTime={row.createdAt}>
+                  <time
+                    className="text-xs font-bold text-[#8b909a]"
+                    dateTime={row.createdAt}
+                  >
                     {new Date(row.createdAt).toLocaleString()}
                   </time>
                 </div>
@@ -1642,8 +1763,12 @@ export function SuperadminPage() {
         <section className="rounded-[28px] border border-[#e4e7ee] bg-white p-4 sm:p-5">
           <div className="flex flex-wrap items-end justify-between gap-2">
             <div>
-              <h2 className="text-lg font-extrabold text-[#1c2744]">{t('superadmin.sessions')}</h2>
-              <p className="mt-1 text-sm text-[#5c6578]">{t('superadmin.sessionsIntro')}</p>
+              <h2 className="text-lg font-extrabold text-[#1c2744]">
+                {t('superadmin.sessions')}
+              </h2>
+              <p className="mt-1 text-sm text-[#5c6578]">
+                {t('superadmin.sessionsIntro')}
+              </p>
             </div>
             <p className="text-xs font-bold text-[#8b909a]">
               {filteredSessions.length} / {sessions.data?.length ?? 0}
@@ -1667,7 +1792,8 @@ export function SuperadminPage() {
                   </p>
                   <p className="text-xs text-[#8b909a]">{row.email}</p>
                   <p className="mt-1 text-xs text-[#5c6578]">
-                    {t('superadmin.expiresAt')}: {new Date(row.expiresAt).toLocaleString()}
+                    {t('superadmin.expiresAt')}:{' '}
+                    {new Date(row.expiresAt).toLocaleString()}
                   </p>
                 </div>
                 <Button

@@ -17,7 +17,8 @@ interface AssignedConference {
   granted: boolean;
 }
 
-const field = 'mt-1 block w-full rounded-2xl border border-[#e4e7ee] bg-[#f6f7fb] px-3 py-2 text-sm';
+const field =
+  'mt-1 block w-full rounded-2xl border border-[#e4e7ee] bg-[#f6f7fb] px-3 py-2 text-sm';
 
 export function ConferenceAccessPage() {
   const { t } = useTranslation();
@@ -43,10 +44,13 @@ export function ConferenceAccessPage() {
   const chosen = assigned.data?.find((item) => item.id === chosenId) ?? null;
   const open = useMutation({
     mutationFn: async (input: { conferenceId: string; password?: string }) => {
-      const response = await apiFetch(`/api/v1/conferences/${input.conferenceId}/access`, {
-        method: 'POST',
-        body: JSON.stringify(input.password ? { password: input.password } : {}),
-      });
+      const response = await apiFetch(
+        `/api/v1/conferences/${input.conferenceId}/access`,
+        {
+          method: 'POST',
+          body: JSON.stringify(input.password ? { password: input.password } : {}),
+        },
+      );
       if (!response.ok) {
         throw new Error(await apiErrorMessage(response));
       }
@@ -73,10 +77,14 @@ export function ConferenceAccessPage() {
     <div className="space-y-5">
       <div>
         <h1 className="text-3xl font-extrabold text-[#1c2744]">{t('access.title')}</h1>
-        <p className="mt-2 max-w-2xl text-sm leading-relaxed text-[#5c6578]">{t('access.intro')}</p>
+        <p className="mt-2 max-w-2xl text-sm leading-relaxed text-[#5c6578]">
+          {t('access.intro')}
+        </p>
       </div>
       {notice ? <p className="text-sm font-extrabold text-[#c54545]">{notice}</p> : null}
-      {assigned.isPending ? <p className="text-sm text-[#8b909a]">{t('common.loading')}</p> : null}
+      {assigned.isPending ? (
+        <p className="text-sm text-[#8b909a]">{t('common.loading')}</p>
+      ) : null}
       {assigned.data?.length === 0 ? (
         <p className="text-sm text-[#5c6578]">{t('access.empty')}</p>
       ) : null}
@@ -96,7 +104,9 @@ export function ConferenceAccessPage() {
                   setNotice(null);
                 }}
               >
-                <span className="block text-lg font-extrabold text-[#1c2744]">{item.name}</span>
+                <span className="block text-lg font-extrabold text-[#1c2744]">
+                  {item.name}
+                </span>
                 <span className="mt-1 block text-sm text-[#5c6578]">
                   {item.shortName}
                   {place ? ` · ${place}` : ''}
