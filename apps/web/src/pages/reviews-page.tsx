@@ -173,7 +173,7 @@ export function ReviewsPage() {
   return (
     <div className="space-y-5">
       <div>
-        <h1 className="text-2xl font-extrabold text-[#1c2744] sm:text-3xl">
+        <h1 className="text-xl font-extrabold text-[#1c2744] sm:text-2xl lg:text-3xl">
           {t('reviews.title')}
         </h1>
         <p className="mt-2 max-w-2xl text-sm leading-relaxed text-[#5c6578]">

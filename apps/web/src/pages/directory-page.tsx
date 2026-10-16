@@ -78,7 +78,9 @@ export function DirectoryPage() {
       <main className="w-full px-4 py-8 sm:px-6 sm:py-10 lg:px-10">
         {slug ? null : (
           <>
-            <h1 className="text-3xl font-extrabold">{t('conferences.directoryTitle')}</h1>
+            <h1 className="text-xl font-extrabold sm:text-2xl lg:text-3xl">
+              {t('conferences.directoryTitle')}
+            </h1>
             <p className="mt-2 max-w-2xl text-sm text-[#5c6578]">
               {t('conferences.directoryIntro')}
             </p>
@@ -138,7 +140,9 @@ export function DirectoryPage() {
               >
                 {t('conferences.directoryTitle')}
               </Link>
-              <h2 className="mt-2 text-3xl font-extrabold">{conference.name}</h2>
+              <h2 className="mt-2 text-xl font-extrabold sm:text-2xl lg:text-3xl">
+                {conference.name}
+              </h2>
               {where ? <p className="mt-2 text-sm text-[#5c6578]">{where}</p> : null}
               {conference.description ? (
                 <p className="mt-2 max-w-3xl text-sm leading-relaxed text-[#5c6578]">

@@ -93,7 +93,7 @@ export function ProgramPage() {
   return (
     <div className="space-y-5">
       <div>
-        <h1 className="text-3xl font-extrabold text-[#1c2744]">
+        <h1 className="text-xl font-extrabold text-[#1c2744] sm:text-2xl lg:text-3xl">
           {t('workflow.programTitle')}
         </h1>
         {conference ? (
