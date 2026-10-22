@@ -241,7 +241,9 @@ export function PaperWorkflow({
     return t('dossier.later');
   };
   const similarityLabel = () => {
-    if (similarityValidated || similarityStatus === 'VALIDATED') {
+    // similarityValidated already covers similarityStatus === 'VALIDATED'
+    // (and the verified+% fallback). A second comparison is unreachable for TS.
+    if (similarityValidated) {
       return t('dossier.similarityValidated');
     }
     if (similarityStatus === 'DEPOSITED') {
