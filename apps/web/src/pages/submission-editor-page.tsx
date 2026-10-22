@@ -29,6 +29,7 @@ interface PaperDetail {
   publicId: string | null;
   submittedAt: string | null;
   conferenceId: string;
+  conferenceName?: string | null;
   trackId: string | null;
   authors: {
     firstName: string;
@@ -129,6 +130,7 @@ export function SubmissionEditorPage() {
         throw new Error(await apiErrorMessage(response));
       }
       return response.json() as Promise<{
+        name: string;
         tracks: { id: string; name: string; code: string }[];
       }>;
     },
@@ -230,6 +232,18 @@ export function SubmissionEditorPage() {
       }),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ['paper', paperId] });
+      await queryClient.invalidateQueries({ queryKey: ['papers'] });
+    },
+  });
+
+  const cancelPaper = useMutation({
+    mutationFn: () =>
+      send(`/api/v1/papers/${paperId}/cancel`, 'POST', {
+        reason: 'Cancelled by the author',
+      }),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['paper', paperId] });
+      await queryClient.invalidateQueries({ queryKey: ['papers'] });
     },
   });
 
@@ -324,26 +338,76 @@ export function SubmissionEditorPage() {
   ];
 
   const field = stageField;
+  const editingExisting = Boolean(paperId);
+
+  if (editingExisting && paper.isPending) {
+    return (
+      <div className="space-y-4">
+        <h1 className="text-xl font-extrabold text-[#1c2744] sm:text-2xl">
+          {t('common.loading')}
+        </h1>
+        <p className="text-sm text-[#5c6578]">{t('papers.loadingPaper')}</p>
+      </div>
+    );
+  }
+
+  if (editingExisting && paper.isError) {
+    return (
+      <div className="space-y-4">
+        <h1 className="text-xl font-extrabold text-[#1c2744] sm:text-2xl">
+          {t('papers.loadError')}
+        </h1>
+        <p className="text-sm font-semibold text-[#c54545]" role="alert">
+          {paper.error.message}
+        </p>
+        <div className="flex flex-wrap gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            className="border-[#c5cad6]"
+            onClick={() => void paper.refetch()}
+          >
+            {t('common.retry')}
+          </Button>
+          <Button asChild variant="outline" className="border-[#c5cad6]">
+            <Link to="/workspace/submissions">{t('papers.back')}</Link>
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  if (editingExisting && !current) {
+    return (
+      <div className="space-y-4">
+        <h1 className="text-xl font-extrabold text-[#1c2744] sm:text-2xl">
+          {t('papers.loadError')}
+        </h1>
+        <Button asChild variant="outline" className="border-[#c5cad6]">
+          <Link to="/workspace/submissions">{t('papers.back')}</Link>
+        </Button>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-5">
-      <Link
-        to="/workspace/submissions"
-        className="text-sm font-bold text-[#8b909a] no-underline"
-      >
-        {t('papers.back')}
-      </Link>
       <div>
         <h1 className="break-words text-xl sm:text-2xl lg:text-3xl">
           {current?.title || t('papers.new')}
         </h1>
         {current ? (
           <p className="mt-2 flex flex-wrap items-center gap-2">
+            {(current.conferenceName || conference.data?.name) ? (
+              <span className="rounded-full border border-[#d8dce6] bg-[#f6f7fb] px-3 py-1 text-xs font-extrabold text-[#1c2744]">
+                {current.conferenceName || conference.data?.name}
+              </span>
+            ) : null}
             <span
               className={`rounded-full px-3 py-1 text-xs font-extrabold ${
                 current.status === 'DRAFT'
                   ? 'bg-[#f0a04b]/16 text-[#9a6410]'
-                  : current.status === 'WITHDRAWN'
+                  : current.status === 'WITHDRAWN' || current.status === 'CANCELLED'
                     ? 'bg-[#e35d5d]/12 text-[#c54545]'
                     : 'bg-[#2fbf71]/14 text-[#1c9a57]'
               }`}
@@ -352,7 +416,9 @@ export function SubmissionEditorPage() {
                 ? t('papers.draft')
                 : current.status === 'WITHDRAWN'
                   ? t('papers.withdrawn')
-                  : t('papers.submitted')}
+                  : current.status === 'CANCELLED'
+                    ? t('papers.cancelled')
+                    : t('papers.submitted')}
             </span>
             {current.publicId ? (
               <span className="text-sm text-[#5c6578]">{current.publicId}</span>
@@ -367,11 +433,14 @@ export function SubmissionEditorPage() {
       ) : null}
       <PaperWorkflow
         paper={current}
-        onScope={(accept) => {
+        onScope={(accept, reason) => {
           setMessage(null);
           void apiFetch(`/api/v1/papers/${paperId}/scope`, {
             method: 'POST',
-            body: JSON.stringify({ accept }),
+            body: JSON.stringify({
+              accept,
+              ...(accept ? {} : { reason }),
+            }),
           }).then(async (response) => {
             if (!response.ok) {
               setMessage(await apiErrorMessage(response));
@@ -382,6 +451,7 @@ export function SubmissionEditorPage() {
         }}
         extras={extras}
       >
+        {!current || current.dossier?.isAuthor ? (
         <div className="space-y-4">
           <div className="flex flex-wrap items-end justify-between gap-2">
             <div>
@@ -617,33 +687,53 @@ export function SubmissionEditorPage() {
                   ? t('papers.draft')
                   : current.status === 'WITHDRAWN'
                     ? t('papers.withdrawn')
-                    : t('papers.submitted')
+                    : current.status === 'CANCELLED'
+                      ? t('papers.cancelled')
+                      : t('papers.submitted')
               }
               statusTone={
                 current.status === 'SUBMITTED'
                   ? 'ok'
-                  : current.status === 'WITHDRAWN'
+                  : current.status === 'WITHDRAWN' || current.status === 'CANCELLED'
                     ? 'missing'
                     : 'wait'
               }
             >
               <div className="flex flex-wrap items-center gap-3">
                 {current.status === 'DRAFT' ? (
-                  <button
-                    type="button"
-                    disabled={submit.isPending}
-                    onClick={() => {
-                      setMessage(null);
-                      void submit.mutateAsync().catch((caught: unknown) => {
-                        setMessage(
-                          caught instanceof Error ? caught.message : t('papers.failed'),
-                        );
-                      });
-                    }}
-                    className="inline-flex min-h-12 items-center rounded-full bg-[#3d4fd4] px-6 text-sm font-extrabold text-white shadow-[0_8px_20px_rgba(61,79,212,0.35)] disabled:opacity-60"
-                  >
-                    {t('papers.submit')}
-                  </button>
+                  <>
+                    <button
+                      type="button"
+                      disabled={submit.isPending}
+                      onClick={() => {
+                        setMessage(null);
+                        void submit.mutateAsync().catch((caught: unknown) => {
+                          setMessage(
+                            caught instanceof Error ? caught.message : t('papers.failed'),
+                          );
+                        });
+                      }}
+                      className="inline-flex min-h-12 items-center rounded-full bg-[#3d4fd4] px-6 text-sm font-extrabold text-white shadow-[0_8px_20px_rgba(61,79,212,0.35)] disabled:opacity-60"
+                    >
+                      {t('papers.submit')}
+                    </button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="border-[#c5cad6]"
+                      disabled={cancelPaper.isPending}
+                      onClick={() => {
+                        setMessage(null);
+                        void cancelPaper.mutateAsync().catch((caught: unknown) => {
+                          setMessage(
+                            caught instanceof Error ? caught.message : t('papers.failed'),
+                          );
+                        });
+                      }}
+                    >
+                      {t('papers.cancel')}
+                    </Button>
+                  </>
                 ) : null}
                 {current.status === 'SUBMITTED' ? (
                   <>
@@ -668,11 +758,22 @@ export function SubmissionEditorPage() {
                     </Button>
                   </>
                 ) : null}
+                {current.status === 'CANCELLED' ? (
+                  <span className="inline-flex min-h-10 items-center rounded-full bg-[#e35d5d]/12 px-4 text-sm font-extrabold text-[#c54545]">
+                    {t('papers.cancelled')}
+                  </span>
+                ) : null}
+                {current.status === 'WITHDRAWN' ? (
+                  <span className="inline-flex min-h-10 items-center rounded-full bg-[#e35d5d]/12 px-4 text-sm font-extrabold text-[#c54545]">
+                    {t('papers.withdrawn')}
+                  </span>
+                ) : null}
               </div>
               {stepNav(false)}
             </StagePanel>
           ) : null}
         </div>
+        ) : null}
       </PaperWorkflow>
     </div>
   );

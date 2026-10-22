@@ -18,6 +18,7 @@ import {
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiTags } from '@nestjs/swagger';
 import {
+  cancelPaperSchema,
   createPaperSchema,
   replaceAuthorsSchema,
   scopeDecisionSchema,
@@ -151,7 +152,12 @@ export class PaperController {
     @Body(new ZodValidationPipe(scopeDecisionSchema))
     body: z.infer<typeof scopeDecisionSchema>,
   ) {
-    return this.papers.decideScope(request.user!, id, body.accept);
+    return this.papers.decideScope(
+      request.user!,
+      id,
+      body.accept,
+      body.reason ?? '',
+    );
   }
 
   @Post('papers/:id/withdraw')
@@ -162,5 +168,15 @@ export class PaperController {
     body: z.infer<typeof withdrawPaperSchema>,
   ) {
     return this.papers.withdraw(request.user!, id, body);
+  }
+
+  @Post('papers/:id/cancel')
+  cancel(
+    @Req() request: AuthenticatedRequest,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body(new ZodValidationPipe(cancelPaperSchema))
+    body: z.infer<typeof cancelPaperSchema>,
+  ) {
+    return this.papers.cancel(request.user!, id, body);
   }
 }

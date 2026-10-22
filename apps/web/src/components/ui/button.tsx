@@ -8,10 +8,12 @@ const buttonVariants = cva(
   {
     variants: {
       variant: {
-        default: 'bg-[#5d74ff]/85 text-white hover:bg-[#5d74ff]',
-        secondary: 'bg-secondary text-secondary-foreground hover:bg-secondary/80',
-        outline: 'border border-border bg-card hover:bg-accent',
-        ghost: 'hover:bg-accent hover:text-accent-foreground',
+        default: 'bg-[#5d74ff] text-white hover:bg-[#4c63f0]',
+        secondary:
+          'bg-[#eef2ff] text-[#3d4fd4] hover:bg-[#e0e7ff]',
+        outline:
+          'border border-[#c5cad6] bg-white text-[#1c2744] hover:bg-[#f6f7fb]',
+        ghost: 'text-[#3d4fd4] hover:bg-[#eef2ff] hover:text-[#3d4fd4]',
       },
       size: {
         default: 'h-10 px-4 lg:h-8 lg:px-3',

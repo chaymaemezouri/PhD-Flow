@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { useCurrentUser } from '@/features/auth/use-account';
 import { canSubmitToConference } from '@/features/navigation/can-submit';
 import { apiErrorMessage, apiFetch } from '@/services/api';
+import { cn } from '@/lib/utils';
 
 interface Mine {
   id: string;
@@ -32,7 +33,7 @@ async function loadMine(): Promise<Mine[]> {
 function formatDay(value: string, language: string) {
   return new Date(`${value}T00:00:00`).toLocaleDateString(language, {
     day: 'numeric',
-    month: 'long',
+    month: 'short',
     year: 'numeric',
   });
 }
@@ -50,6 +51,28 @@ function formatRange(start: string | null, end: string | null, language: string)
   return null;
 }
 
+function Badge({
+  children,
+  tone = 'neutral',
+}: {
+  children: string;
+  tone?: 'neutral' | 'blue' | 'green' | 'amber';
+}) {
+  return (
+    <span
+      className={cn(
+        'inline-flex items-center rounded-md px-2 py-0.5 text-[11px] font-bold',
+        tone === 'blue' && 'bg-[#eef2ff] text-[#3d4fd4]',
+        tone === 'green' && 'bg-[#e8f8ef] text-[#1c9a57]',
+        tone === 'amber' && 'bg-[#fff4e5] text-[#9a6410]',
+        tone === 'neutral' && 'bg-[#f4f6fb] text-[#5c6578]',
+      )}
+    >
+      {children}
+    </span>
+  );
+}
+
 export function ConferencesPage() {
   const { t, i18n } = useTranslation();
   const account = useCurrentUser();
@@ -57,6 +80,7 @@ export function ConferencesPage() {
   const queryClient = useQueryClient();
   const [error, setError] = useState<string | null>(null);
   const mine = useQuery({ queryKey: ['conferences'], queryFn: loadMine });
+
   async function respondInvite(id: string, accept: boolean) {
     setError(null);
     const response = await apiFetch(`/api/v1/conferences/${id}/invitation/respond`, {
@@ -69,23 +93,23 @@ export function ConferencesPage() {
     }
     await queryClient.invalidateQueries({ queryKey: ['conferences'] });
   }
+
   return (
-    <div className="space-y-5">
-      <div className="flex flex-wrap items-start justify-between gap-3">
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-extrabold text-[#1c2744]">
+          <h1 className="text-xl font-extrabold tracking-tight text-[#1c2744] sm:text-2xl">
             {t('conferences.title')}
           </h1>
-          <p className="mt-2 max-w-2xl text-sm text-[#5c6578]">
-            {t('conferences.intro')}
-          </p>
+          <p className="mt-1 max-w-xl text-sm text-[#5c6578]">{t('conferences.intro')}</p>
         </div>
         {superadmin ? (
-          <Button asChild>
+          <Button asChild size="sm">
             <Link to="/workspace/system">{t('conferences.create')}</Link>
           </Button>
         ) : null}
       </div>
+
       {mine.isPending ? (
         <p className="text-sm text-[#8b909a]">{t('common.loading')}</p>
       ) : null}
@@ -94,102 +118,106 @@ export function ConferencesPage() {
       ) : null}
       {error ? <p className="text-sm text-[#c54545]">{error}</p> : null}
       {mine.data?.length === 0 ? (
-        <p className="text-sm text-[#5c6578]">{t('conferences.empty')}</p>
+        <p className="rounded-xl border border-dashed border-[#d8dce6] bg-white px-4 py-8 text-center text-sm text-[#5c6578]">
+          {t('conferences.empty')}
+        </p>
       ) : null}
-      <ul className="grid gap-3">
+
+      <ul className="grid gap-2.5">
         {mine.data?.map((item) => {
-          const place = [item.city, item.country].filter(Boolean).join(' · ');
+          const place = [item.city, item.country].filter(Boolean).join(', ');
           const when = formatRange(item.startsOn, item.endsOn, i18n.language);
-          const where = [place, when].filter(Boolean).join(' · ');
+          const invited = item.membershipStatus === 'INVITED';
+          const open = item.membershipStatus === 'OPEN';
+          const canSubmit = canSubmitToConference(superadmin, mine.data ?? [], item);
+
           return (
             <li
               key={item.id}
-              className="rounded-2xl border border-[#e4e7ee] bg-white p-5"
+              className="rounded-xl border border-[#e4e7ee] bg-white px-4 py-3.5 sm:px-5"
             >
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="text-xs font-bold tracking-wide text-[#5d74ff]">
-                    {item.shortName}
-                  </p>
-                  <h2 className="mt-1 text-xl font-extrabold">
+              <div className="flex flex-wrap items-start justify-between gap-2">
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-[11px] font-extrabold uppercase tracking-[0.08em] text-[#8b93a7]">
+                      {item.shortName}
+                    </span>
+                    <Badge tone="green">
+                      {t(`conferences.states.${item.status}`, {
+                        defaultValue: item.status,
+                      })}
+                    </Badge>
+                    {!open ? (
+                      <Badge tone="blue">
+                        {t(`conferences.roles.${item.role}`, {
+                          defaultValue: item.role,
+                        })}
+                      </Badge>
+                    ) : null}
+                    <Badge tone={invited ? 'amber' : 'neutral'}>
+                      {t(`conferences.membership.${item.membershipStatus}`, {
+                        defaultValue: item.membershipStatus,
+                      })}
+                    </Badge>
+                  </div>
+                  <h2 className="mt-1.5 text-base font-extrabold text-[#1c2744] sm:text-lg">
                     <Link
                       to={`/workspace/conferences/${item.id}`}
-                      className="text-[#1c2744] no-underline"
+                      className="text-inherit no-underline hover:text-[#3d4fd4]"
                     >
                       {item.name}
                     </Link>
                   </h2>
-                  {where ? <p className="mt-1 text-sm text-[#5c6578]">{where}</p> : null}
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  {item.membershipStatus === 'OPEN' ? null : (
-                    <span className="rounded-full bg-[#5d74ff]/12 px-3 py-1 text-xs font-bold text-[#3d4fd4]">
-                      {t(`conferences.roles.${item.role}`, { defaultValue: item.role })}
-                    </span>
-                  )}
-                  <span className="rounded-full bg-[#2fbf71]/14 px-3 py-1 text-xs font-bold text-[#1c9a57]">
-                    {t(`conferences.states.${item.status}`, {
-                      defaultValue: item.status,
-                    })}
-                  </span>
-                  <span className="rounded-full bg-[#f4f7ff] px-3 py-1 text-xs font-bold text-[#5c6578]">
-                    {t(`conferences.membership.${item.membershipStatus}`, {
-                      defaultValue: item.membershipStatus,
-                    })}
-                  </span>
+                  {place || when ? (
+                    <p className="mt-1 text-xs font-semibold text-[#5c6578] sm:text-sm">
+                      {[place, when].filter(Boolean).join(' · ')}
+                    </p>
+                  ) : null}
                 </div>
               </div>
-              <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
-                {item.membershipStatus === 'INVITED' ? (
-                  <div className="flex flex-wrap gap-2">
-                    <button
+
+              <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-[#eef1f8] pt-3">
+                {invited ? (
+                  <>
+                    <Button
                       type="button"
-                      className="inline-flex min-h-10 items-center justify-center rounded-full bg-[#5d74ff] px-4 py-2 text-sm font-extrabold text-white"
+                      size="sm"
                       onClick={() => void respondInvite(item.id, true)}
                     >
                       {t('conferences.accept')}
-                    </button>
-                    <button
+                    </Button>
+                    <Button
                       type="button"
-                      className="inline-flex min-h-10 items-center justify-center rounded-full border border-[#c5cad6] bg-white px-4 py-2 text-sm font-extrabold text-[#5c6578]"
+                      size="sm"
+                      variant="outline"
                       onClick={() => void respondInvite(item.id, false)}
                     >
                       {t('conferences.decline')}
-                    </button>
-                  </div>
+                    </Button>
+                  </>
                 ) : null}
-                {canSubmitToConference(superadmin, mine.data ?? [], item) ? (
-                  <Link
-                    to={`/workspace/submissions/new?conference=${item.id}`}
-                    className="inline-flex min-h-10 w-full items-center justify-center rounded-full bg-[#5d74ff] px-4 py-2 text-sm font-extrabold text-white no-underline shadow-[0_6px_16px_rgba(93,116,255,0.28)] sm:w-auto"
-                  >
-                    {t('home.submitPaper')}
-                  </Link>
+                {canSubmit ? (
+                  <Button asChild size="sm">
+                    <Link to={`/workspace/submissions/new?conference=${item.id}`}>
+                      {t('home.submitPaper')}
+                    </Link>
+                  </Button>
                 ) : null}
-                <div className="flex flex-wrap gap-2">
-                  <Link
-                    to={`/workspace/conferences/${item.id}`}
-                    className="inline-flex min-h-10 items-center justify-center rounded-full border border-[#c5cad6] bg-white px-3.5 py-2 text-sm font-extrabold text-[#3d4fd4] no-underline"
-                  >
-                    {t('home.manage')}
-                  </Link>
-                  {item.membershipStatus === 'OPEN' ? null : (
-                    <>
-                      <Link
-                        to={`/workspace/program?conference=${item.id}`}
-                        className="inline-flex min-h-10 items-center justify-center rounded-full border border-[#c5cad6] bg-white px-3.5 py-2 text-sm font-extrabold text-[#3d4fd4] no-underline"
-                      >
+                <Button asChild size="sm" variant="outline">
+                  <Link to={`/workspace/conferences/${item.id}`}>{t('home.manage')}</Link>
+                </Button>
+                {!open ? (
+                  <>
+                    <Button asChild size="sm" variant="ghost">
+                      <Link to={`/workspace/program?conference=${item.id}`}>
                         {t('home.program')}
                       </Link>
-                      <Link
-                        to="/workspace/follow-up"
-                        className="inline-flex min-h-10 items-center justify-center rounded-full border border-[#c5cad6] bg-white px-3.5 py-2 text-sm font-extrabold text-[#3d4fd4] no-underline"
-                      >
-                        {t('home.publication')}
-                      </Link>
-                    </>
-                  )}
-                </div>
+                    </Button>
+                    <Button asChild size="sm" variant="ghost">
+                      <Link to="/workspace/follow-up">{t('home.publication')}</Link>
+                    </Button>
+                  </>
+                ) : null}
               </div>
             </li>
           );

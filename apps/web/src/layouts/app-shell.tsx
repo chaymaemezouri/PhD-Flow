@@ -1,12 +1,14 @@
 import {
   CalendarRange,
   ClipboardList,
+  CreditCard,
   Home,
   KeyRound,
   Library,
   ListChecks,
   LogOut,
   Menu,
+  Mic2,
   NotebookPen,
   ScrollText,
   Settings2,
@@ -17,11 +19,13 @@ import {
 } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
-import { NavLink, Navigate, Outlet, useLocation, useNavigate } from 'react-router';
+import { Link, NavLink, Navigate, Outlet, useLocation, useNavigate } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { DeadlineBell } from '@/components/deadline-bell';
+import { Button } from '@/components/ui/button';
 import { useCurrentUser, useLogout } from '@/features/auth/use-account';
-import { homePathFor, isRoleHome } from '@/features/navigation/home-path';
+import { canStartSubmission } from '@/features/navigation/can-submit';
+import { homePathFor } from '@/features/navigation/home-path';
 import { apiErrorMessage, apiFetch } from '@/services/api';
 import { cn } from '@/lib/utils';
 
@@ -140,6 +144,13 @@ function tabsFor(home: string): NavTab[] {
       end: false,
     },
     {
+      id: 'registration',
+      to: '/workspace/registration',
+      label: 'nav.registration',
+      icon: CreditCard,
+      end: false,
+    },
+    {
       id: 'followUp',
       to: '/workspace/follow-up',
       label: 'nav.followUp',
@@ -153,33 +164,67 @@ function tabsFor(home: string): NavTab[] {
       icon: CalendarRange,
       end: false,
     },
+    {
+      id: 'sessionChair',
+      to: '/workspace/session-chair',
+      label: 'nav.sessionChair',
+      icon: Mic2,
+      end: false,
+    },
     shared.account,
     shared.preferences,
   ];
 
   const hidden = new Set(
     audience === 'reviewer'
-      ? ['followUp', 'program']
+      ? ['registration', 'followUp', 'program']
       : audience === 'author'
-        ? ['reviews']
+        ? ['reviews', 'sessionChair']
         : [],
   );
   return catalog.filter((tab) => !hidden.has(tab.id));
 }
 
+const mainIds = new Set(['home', 'conferences']);
+const accountIds = new Set(['account', 'preferences']);
+
+function groupTabs(tabs: NavTab[]) {
+  const main: NavTab[] = [];
+  const work: NavTab[] = [];
+  const account: NavTab[] = [];
+  for (const tab of tabs) {
+    if (mainIds.has(tab.id)) {
+      main.push(tab);
+    } else if (accountIds.has(tab.id)) {
+      account.push(tab);
+    } else {
+      work.push(tab);
+    }
+  }
+  return { main, work, account };
+}
+
 function navClass(isActive: boolean, compact = false) {
   return cn(
-    'flex items-center gap-3 rounded-2xl font-bold no-underline',
+    'flex items-center no-underline transition-colors',
     compact
-      ? 'w-full min-w-0 flex-col gap-1 overflow-hidden px-1 py-2 text-center text-[10px] leading-tight sm:text-[11px]'
-      : 'min-h-11 px-3 py-2.5 text-sm lg:min-h-9 lg:px-2.5 lg:py-1.5 lg:text-xs',
+      ? 'w-full min-w-0 flex-col gap-1 overflow-hidden rounded-xl px-1 py-2 text-center text-[10px] font-bold leading-tight sm:text-[11px]'
+      : 'min-h-9 gap-2 rounded-lg px-2 py-1.5 text-[12px] font-semibold',
     isActive
-      ? 'bg-[#5d74ff]/15 text-[#3d4fd4]'
-      : 'text-[#5c6578] hover:bg-[#eef2ff] hover:text-[#3d4fd4]',
+      ? 'bg-[#eef2ff] text-[#3d4fd4]'
+      : 'text-[#5c6578] hover:bg-[#f4f6fb] hover:text-[#1c2744]',
   );
 }
 
-function MobileNavLink({ tab, onNavigate }: { tab: NavTab; onNavigate?: () => void }) {
+function SidebarLink({
+  tab,
+  onNavigate,
+  compact = false,
+}: {
+  tab: NavTab;
+  onNavigate?: () => void;
+  compact?: boolean;
+}) {
   const { t } = useTranslation();
   const Icon = tab.icon;
   return (
@@ -187,11 +232,43 @@ function MobileNavLink({ tab, onNavigate }: { tab: NavTab; onNavigate?: () => vo
       to={tab.to}
       end={tab.end}
       onClick={onNavigate}
-      className={({ isActive }) => navClass(isActive)}
+      className={({ isActive }) => navClass(isActive, compact)}
     >
-      <Icon className="size-4 shrink-0" />
-      <span className="truncate">{t(tab.label)}</span>
+      <Icon className={compact ? 'size-5 shrink-0' : 'size-3.5 shrink-0'} strokeWidth={2} />
+      <span className={cn('truncate', compact ? 'max-w-full' : '')}>{t(tab.label)}</span>
     </NavLink>
+  );
+}
+
+function SectionLabel({ children }: { children: string }) {
+  return (
+    <p className="mb-1 px-2 text-[10px] font-bold uppercase tracking-[0.12em] text-[#9aa3b5]">
+      {children}
+    </p>
+  );
+}
+
+function NavSection({
+  label,
+  tabs,
+  onNavigate,
+}: {
+  label: string;
+  tabs: NavTab[];
+  onNavigate?: () => void;
+}) {
+  if (tabs.length === 0) {
+    return null;
+  }
+  return (
+    <div>
+      <SectionLabel>{label}</SectionLabel>
+      <div className="grid gap-0.5">
+        {tabs.map((tab) => (
+          <SidebarLink key={tab.to} tab={tab} onNavigate={onNavigate} />
+        ))}
+      </div>
+    </div>
   );
 }
 
@@ -209,13 +286,18 @@ export function AppShell() {
       if (!response.ok) {
         throw new Error(await apiErrorMessage(response));
       }
-      return response.json() as Promise<{ role: string; membershipStatus: string }[]>;
+      return response.json() as Promise<
+        { id: string; name: string; role: string; membershipStatus: string }[]
+      >;
     },
   });
   const roles =
     memberships.data
       ?.filter((item) => item.membershipStatus === 'ACTIVE')
       .map((item) => item.role) ?? [];
+  const activeConference = memberships.data?.find(
+    (item) => item.membershipStatus === 'ACTIVE',
+  );
   const platformAdmin = account.data?.platformRole === 'SYSTEM_ADMIN';
   const manager = roles.some((role) => role === 'CHAIR' || role === 'ADMINISTRATOR');
   const unlocked = account.data?.unlockedConferenceId ?? null;
@@ -231,6 +313,7 @@ export function AppShell() {
       ? { ...tab, to: `/workspace/conferences/${unlocked}` }
       : tab,
   );
+  const sections = groupTabs(tabs);
   const gate =
     account.isSuccess &&
     manager &&
@@ -240,14 +323,26 @@ export function AppShell() {
     location.pathname !== '/workspace/conference-access';
   const mobileBar = tabs.slice(0, 4);
   const mobileMore = tabs.slice(4);
+  const profile = account.data?.profile;
   const displayName = account.data
-    ? `${account.data.profile.firstName} ${account.data.profile.lastName}`
+    ? `${profile?.firstName ?? ''} ${profile?.lastName ?? ''}`.trim()
     : t('top.guest');
   const moreActive = mobileMore.some((tab) =>
     tab.end ? location.pathname === tab.to : location.pathname.startsWith(tab.to),
   );
-  const onHome = isRoleHome(location.pathname);
-  const platformSection = location.pathname.startsWith('/workspace/system/');
+  const roleLabel = platformAdmin
+    ? t('superadmin.sidebarLabel')
+    : activeConference
+      ? t(`conferences.roles.${activeConference.role}`, {
+          defaultValue: activeConference.role,
+        })
+      : null;
+  const roleLine = roleLabel ?? t('home.noConference');
+  const profileLine =
+    [profile?.academicTitle, activeConference?.name, roleLabel]
+      .filter(Boolean)
+      .join(' · ') || t('home.noConference');
+  const showNewSubmission = canStartSubmission(Boolean(platformAdmin), memberships.data);
 
   useEffect(() => {
     setMenuOpen(false);
@@ -280,111 +375,130 @@ export function AppShell() {
       >
         {t('nav.skip')}
       </a>
-      <div className="grid min-h-screen w-full grid-cols-1 lg:grid-cols-[175px_minmax(0,1fr)]">
-        <aside className="hidden h-screen flex-col border-r border-[#e6e8ec] bg-white p-2 lg:sticky lg:top-0 lg:flex">
-          <p className="px-1 text-[11px] font-extrabold tracking-tight text-[#3d4fd4]">
-            {t('brand.name')}
-          </p>
-          {platformAdmin ? (
-            <p className="mt-1 px-2 text-xs font-bold uppercase tracking-wide text-[#8b909a]">
-              {t('superadmin.sidebarLabel')}
+      <div className="grid min-h-screen w-full grid-cols-1 lg:grid-cols-[176px_minmax(0,1fr)]">
+        <aside className="hidden h-screen flex-col border-r border-[#e6e8ec] bg-white px-2 py-3 lg:sticky lg:top-0 lg:flex">
+          <div className="px-2 pb-4 pt-2">
+            <p className="truncate text-[12px] font-extrabold tracking-tight text-[#3d4fd4]">
+              {t('brand.name')}
             </p>
-          ) : null}
+            <p className="mt-0.5 truncate text-[10px] font-semibold text-[#8b909a]">
+              {roleLine}
+            </p>
+          </div>
+
           <nav
-            className="sidebar-nav mt-14 flex flex-1 flex-col gap-0.5 overflow-y-auto"
+            className="sidebar-nav mt-6 flex flex-1 flex-col gap-3 overflow-y-auto border-t border-[#eef1f8] pt-4"
             aria-label={t('nav.workspace')}
           >
-            {tabs.map((tab, index) => {
-              const Icon = tab.icon;
-              const showDivider =
-                platformAdmin && (tab.id === 'submissions' || tab.id === 'account');
-              return (
-                <div key={tab.to}>
-                  {showDivider ? (
-                    <div className="my-1.5 border-t border-[#eef1f8]" aria-hidden />
-                  ) : null}
-                  {platformAdmin && index === 0 ? (
-                    <p className="mb-1 px-2.5 text-[10px] font-extrabold uppercase tracking-[0.14em] text-[#9aa3b5]">
-                      {t('superadmin.navPlatform')}
-                    </p>
-                  ) : null}
-                  {platformAdmin && tab.id === 'submissions' ? (
-                    <p className="mb-1 px-2.5 text-[10px] font-extrabold uppercase tracking-[0.14em] text-[#9aa3b5]">
-                      {t('superadmin.navContent')}
-                    </p>
-                  ) : null}
-                  {platformAdmin && tab.id === 'account' ? (
-                    <p className="mb-1 px-2.5 text-[10px] font-extrabold uppercase tracking-[0.14em] text-[#9aa3b5]">
-                      {t('superadmin.navAccount')}
-                    </p>
-                  ) : null}
-                  <NavLink
-                    to={tab.to}
-                    end={tab.end}
-                    className={({ isActive }) => navClass(isActive)}
-                  >
-                    <Icon className="size-4 shrink-0" />
-                    {t(tab.label)}
-                  </NavLink>
+            {platformAdmin ? (
+              <>
+                <NavSection
+                  label={t('superadmin.navPlatform')}
+                  tabs={tabs.filter((tab) =>
+                    [
+                      'home',
+                      'sysAdmins',
+                      'sysConferences',
+                      'sysUsers',
+                      'sysSessions',
+                      'sysAudit',
+                    ].includes(tab.id),
+                  )}
+                />
+                <NavSection
+                  label={t('superadmin.navContent')}
+                  tabs={tabs.filter(
+                    (tab) => tab.id === 'submissions' || tab.id === 'followUp',
+                  )}
+                />
+                <NavSection
+                  label={t('superadmin.navAccount')}
+                  tabs={tabs.filter(
+                    (tab) => tab.id === 'account' || tab.id === 'preferences',
+                  )}
+                />
+              </>
+            ) : (
+              <>
+                <div className="grid gap-0.5">
+                  {sections.main.map((tab) => (
+                    <SidebarLink key={tab.to} tab={tab} />
+                  ))}
                 </div>
-              );
-            })}
+                <NavSection label={t('nav.sectionWork')} tabs={sections.work} />
+                <NavSection label={t('nav.sectionAccount')} tabs={sections.account} />
+              </>
+            )}
           </nav>
-          <div className="mt-4 border-t border-[#eef1f8] pt-4">
-            <p className="truncate px-2 text-sm font-extrabold">{displayName}</p>
+
+          <div className="mt-auto border-t border-[#eef1f8] pt-3">
+            <p className="truncate px-2 text-[11px] font-extrabold text-[#1c2744]">
+              {displayName}
+            </p>
             <button
               type="button"
-              className="mt-2 flex w-full items-center gap-3 rounded-2xl px-3 py-2.5 text-sm font-semibold text-[#5c6573] hover:bg-[#f4f5f7]"
+              className="mt-1 flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-[12px] font-semibold text-[#5c6578] hover:bg-[#f4f6fb] hover:text-[#c54545]"
               onClick={signOut}
             >
-              <LogOut className="size-4" />
+              <LogOut className="size-3.5" />
               {t('auth.logout')}
             </button>
           </div>
         </aside>
 
-        <div className="min-w-0 w-full px-3 pb-[calc(5.5rem+env(safe-area-inset-bottom))] pt-3 sm:px-4 sm:pt-4 lg:p-2.5 lg:pb-2.5">
-          <header className="mb-4 flex items-center gap-3 lg:mb-2">
+        <div className="min-w-0 w-full px-3 pb-[calc(5.5rem+env(safe-area-inset-bottom))] pt-3 sm:px-4 sm:pt-4 lg:px-3 lg:pb-3 lg:pt-3">
+          <header className="mb-3 flex flex-wrap items-center gap-3 rounded-2xl border border-[#e4e7ee] bg-white px-3 py-2.5 sm:px-4 lg:mb-3 lg:gap-4 lg:px-4 lg:py-2.5">
             <button
               type="button"
-              className="grid size-11 shrink-0 place-items-center rounded-2xl border border-[#e4e7ee] bg-white text-[#1c2744] lg:hidden"
+              className="grid size-10 shrink-0 place-items-center rounded-xl border border-[#e4e7ee] bg-[#f6f7fb] text-[#1c2744] lg:hidden"
               aria-expanded={menuOpen}
               aria-label={menuOpen ? t('nav.close') : t('nav.menu')}
               onClick={() => setMenuOpen((open) => !open)}
             >
               {menuOpen ? <X className="size-5" /> : <Menu className="size-5" />}
             </button>
-            <p className="min-w-0 flex-1 truncate text-lg font-extrabold tracking-tight text-[#3d4fd4] lg:hidden">
-              {t('brand.name')}
-            </p>
-            <div className="ml-auto flex shrink-0 items-center gap-2 sm:gap-3">
-              <DeadlineBell />
-              {onHome && !platformSection ? null : (
-                <>
-                  {account.data?.profile.photoPath ? (
-                    <img
-                      src={account.data.profile.photoPath}
-                      alt=""
-                      className="size-9 rounded-full object-cover"
-                    />
-                  ) : (
-                    <span className="grid size-9 place-items-center rounded-full bg-white text-sm font-extrabold">
-                      {displayName.slice(0, 1)}
-                    </span>
-                  )}
-                  <span className="hidden min-w-0 max-w-[10rem] sm:block">
-                    <span className="block truncate text-sm font-extrabold">
-                      {displayName}
-                    </span>
-                    <span className="block truncate text-xs text-[#8b909a]">
-                      {account.data?.email}
-                    </span>
-                  </span>
-                </>
+
+            <div className="flex min-w-0 flex-1 items-center gap-2.5 sm:gap-3">
+              {profile?.photoPath ? (
+                <img
+                  src={profile.photoPath}
+                  alt=""
+                  className="size-10 shrink-0 rounded-full object-cover lg:size-11"
+                />
+              ) : (
+                <span className="grid size-10 shrink-0 place-items-center rounded-full bg-[#eef2ff] text-sm font-extrabold text-[#3d4fd4] lg:size-11">
+                  {displayName.slice(0, 1)}
+                </span>
               )}
+              <div className="min-w-0">
+                <p className="truncate text-sm font-extrabold text-[#1c2744] sm:text-[15px]">
+                  {displayName}
+                </p>
+                <p className="truncate text-[11px] font-semibold text-[#5c6578] sm:text-xs">
+                  {profileLine}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex w-full shrink-0 flex-wrap items-center justify-end gap-2 sm:ml-auto sm:w-auto">
+              <DeadlineBell />
+              <Link
+                to="/workspace/account"
+                className="rounded-full bg-[#f4f7ff] px-3 py-2 text-xs font-bold text-[#3d4fd4] no-underline sm:text-sm"
+              >
+                {t('auth.profileTitle')}
+              </Link>
+              {showNewSubmission ? (
+                <Button asChild size="sm" className="sm:h-10 sm:px-4 sm:text-sm">
+                  <Link to="/workspace/submissions/new">{t('papers.new')}</Link>
+                </Button>
+              ) : null}
             </div>
           </header>
-          <main id="main-content" className="min-w-0 overflow-x-clip">
+          <main
+            id="main-content"
+            className="min-w-0 overflow-x-clip px-3 sm:px-4 lg:px-4"
+          >
             <Outlet />
           </main>
         </div>
@@ -422,82 +536,65 @@ export function AppShell() {
               </button>
             </div>
             <nav className="overflow-y-auto px-3 py-3" aria-label={t('nav.workspace')}>
-              {platformAdmin ? (
-                <div className="grid gap-4">
-                  <div>
-                    <p className="mb-2 px-3 text-[11px] font-extrabold uppercase tracking-[0.14em] text-[#9aa3b5]">
-                      {t('superadmin.navPlatform')}
-                    </p>
-                    <div className="grid gap-1">
-                      {tabs
-                        .filter((tab) =>
-                          [
-                            'home',
-                            'sysAdmins',
-                            'sysConferences',
-                            'sysUsers',
-                            'sysSessions',
-                            'sysAudit',
-                          ].includes(tab.id),
-                        )
-                        .map((tab) => (
-                          <MobileNavLink
-                            key={tab.to}
-                            tab={tab}
-                            onNavigate={() => setMenuOpen(false)}
-                          />
-                        ))}
+              <div className="grid gap-3">
+                {platformAdmin ? (
+                  <>
+                    <NavSection
+                      label={t('superadmin.navPlatform')}
+                      onNavigate={() => setMenuOpen(false)}
+                      tabs={tabs.filter((tab) =>
+                        [
+                          'home',
+                          'sysAdmins',
+                          'sysConferences',
+                          'sysUsers',
+                          'sysSessions',
+                          'sysAudit',
+                        ].includes(tab.id),
+                      )}
+                    />
+                    <NavSection
+                      label={t('superadmin.navContent')}
+                      onNavigate={() => setMenuOpen(false)}
+                      tabs={tabs.filter(
+                        (tab) => tab.id === 'submissions' || tab.id === 'followUp',
+                      )}
+                    />
+                    <NavSection
+                      label={t('superadmin.navAccount')}
+                      onNavigate={() => setMenuOpen(false)}
+                      tabs={tabs.filter(
+                        (tab) => tab.id === 'account' || tab.id === 'preferences',
+                      )}
+                    />
+                  </>
+                ) : (
+                  <>
+                    <div className="grid gap-0.5">
+                      {sections.main.map((tab) => (
+                        <SidebarLink
+                          key={tab.to}
+                          tab={tab}
+                          onNavigate={() => setMenuOpen(false)}
+                        />
+                      ))}
                     </div>
-                  </div>
-                  <div>
-                    <p className="mb-2 px-3 text-[11px] font-extrabold uppercase tracking-[0.14em] text-[#9aa3b5]">
-                      {t('superadmin.navContent')}
-                    </p>
-                    <div className="grid gap-1">
-                      {tabs
-                        .filter(
-                          (tab) => tab.id === 'submissions' || tab.id === 'followUp',
-                        )
-                        .map((tab) => (
-                          <MobileNavLink
-                            key={tab.to}
-                            tab={tab}
-                            onNavigate={() => setMenuOpen(false)}
-                          />
-                        ))}
-                    </div>
-                  </div>
-                  <div>
-                    <p className="mb-2 px-3 text-[11px] font-extrabold uppercase tracking-[0.14em] text-[#9aa3b5]">
-                      {t('superadmin.navAccount')}
-                    </p>
-                    <div className="grid gap-1">
-                      {tabs
-                        .filter((tab) => tab.id === 'account' || tab.id === 'preferences')
-                        .map((tab) => (
-                          <MobileNavLink
-                            key={tab.to}
-                            tab={tab}
-                            onNavigate={() => setMenuOpen(false)}
-                          />
-                        ))}
-                    </div>
-                  </div>
-                </div>
-              ) : (
-                <div className="grid gap-1">
-                  {tabs.map((tab) => (
-                    <MobileNavLink
-                      key={tab.to}
-                      tab={tab}
+                    <NavSection
+                      label={t('nav.sectionWork')}
+                      tabs={sections.work}
                       onNavigate={() => setMenuOpen(false)}
                     />
-                  ))}
-                </div>
-              )}
+                    <NavSection
+                      label={t('nav.sectionAccount')}
+                      tabs={sections.account}
+                      onNavigate={() => setMenuOpen(false)}
+                    />
+                  </>
+                )}
+              </div>
               <button
                 type="button"
-                className="mt-3 flex min-h-11 w-full items-center gap-3 rounded-2xl px-3 py-2.5 text-sm font-semibold text-[#5c6573] hover:bg-[#f4f5f7]"
+                className="mt-3 flex min-h-11 w-full items-center gap-3 rounded-lg px-2 py-2.5 text-sm font-semibold text-[#5c6573] hover:bg-[#f4f5f7] hover:text-[#c54545]"
                 onClick={signOut}
               >
                 <LogOut className="size-4" />
@@ -514,21 +611,11 @@ export function AppShell() {
         aria-label={t('nav.workspace')}
       >
         <ul className="grid grid-cols-5 gap-0.5">
-          {mobileBar.map((tab) => {
-            const Icon = tab.icon;
-            return (
-              <li key={tab.to} className="min-w-0">
-                <NavLink
-                  to={tab.to}
-                  end={tab.end}
-                  className={({ isActive }) => navClass(isActive, true)}
-                >
-                  <Icon className="size-5 shrink-0" />
-                  <span className="max-w-full truncate">{t(tab.label)}</span>
-                </NavLink>
-              </li>
-            );
-          })}
+          {mobileBar.map((tab) => (
+            <li key={tab.to} className="min-w-0">
+              <SidebarLink tab={tab} compact />
+            </li>
+          ))}
           <li className="min-w-0">
             <button
               type="button"

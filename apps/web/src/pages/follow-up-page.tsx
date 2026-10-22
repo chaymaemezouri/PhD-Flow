@@ -23,7 +23,11 @@ interface PaperSummary extends WorkPaper {
 
 /** Publié = étape 9 « Final decision and publication » terminée (DOI attribué). */
 function isPublished(paper: PaperSummary): boolean {
-  if (paper.status === 'DRAFT' || paper.status === 'WITHDRAWN') {
+  if (
+    paper.status === 'DRAFT' ||
+    paper.status === 'WITHDRAWN' ||
+    paper.status === 'CANCELLED'
+  ) {
     return false;
   }
   return Boolean(paper.doi);

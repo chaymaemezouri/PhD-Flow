@@ -9,6 +9,7 @@ import type {
   createPaperSchema,
   replaceAuthorsSchema,
   updatePaperSchema,
+  cancelPaperSchema,
   withdrawPaperSchema,
 } from '@scholarflow/validation';
 import type { z } from 'zod';
@@ -46,6 +47,7 @@ type CreateInput = z.infer<typeof createPaperSchema>;
 type UpdateInput = z.infer<typeof updatePaperSchema>;
 type AuthorsInput = z.infer<typeof replaceAuthorsSchema>;
 type WithdrawInput = z.infer<typeof withdrawPaperSchema>;
+type CancelInput = z.infer<typeof cancelPaperSchema>;
 
 const paperInclude = {
   authors: { orderBy: { position: 'asc' as const } },
@@ -319,7 +321,12 @@ export class PaperService {
     };
   }
 
-  async decideScope(actor: AuthenticatedUser, id: string, accept: boolean) {
+  async decideScope(
+    actor: AuthenticatedUser,
+    id: string,
+    accept: boolean,
+    reason = '',
+  ) {
     const row = await this.load(id);
     if (!this.isManager(actor, row)) {
       throw new ForbiddenException('You cannot change this conference');
@@ -330,9 +337,16 @@ export class PaperService {
     if (row.scopeStatus !== 'PENDING') {
       throw new ForbiddenException('The scope has already been decided');
     }
+    const note = accept ? '' : reason.trim();
+    if (!accept && note.length < 3) {
+      throw new BadRequestException('A reason is required when the paper is not accepted');
+    }
     await this.prisma.paper.update({
       where: { id },
-      data: { scopeStatus: accept ? 'ACCEPTED' : 'REFUSED' },
+      data: {
+        scopeStatus: accept ? 'ACCEPTED' : 'REFUSED',
+        scopeReason: note,
+      },
     });
     return this.getOne(actor, id);
   }
@@ -412,6 +426,34 @@ export class PaperService {
           paperId: id,
           fromStatus: PaperStatus.SUBMITTED,
           toStatus: PaperStatus.WITHDRAWN,
+          actorId: actor.id,
+          reason: input.reason,
+        },
+      });
+    });
+    return this.getOne(actor, id);
+  }
+
+  async cancel(actor: AuthenticatedUser, id: string, input: CancelInput) {
+    const row = await this.load(id);
+    await this.assertReadable(actor, row);
+    const manager = this.isManager(actor, row);
+    if (row.createdById !== actor.id && !manager) {
+      throw new ForbiddenException('You cannot cancel this paper');
+    }
+    if (row.status !== PaperStatus.DRAFT) {
+      throw new ForbiddenException('Only a draft paper can be cancelled');
+    }
+    await this.prisma.$transaction(async (tx) => {
+      await tx.paper.update({
+        where: { id },
+        data: { status: PaperStatus.CANCELLED },
+      });
+      await tx.paperStatusEvent.create({
+        data: {
+          paperId: id,
+          fromStatus: PaperStatus.DRAFT,
+          toStatus: PaperStatus.CANCELLED,
           actorId: actor.id,
           reason: input.reason,
         },
@@ -610,6 +652,7 @@ export class PaperService {
         copyright: { select: { status: true } },
         presentation: { select: { id: true } },
         files: { select: { kind: true } },
+        _count: { select: { assignments: true } },
       },
     });
     const registrations = await this.prisma.registration.findMany({
@@ -626,6 +669,7 @@ export class PaperService {
       const row = byId.get(paper.id);
       return {
         ...paper,
+        assignmentCount: row?._count.assignments ?? 0,
         steps: row ? paperSteps(row, registrations) : [],
       };
     });
@@ -640,12 +684,15 @@ export class PaperService {
     return {
       id: row.id,
       conferenceId: row.conferenceId,
+      conferenceName: row.conference.name,
       trackId: row.trackId,
       publicId: row.publicId,
       title: row.title,
       abstract: row.abstract,
       keywords: row.keywords,
       status: row.status,
+      paperKind: row.paperKind,
+      scopeStatus: row.scopeStatus,
       doi: row.doi,
       submittedAt: row.submittedAt?.toISOString() ?? null,
       withdrawnAt: row.withdrawnAt?.toISOString() ?? null,
@@ -661,14 +708,24 @@ export class PaperService {
             affiliation: author.affiliation,
             corresponding: author.corresponding,
           })),
-      decision:
-        (this.isManager(actor, row) || row.createdById === actor.id) && row.decision
-          ? {
-              outcome: row.decision.outcome,
-              status: row.decision.status,
-              letter: row.decision.letter,
-            }
-          : null,
+      decision: (() => {
+        if (!row.decision) {
+          return null;
+        }
+        const ownerOrManager =
+          this.isManager(actor, row) || row.createdById === actor.id;
+        const published = row.decision.status === 'PUBLISHED';
+        // Full workflow visibility for every reader (reviewer, session chair, …):
+        // published outcome/status; letter stays private to author/managers.
+        if (!ownerOrManager && !published) {
+          return null;
+        }
+        return {
+          outcome: row.decision.outcome,
+          status: row.decision.status,
+          letter: ownerOrManager ? row.decision.letter : undefined,
+        };
+      })(),
       manuscript: file
         ? {
             id: file.id,
@@ -692,6 +749,9 @@ export class PaperService {
       assignments,
       track,
       chairUsers,
+      remarks,
+      slidesRemarks,
+      cameraReadyRemarks,
     ] = await Promise.all([
       this.prisma.paperFile.findMany({
         where: { paperId: row.id },
@@ -707,7 +767,11 @@ export class PaperService {
       this.prisma.copyrightRecord.findUnique({ where: { paperId: row.id } }),
       this.prisma.presentation.findFirst({
         where: { paperId: row.id },
-        select: { id: true },
+        include: {
+          session: {
+            include: { room: true },
+          },
+        },
       }),
       this.prisma.registration.findUnique({
         where: {
@@ -734,12 +798,37 @@ export class PaperService {
             include: { profile: true },
           })
         : Promise.resolve([]),
+      this.prisma.revisionRemark.findMany({
+        where: { paperId: row.id },
+        orderBy: [{ round: 'desc' }, { sortOrder: 'asc' }],
+      }),
+      this.prisma.presentationRemark.findMany({
+        where: { paperId: row.id },
+        orderBy: [{ round: 'desc' }, { sortOrder: 'asc' }],
+      }),
+      this.prisma.cameraReadyRemark.findMany({
+        where: { paperId: row.id },
+        orderBy: [{ round: 'desc' }, { sortOrder: 'asc' }],
+      }),
     ]);
+    const currentRound = remarks[0]?.round ?? 0;
+    const activeRemarks = remarks.filter((item) => item.round === currentRound);
+    const slidesRound = slidesRemarks[0]?.round ?? 0;
+    const activeSlidesRemarks = slidesRemarks.filter(
+      (item) => item.round === slidesRound,
+    );
+    const cameraRound = cameraReadyRemarks[0]?.round ?? 0;
+    const activeCameraRemarks = cameraReadyRemarks.filter(
+      (item) => item.round === cameraRound,
+    );
     return {
       paperKind: row.paperKind,
       scopeStatus: row.scopeStatus,
+      scopeReason: row.scopeReason || null,
+      conferenceName: row.conference.name,
       trackName: track ? `${track.code} · ${track.name}` : null,
       canManage: manager,
+      isAuthor: row.createdById === actor.id,
       templateValidated: row.templateValidatedAt !== null,
       doi: row.doi,
       files: dedupeFiles(files).map((file) => ({
@@ -752,8 +841,26 @@ export class PaperService {
         ? { percentage: similarity.percentage, verified: similarity.verifiedAt !== null }
         : null,
       copyrightStatus: copyright?.status ?? null,
-      presented: presentation !== null || row.presentedAt !== null,
-      presentedAt: row.presentedAt?.toISOString() ?? null,
+      presented: row.presentedAt !== null || presentation?.presentedAt !== null,
+      presentedAt:
+        (presentation?.presentedAt ?? row.presentedAt)?.toISOString() ?? null,
+      scheduled: presentation !== null,
+      schedule: presentation
+        ? {
+            presentationId: presentation.id,
+            sessionTitle: presentation.session.title,
+            roomName: presentation.session.room.name,
+            startsAt: presentation.session.startsAt.toISOString(),
+            endsAt: presentation.session.endsAt.toISOString(),
+            modality: presentation.modality,
+            score: presentation.score,
+            chairRemarks: presentation.comment || row.sessionComment || null,
+          }
+        : null,
+      slidesStatus: row.slidesStatus,
+      cameraReadyStatus: row.cameraReadyStatus,
+      similarityStatus: row.similarityStatus,
+      copyrightStageStatus: row.copyrightStageStatus,
       sessionComment: row.sessionComment,
       sessionChairs: chairUsers.map((user) => ({
         userId: user.id,
@@ -778,6 +885,28 @@ export class PaperService {
         recommendation: item.form?.recommendation ?? null,
         comments: item.form?.commentsToAuthor ?? '',
         mine: item.reviewerId === actor.id,
+      })),
+      remarks: activeRemarks.map((item) => ({
+        id: item.id,
+        text: item.text,
+        status: item.status,
+        round: item.round,
+      })),
+      remarksRound: currentRound || null,
+      remarksDone:
+        activeRemarks.length > 0 &&
+        activeRemarks.every((item) => item.status === 'VALIDATED'),
+      slidesRemarks: activeSlidesRemarks.map((item) => ({
+        id: item.id,
+        text: item.text,
+        status: item.status,
+        round: item.round,
+      })),
+      cameraReadyRemarks: activeCameraRemarks.map((item) => ({
+        id: item.id,
+        text: item.text,
+        status: item.status,
+        round: item.round,
       })),
     };
   }

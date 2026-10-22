@@ -32,6 +32,8 @@ interface PaperRow {
   title: string;
   status: string;
   publicId: string | null;
+  scopeStatus?: string;
+  assignmentCount?: number;
 }
 
 interface ReviewerRow {
@@ -310,9 +312,13 @@ export function ReviewsPage() {
               >
                 <option value="">{t('reviews.choosePaper')}</option>
                 {papers.data
-                  ?.filter((item) => item.status === 'SUBMITTED')
+                  ?.filter(
+                    (item) =>
+                      item.status === 'SUBMITTED' && item.scopeStatus === 'ACCEPTED',
+                  )
                   .map((item) => (
                     <option key={item.id} value={item.id}>
+                      {(item.assignmentCount ?? 0) > 0 ? '✓ ' : ''}
                       {item.publicId ? `${item.publicId} · ${item.title}` : item.title}
                     </option>
                   ))}

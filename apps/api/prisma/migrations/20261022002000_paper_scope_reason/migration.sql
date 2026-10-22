@@ -1,0 +1,1 @@
+ALTER TABLE "papers" ADD COLUMN "scope_reason" TEXT NOT NULL DEFAULT '';

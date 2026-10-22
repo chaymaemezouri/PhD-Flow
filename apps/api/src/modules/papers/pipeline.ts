@@ -24,13 +24,16 @@ interface RegistrationFact {
   status: string;
 }
 
-const ACCEPTED = new Set(['ACCEPTED', 'CONDITIONALLY_ACCEPTED']);
+const ACCEPTED = new Set(['ACCEPTED']);
 
 export function paperSteps(
   paper: PipelinePaper,
   registrations: RegistrationFact[],
 ): PaperStep[] {
-  const submitted = paper.status === 'SUBMITTED' || paper.status === 'WITHDRAWN';
+  const submitted =
+    paper.status === 'SUBMITTED' ||
+    paper.status === 'WITHDRAWN' ||
+    paper.status === 'CANCELLED';
   const published = paper.decision?.status === 'PUBLISHED' ? paper.decision : null;
   const registration = registrations.find(
     (item) =>
@@ -53,7 +56,7 @@ export function paperSteps(
 }
 
 function submissionState(status: string, submitted: boolean): StepState {
-  if (status === 'WITHDRAWN') {
+  if (status === 'WITHDRAWN' || status === 'CANCELLED') {
     return 'failed';
   }
   return submitted ? 'done' : 'pending';

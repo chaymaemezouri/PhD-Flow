@@ -19,11 +19,21 @@ interface SessionRow {
   id: string;
   title: string;
   startsAt: string;
+  endsAt: string;
   room: { name: string; capacity: number };
   presentations: {
     id: string;
+    modality: 'IN_PERSON' | 'ONLINE';
     score: number | null;
-    paper: { title: string; publicId: string | null };
+    comment: string;
+    presentedAt: string | null;
+    paper: {
+      id: string;
+      title: string;
+      publicId: string | null;
+      sessionComment: string;
+      sessionChairs: { userId: string; name: string; mine: boolean }[];
+    };
   }[];
 }
 
@@ -84,8 +94,7 @@ export function ProgramPage() {
     papers.data?.filter(
       (paper) =>
         paper.decision?.status === 'PUBLISHED' &&
-        (paper.decision.outcome === 'ACCEPTED' ||
-          paper.decision.outcome === 'CONDITIONALLY_ACCEPTED'),
+        paper.decision.outcome === 'ACCEPTED',
     ) ?? [];
   const field =
     'mt-1 block rounded-2xl border border-[#e4e7ee] bg-[#f6f7fb] px-3 py-2 text-sm';
@@ -135,32 +144,61 @@ export function ProgramPage() {
           >
             <p className="text-lg font-extrabold text-[#1c2744]">{session.title}</p>
             <p className="mt-1 text-sm text-[#5c6578]">
-              {session.room.name} · {new Date(session.startsAt).toLocaleString()}
+              {session.room.name} · {new Date(session.startsAt).toLocaleString()} –{' '}
+              {new Date(session.endsAt).toLocaleTimeString([], {
+                hour: '2-digit',
+                minute: '2-digit',
+              })}
             </p>
             {session.presentations.length === 0 ? (
               <p className="mt-3 text-sm text-[#8b909a]">{t('workflow.sessionEmpty')}</p>
             ) : (
               <ul className="mt-4 grid gap-3">
-                {session.presentations.map((item) => (
+                {session.presentations.map((item) => {
+                  const isSessionChair = item.paper.sessionChairs.some((c) => c.mine);
+                  const canAssess = chair || isSessionChair;
+                  return (
                   <li key={item.id} className="rounded-2xl bg-[#f6f7fb] px-4 py-3">
-                    <p className="text-sm font-extrabold leading-snug text-[#1c2744]">
-                      {item.paper.title}
-                    </p>
-                    <p className="mt-1 text-xs text-[#8b909a]">
-                      {item.paper.publicId}
-                      {item.score !== null ? ` · ${item.score}/10` : ''}
-                    </p>
-                    {chair ? (
+                    <div className="flex flex-wrap items-start justify-between gap-2">
+                      <div>
+                        <p className="text-sm font-extrabold leading-snug text-[#1c2744]">
+                          {item.paper.title}
+                        </p>
+                        <p className="mt-1 text-xs text-[#8b909a]">
+                          {item.paper.publicId}
+                          {' · '}
+                          {item.modality === 'ONLINE'
+                            ? t('dossier.modalityOnline')
+                            : t('dossier.modalityInPerson')}
+                          {item.presentedAt
+                            ? ` · ${t('dossier.presentationPresented')}`
+                            : ` · ${t('dossier.presentationScheduled')}`}
+                          {item.score !== null ? ` · ${item.score}/10` : ''}
+                        </p>
+                        {item.paper.sessionChairs.length > 0 ? (
+                          <p className="mt-1 text-xs font-semibold text-[#5c6578]">
+                            {t('dossier.sessionChair')}:{' '}
+                            {item.paper.sessionChairs.map((c) => c.name).join(', ')}
+                          </p>
+                        ) : null}
+                      </div>
+                    </div>
+                    {canAssess ? (
                       <form
-                        className="mt-3 flex flex-wrap items-end gap-2"
+                        className="mt-3 grid gap-2"
                         onSubmit={(event) => {
                           event.preventDefault();
-                          const score = Number(
-                            new FormData(event.currentTarget).get('score'),
-                          );
+                          const form = new FormData(event.currentTarget);
+                          const scoreRaw = String(form.get('score') ?? '');
+                          const score = scoreRaw ? Number(scoreRaw) : undefined;
+                          const comment = String(form.get('comment') ?? '');
                           void apiFetch(`/api/v1/presentations/${item.id}/assessment`, {
                             method: 'POST',
-                            body: JSON.stringify({ score, comment: '' }),
+                            body: JSON.stringify({
+                              score,
+                              comment,
+                              presented: true,
+                            }),
                           }).then(async (response) => {
                             setMessage(
                               response.ok
@@ -170,9 +208,18 @@ export function ProgramPage() {
                             await queryClient.invalidateQueries({
                               queryKey: ['program'],
                             });
+                            await queryClient.invalidateQueries({
+                              queryKey: ['paper'],
+                            });
                           });
                         }}
                       >
+                        <p className="text-xs font-extrabold text-[#1c2744]">
+                          {t('dossier.chairFollowUp')}
+                        </p>
+                        <p className="text-xs text-[#8b909a]">
+                          {t('dossier.chairFollowUpHint')}
+                        </p>
                         <label className="text-xs font-bold text-[#5c6578]">
                           {t('workflow.presentationScore')}
                           <input
@@ -180,18 +227,29 @@ export function ProgramPage() {
                             type="number"
                             min={1}
                             max={10}
-                            required
                             defaultValue={item.score ?? ''}
                             className="mt-1 block w-24 rounded-2xl border border-[#e4e7ee] bg-white px-3 py-2 text-sm"
                           />
                         </label>
-                        <Button type="submit" size="sm">
-                          {t('workflow.save')}
-                        </Button>
+                        <label className="text-xs font-bold text-[#5c6578]">
+                          {t('dossier.chairRemarks')}
+                          <textarea
+                            name="comment"
+                            className="mt-1 block min-h-20 w-full rounded-2xl border border-[#e4e7ee] bg-white px-3 py-2 text-sm"
+                            placeholder={t('dossier.chairRemarksPlaceholder')}
+                            defaultValue={item.comment || item.paper.sessionComment}
+                          />
+                        </label>
+                        <div>
+                          <Button type="submit" size="sm">
+                            {t('dossier.markPresented')}
+                          </Button>
+                        </div>
                       </form>
                     ) : null}
                   </li>
-                ))}
+                  );
+                })}
               </ul>
             )}
           </li>
@@ -268,7 +326,10 @@ export function ProgramPage() {
               `/api/v1/sessions/${String(data.get('sessionId'))}/presentations`,
               {
                 method: 'POST',
-                body: JSON.stringify({ paperId: String(data.get('paperId')) }),
+                body: JSON.stringify({
+                  paperId: String(data.get('paperId')),
+                  modality: String(data.get('modality') || 'IN_PERSON'),
+                }),
               },
             ).then(async (response) => {
               setMessage(
@@ -305,6 +366,13 @@ export function ProgramPage() {
                   {paper.publicId ? `${paper.publicId} · ${paper.title}` : paper.title}
                 </option>
               ))}
+            </select>
+          </label>
+          <label className="text-sm font-bold">
+            {t('dossier.scheduleModality')}
+            <select name="modality" className={field} defaultValue="IN_PERSON">
+              <option value="IN_PERSON">{t('dossier.modalityInPerson')}</option>
+              <option value="ONLINE">{t('dossier.modalityOnline')}</option>
             </select>
           </label>
           <div className="md:col-span-2">

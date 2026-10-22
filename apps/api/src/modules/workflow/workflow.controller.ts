@@ -5,6 +5,7 @@ import {
   Header,
   Param,
   ParseUUIDPipe,
+  Patch,
   Post,
   Query,
   Req,
@@ -25,6 +26,10 @@ import {
   sessionSchema,
   assessmentSchema,
   similaritySchema,
+  revisionRemarkSchema,
+  slidesDecisionSchema,
+  cameraReadyDecisionSchema,
+  copyrightDecisionSchema,
 } from '@scholarflow/validation';
 import type { Response } from 'express';
 import type { z } from 'zod';
@@ -56,6 +61,69 @@ export class WorkflowController {
     @Body(new ZodValidationPipe(decisionSchema)) body: z.infer<typeof decisionSchema>,
   ) {
     return this.workflow.saveDecision(request.user!, id, body);
+  }
+
+  @Patch('papers/:id/remarks/:remarkId')
+  remark(
+    @Req() request: AuthenticatedRequest,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('remarkId', ParseUUIDPipe) remarkId: string,
+    @Body(new ZodValidationPipe(revisionRemarkSchema))
+    body: z.infer<typeof revisionRemarkSchema>,
+  ) {
+    return this.workflow.updateRemark(request.user!, id, remarkId, body.status);
+  }
+
+  @Post('papers/:id/slides/decision')
+  slidesDecision(
+    @Req() request: AuthenticatedRequest,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body(new ZodValidationPipe(slidesDecisionSchema))
+    body: z.infer<typeof slidesDecisionSchema>,
+  ) {
+    return this.workflow.decideSlides(request.user!, id, body);
+  }
+
+  @Patch('papers/:id/presentation-remarks/:remarkId')
+  presentationRemark(
+    @Req() request: AuthenticatedRequest,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('remarkId', ParseUUIDPipe) remarkId: string,
+    @Body(new ZodValidationPipe(revisionRemarkSchema))
+    body: z.infer<typeof revisionRemarkSchema>,
+  ) {
+    return this.workflow.updatePresentationRemark(
+      request.user!,
+      id,
+      remarkId,
+      body.status,
+    );
+  }
+
+  @Post('papers/:id/camera-ready/decision')
+  cameraReadyDecision(
+    @Req() request: AuthenticatedRequest,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body(new ZodValidationPipe(cameraReadyDecisionSchema))
+    body: z.infer<typeof cameraReadyDecisionSchema>,
+  ) {
+    return this.workflow.decideCameraReady(request.user!, id, body);
+  }
+
+  @Patch('papers/:id/camera-ready-remarks/:remarkId')
+  cameraReadyRemark(
+    @Req() request: AuthenticatedRequest,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('remarkId', ParseUUIDPipe) remarkId: string,
+    @Body(new ZodValidationPipe(revisionRemarkSchema))
+    body: z.infer<typeof revisionRemarkSchema>,
+  ) {
+    return this.workflow.updateCameraReadyRemark(
+      request.user!,
+      id,
+      remarkId,
+      body.status,
+    );
   }
 
   @Post('papers/:id/revision')
@@ -162,8 +230,10 @@ export class WorkflowController {
   validateCopyright(
     @Req() request: AuthenticatedRequest,
     @Param('id', ParseUUIDPipe) id: string,
+    @Body(new ZodValidationPipe(copyrightDecisionSchema))
+    body: z.infer<typeof copyrightDecisionSchema>,
   ) {
-    return this.workflow.validateCopyright(request.user!, id, true);
+    return this.workflow.validateCopyright(request.user!, id, body.accept);
   }
 
   @Post('conferences/:id/register')

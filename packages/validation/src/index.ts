@@ -70,6 +70,24 @@ export const decisionSchema = z.object({
   publish: z.boolean().default(false),
 });
 
+export const revisionRemarkSchema = z.object({
+  status: z.enum(['OPEN', 'ADDRESSED', 'VALIDATED']),
+});
+
+export const slidesDecisionSchema = z.object({
+  outcome: z.enum(['VALIDATED', 'NEEDS_MODS']),
+  note: z.string().trim().max(4000).default(''),
+});
+
+export const cameraReadyDecisionSchema = z.object({
+  outcome: z.enum(['VALIDATED', 'NEEDS_MODS']),
+  note: z.string().trim().max(4000).default(''),
+});
+
+export const copyrightDecisionSchema = z.object({
+  accept: z.boolean(),
+});
+
 export const similaritySchema = z.object({
   percentage: z.number().min(0).max(100),
   note: z.string().trim().max(500).default(''),
@@ -89,11 +107,13 @@ export const sessionSchema = z.object({
 
 export const presentationSchema = z.object({
   paperId: z.uuid(),
+  modality: z.enum(['IN_PERSON', 'ONLINE']).default('IN_PERSON'),
 });
 
 export const assessmentSchema = z.object({
-  score: z.number().int().min(1).max(10),
-  comment: z.string().trim().max(1000).default(''),
+  score: z.number().int().min(1).max(10).optional(),
+  comment: z.string().trim().max(2000).default(''),
+  presented: z.boolean().default(true),
 });
 
 export const presentationNoteSchema = z.object({
@@ -328,15 +348,30 @@ export const updatePaperSchema = z.object({
   paperKind: paperKindSchema.optional(),
 });
 
-export const scopeDecisionSchema = z.object({
-  accept: z.boolean(),
-});
+export const scopeDecisionSchema = z
+  .object({
+    accept: z.boolean(),
+    reason: z.string().trim().max(1000).optional(),
+  })
+  .superRefine((value, ctx) => {
+    if (!value.accept && (!value.reason || value.reason.length < 3)) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['reason'],
+        message: 'A reason is required when the paper is not accepted',
+      });
+    }
+  });
 
 export const replaceAuthorsSchema = z.object({
   authors: z.array(paperAuthorSchema).min(1).max(20),
 });
 
 export const withdrawPaperSchema = z.object({
+  reason: z.string().trim().min(3).max(500),
+});
+
+export const cancelPaperSchema = z.object({
   reason: z.string().trim().min(3).max(500),
 });
 

@@ -17,6 +17,7 @@ import { apiErrorMessage, apiFetch } from '@/services/api';
 
 interface PaperSummary extends WorkPaper {
   conferenceId: string;
+  conferenceName?: string | null;
   doi?: string | null;
 }
 
@@ -71,20 +72,18 @@ export function SubmissionsPage() {
     <div className="space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-end sm:justify-between">
         <div className="min-w-0">
-          <h1 className="text-xl text-navy sm:text-2xl">
+          <h1 className="text-xl font-extrabold text-[#1c2744] sm:text-2xl">
             {isManager
               ? t('home.chairPapers')
               : isReviewerOnly
                 ? t('reviews.title')
                 : t('papers.title')}
           </h1>
-          <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
-            {isManager
-              ? t('home.chairBoardHint')
-              : isReviewerOnly
-                ? t('home.reviewBoardHint')
-                : t('papers.intro')}
-          </p>
+          {isManager || isReviewerOnly ? (
+            <p className="mt-2 max-w-2xl text-sm text-[#5c6578]">
+              {isManager ? t('home.chairBoardHint') : t('home.reviewBoardHint')}
+            </p>
+          ) : null}
         </div>
         <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:flex-wrap sm:items-center">
           <PapersLayoutToggle layout={layout} onChange={chooseLayout} />

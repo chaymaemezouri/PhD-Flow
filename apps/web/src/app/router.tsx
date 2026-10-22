@@ -18,8 +18,10 @@ import { RegisterPage } from '@/pages/register-page';
 import { ResetPasswordPage } from '@/pages/reset-password-page';
 import { FollowUpPage } from '@/pages/follow-up-page';
 import { ProgramPage } from '@/pages/program-page';
+import { RegistrationPage } from '@/pages/registration-page';
 import { ReviewsPage } from '@/pages/reviews-page';
 import { RoleDashboardPage, WorkspaceHome } from '@/pages/role-dashboard-page';
+import { SessionChairPage } from '@/pages/session-chair-page';
 import { SuperadminPage } from '@/pages/superadmin-page';
 import { SubmissionEditorPage } from '@/pages/submission-editor-page';
 import { SubmissionsPage } from '@/pages/submissions-page';
@@ -69,8 +71,10 @@ export const routes = [
           { path: 'submissions/new', element: <SubmissionEditorPage /> },
           { path: 'submissions/:paperId', element: <SubmissionEditorPage /> },
           { path: 'reviews', element: <ReviewsPage /> },
+          { path: 'registration', element: <RegistrationPage /> },
           { path: 'follow-up', element: <FollowUpPage /> },
           { path: 'program', element: <ProgramPage /> },
+          { path: 'session-chair', element: <SessionChairPage /> },
           { path: 'planned/:moduleId', element: <PlannedModulePage /> },
         ],
       },

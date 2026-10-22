@@ -12,6 +12,11 @@ import {
   PaperStatus,
   PlatformRole,
   PrismaClient,
+  CameraReadyStatus,
+  CopyrightStageStatus,
+  RemarkStatus,
+  SimilarityStatus,
+  SlidesStatus,
 } from '../src/generated/prisma/client.js';
 
 loadEnv({ path: resolve(process.cwd(), '.env') });
@@ -38,6 +43,22 @@ async function main(): Promise<void> {
     create: { key: 'platform.version', value: '0.1.0' },
   });
 
+  const demoUsers = await prisma.user.findMany({
+    where: {
+      OR: [
+        { email: { endsWith: DEMO_DOMAIN } },
+        { email: { endsWith: '@example.test' } },
+        { email: { endsWith: '@conference.test' } },
+        { email: { endsWith: '@paper.test' } },
+        { email: { endsWith: '@review.test' } },
+      ],
+    },
+    select: { id: true },
+  });
+  const demoUserIds = demoUsers.map((user) => user.id);
+  if (demoUserIds.length > 0) {
+    await prisma.paper.deleteMany({ where: { createdById: { in: demoUserIds } } });
+  }
   await prisma.conference.deleteMany({
     where: {
       OR: [
@@ -47,6 +68,7 @@ async function main(): Promise<void> {
         { slug: { startsWith: 'phase2-' } },
         { slug: { startsWith: 'papers-' } },
         { slug: { startsWith: 'reviews-' } },
+        ...(demoUserIds.length > 0 ? [{ createdById: { in: demoUserIds } }] : []),
       ],
     },
   });
@@ -185,6 +207,22 @@ async function main(): Promise<void> {
     ],
   });
   const lea = person(chercheur, 'Léa', 'Dubois', 'LIRIS, Université de Lyon');
+  const auteur2 = await createUser('auteur2', passwordHash, {
+    firstName: 'Samir',
+    lastName: 'Haddad',
+    academicTitle: 'Doctorant',
+    institution: 'Université Claude Bernard Lyon 1',
+    laboratory: 'LIRIS',
+    department: 'Informatique',
+    disciplines: ['Informatique'],
+    interests: 'Paiement et inscriptions conférence.',
+    biography: 'Compte démo pour l’état Under check receipt.',
+    photoPath: '',
+    orcid: '',
+    website: '',
+    education: [],
+  });
+  const samir = person(auteur2, 'Samir', 'Haddad', 'LIRIS, Université de Lyon');
 
   const conference = await prisma.conference.create({
     data: {
@@ -204,7 +242,7 @@ async function main(): Promise<void> {
       accessPasswordHash: passwordHash,
       accessPasswordNote: DEMO_PASSWORD,
       createdById: admin.id,
-      nextPaperNumber: 11,
+      nextPaperNumber: 20,
       tracks: {
         create: [
           {
@@ -304,6 +342,11 @@ async function main(): Promise<void> {
           },
           {
             userId: chercheur.id,
+            role: ConferenceRole.AUTHOR,
+            status: MembershipStatus.ACTIVE,
+          },
+          {
+            userId: auteur2.id,
             role: ConferenceRole.AUTHOR,
             status: MembershipStatus.ACTIVE,
           },
@@ -425,16 +468,52 @@ async function main(): Promise<void> {
       note: 'Au-dessus du seuil de 20 %.',
     },
   });
+  await assign(
+    conditional.id,
+    reviewer.id,
+    admin.id,
+    AssignmentStatus.COMPLETED,
+    'completed-conditional',
+    {
+      form: {
+        recommendation: 'WEAK_ACCEPT',
+        score: 6,
+        confidence: 3,
+        commentsToAuthor:
+          'Préciser la provenance des traces.\nAjouter une figure de calibration.',
+        commentsToCommittee: 'Acceptable avec modifications mineures.',
+      },
+    },
+  );
   await prisma.decision.create({
     data: {
       paperId: conditional.id,
       outcome: 'CONDITIONALLY_ACCEPTED',
       letter:
-        'DEMO-2027-0005 est accepté sous condition. Merci de préciser la provenance des traces dans la version finale.',
+        'DEMO-2027-0005 est accepté avec modifications mineures.\nPréciser la provenance des traces.\nAjouter une figure de calibration.',
       status: 'PUBLISHED',
       publishedAt: new Date('2026-10-10T16:00:00.000Z'),
       decidedById: admin.id,
     },
+  });
+  await prisma.revisionRemark.createMany({
+    data: [
+      {
+        paperId: conditional.id,
+        text: 'Préciser la provenance des traces.',
+        status: RemarkStatus.OPEN,
+        round: 1,
+        sortOrder: 0,
+      },
+      {
+        paperId: conditional.id,
+        text: 'Ajouter une figure de calibration.',
+        status: RemarkStatus.ADDRESSED,
+        round: 1,
+        sortOrder: 1,
+        addressedAt: new Date('2026-10-11T10:00:00.000Z'),
+      },
+    ],
   });
 
   const accepted = await submittedPaper(conference.id, systems?.id, lea, {
@@ -484,6 +563,22 @@ async function main(): Promise<void> {
     chercheur.id,
     new Date('2026-10-10T09:00:00.000Z'),
   );
+  await addFile(
+    conference.id,
+    accepted.id,
+    PaperFileKind.PAYMENT_PROOF,
+    'tides-payment.pdf',
+    chercheur.id,
+    new Date('2026-10-11T09:00:00.000Z'),
+  );
+  await addFile(
+    conference.id,
+    accepted.id,
+    PaperFileKind.SLIDES,
+    'tides-slides.pdf',
+    chercheur.id,
+    new Date('2026-10-12T09:00:00.000Z'),
+  );
   await assign(
     accepted.id,
     reviewer.id,
@@ -526,7 +621,16 @@ async function main(): Promise<void> {
   });
   await prisma.paper.update({
     where: { id: accepted.id },
-    data: { templateValidatedAt: new Date('2026-10-11T17:00:00.000Z') },
+    data: {
+      templateValidatedAt: new Date('2026-10-11T17:00:00.000Z'),
+      slidesStatus: SlidesStatus.VALIDATED,
+      cameraReadyStatus: CameraReadyStatus.VALIDATED,
+      similarityStatus: SimilarityStatus.VALIDATED,
+      copyrightStageStatus: CopyrightStageStatus.VALIDATED,
+      presentedAt: new Date('2026-10-12T15:00:00.000Z'),
+      sessionComment: 'Présentation validée — exposé clair.',
+      sessionChairIds: [admin.id],
+    },
   });
 
   const revision = await submittedPaper(conference.id, systems?.id, lea, {
@@ -562,11 +666,29 @@ async function main(): Promise<void> {
       paperId: revision.id,
       outcome: 'REVISION_REQUIRED',
       letter:
-        'DEMO-2027-0006 doit être révisé. Le modèle de menace doit citer les journaux réellement observés.',
+        'DEMO-2027-0006 est accepté avec modifications majeures.\nLe modèle de menace doit citer les journaux réellement observés.\nClarifier le scénario d’attaque principal.',
       status: 'PUBLISHED',
       publishedAt: new Date('2026-10-12T16:00:00.000Z'),
       decidedById: admin.id,
     },
+  });
+  await prisma.revisionRemark.createMany({
+    data: [
+      {
+        paperId: revision.id,
+        text: 'Le modèle de menace doit citer les journaux réellement observés.',
+        status: RemarkStatus.OPEN,
+        round: 1,
+        sortOrder: 0,
+      },
+      {
+        paperId: revision.id,
+        text: 'Clarifier le scénario d’attaque principal.',
+        status: RemarkStatus.OPEN,
+        round: 1,
+        sortOrder: 1,
+      },
+    ],
   });
 
   const rejected = await submittedPaper(conference.id, theory?.id, lea, {
@@ -731,6 +853,885 @@ async function main(): Promise<void> {
   await prisma.copyrightRecord.create({
     data: { paperId: copyrightRejected.id, status: 'REJECTED' },
   });
+  await prisma.paper.update({
+    where: { id: copyrightRejected.id },
+    data: { slidesStatus: SlidesStatus.OPEN },
+  });
+
+  const paymentCheck = await submittedPaper(conference.id, dataTrack?.id, samir, {
+    publicId: 'DEMO-2027-0011',
+    title: 'Paiement en vérification du reçu',
+    abstract:
+      'Accepté, reçu de paiement déposé : état Under check receipt en attente de validation admin.',
+    keywords: ['paiement', 'reçu'],
+  });
+  await addFile(
+    conference.id,
+    paymentCheck.id,
+    PaperFileKind.MANUSCRIPT,
+    'paiement.pdf',
+    auteur2.id,
+  );
+  await addFile(
+    conference.id,
+    paymentCheck.id,
+    PaperFileKind.PAYMENT_PROOF,
+    'paiement-recu.pdf',
+    auteur2.id,
+  );
+  await assign(
+    paymentCheck.id,
+    reviewer.id,
+    admin.id,
+    AssignmentStatus.COMPLETED,
+    'completed-payment-check',
+    {
+      form: {
+        recommendation: 'ACCEPT',
+        score: 7,
+        confidence: 4,
+        commentsToAuthor: 'Article clair, acceptation sans modification.',
+        commentsToCommittee: 'OK.',
+      },
+    },
+  );
+  await prisma.decision.create({
+    data: {
+      paperId: paymentCheck.id,
+      outcome: 'ACCEPTED',
+      letter: 'DEMO-2027-0011 est accepté sans modification.',
+      status: 'PUBLISHED',
+      publishedAt: new Date('2026-10-15T16:00:00.000Z'),
+      decidedById: admin.id,
+    },
+  });
+
+  const slidesOpen = await submittedPaper(conference.id, systems?.id, lea, {
+    publicId: 'DEMO-2027-0012',
+    title: 'Présentation ouverte — dépôt PPT à faire',
+    abstract: 'Inscription validée. État : Presentation is open.',
+    keywords: ['présentation', 'ouvert'],
+  });
+  await addFile(
+    conference.id,
+    slidesOpen.id,
+    PaperFileKind.MANUSCRIPT,
+    'pres-open.pdf',
+    lea.id,
+  );
+  await assign(
+    slidesOpen.id,
+    reviewer.id,
+    admin.id,
+    AssignmentStatus.COMPLETED,
+    'completed-slides-open',
+    {
+      form: {
+        recommendation: 'ACCEPT',
+        score: 8,
+        confidence: 4,
+        commentsToAuthor: 'Bon manuscrit.',
+        commentsToCommittee: 'OK.',
+      },
+    },
+  );
+  await prisma.decision.create({
+    data: {
+      paperId: slidesOpen.id,
+      outcome: 'ACCEPTED',
+      letter: 'DEMO-2027-0012 est accepté sans modification.',
+      status: 'PUBLISHED',
+      publishedAt: new Date('2026-10-15T17:00:00.000Z'),
+      decidedById: admin.id,
+    },
+  });
+  await prisma.paper.update({
+    where: { id: slidesOpen.id },
+    data: { slidesStatus: SlidesStatus.OPEN },
+  });
+
+  const slidesDeposited = await submittedPaper(conference.id, systems?.id, lea, {
+    publicId: 'DEMO-2027-0013',
+    title: 'Présentation déposée en attente admin',
+    abstract: 'PPT déposé. État : Presentation deposited.',
+    keywords: ['présentation', 'déposée'],
+  });
+  await addFile(
+    conference.id,
+    slidesDeposited.id,
+    PaperFileKind.MANUSCRIPT,
+    'pres-dep.pdf',
+    lea.id,
+  );
+  await addFile(
+    conference.id,
+    slidesDeposited.id,
+    PaperFileKind.SLIDES,
+    'pres-dep-slides.pdf',
+    lea.id,
+  );
+  await assign(
+    slidesDeposited.id,
+    reviewer.id,
+    admin.id,
+    AssignmentStatus.COMPLETED,
+    'completed-slides-dep',
+    {
+      form: {
+        recommendation: 'ACCEPT',
+        score: 7,
+        confidence: 3,
+        commentsToAuthor: 'Correct.',
+        commentsToCommittee: 'OK.',
+      },
+    },
+  );
+  await prisma.decision.create({
+    data: {
+      paperId: slidesDeposited.id,
+      outcome: 'ACCEPTED',
+      letter: 'DEMO-2027-0013 est accepté sans modification.',
+      status: 'PUBLISHED',
+      publishedAt: new Date('2026-10-15T18:00:00.000Z'),
+      decidedById: admin.id,
+    },
+  });
+  await prisma.paper.update({
+    where: { id: slidesDeposited.id },
+    data: { slidesStatus: SlidesStatus.DEPOSITED },
+  });
+
+  const slidesMods = await submittedPaper(conference.id, theory?.id, lea, {
+    publicId: 'DEMO-2027-0014',
+    title: 'Présentation not comfort — checklist mods',
+    abstract: 'Admin a demandé des modifications. État : Presentation not comfort.',
+    keywords: ['présentation', 'mods'],
+  });
+  await addFile(
+    conference.id,
+    slidesMods.id,
+    PaperFileKind.MANUSCRIPT,
+    'pres-mods.pdf',
+    lea.id,
+  );
+  await addFile(
+    conference.id,
+    slidesMods.id,
+    PaperFileKind.SLIDES,
+    'pres-mods-slides.pdf',
+    lea.id,
+  );
+  await assign(
+    slidesMods.id,
+    reviewer.id,
+    admin.id,
+    AssignmentStatus.COMPLETED,
+    'completed-slides-mods',
+    {
+      form: {
+        recommendation: 'ACCEPT',
+        score: 7,
+        confidence: 4,
+        commentsToAuthor: 'OK.',
+        commentsToCommittee: 'OK.',
+      },
+    },
+  );
+  await prisma.decision.create({
+    data: {
+      paperId: slidesMods.id,
+      outcome: 'ACCEPTED',
+      letter: 'DEMO-2027-0014 est accepté sans modification.',
+      status: 'PUBLISHED',
+      publishedAt: new Date('2026-10-15T19:00:00.000Z'),
+      decidedById: admin.id,
+    },
+  });
+  await prisma.paper.update({
+    where: { id: slidesMods.id },
+    data: {
+      slidesStatus: SlidesStatus.NEEDS_MODS,
+      sessionComment: 'Réduire le nombre de slides.\nClarifier la slide résultats.',
+    },
+  });
+  await prisma.presentationRemark.createMany({
+    data: [
+      {
+        paperId: slidesMods.id,
+        text: 'Réduire le nombre de slides.',
+        status: RemarkStatus.OPEN,
+        round: 1,
+        sortOrder: 0,
+      },
+      {
+        paperId: slidesMods.id,
+        text: 'Clarifier la slide résultats.',
+        status: RemarkStatus.ADDRESSED,
+        round: 1,
+        sortOrder: 1,
+        addressedAt: new Date('2026-10-16T09:00:00.000Z'),
+      },
+    ],
+  });
+
+  const slidesWill = await submittedPaper(conference.id, theory?.id, lea, {
+    publicId: 'DEMO-2027-0015',
+    title: 'Presentation will deposer — nouvelle version PPT',
+    abstract: 'Nouvelle version déposée après mods. État : Presentation will deposer.',
+    keywords: ['présentation', 'will-deposer'],
+  });
+  await addFile(
+    conference.id,
+    slidesWill.id,
+    PaperFileKind.MANUSCRIPT,
+    'pres-will.pdf',
+    lea.id,
+  );
+  await addFile(
+    conference.id,
+    slidesWill.id,
+    PaperFileKind.SLIDES,
+    'pres-will-slides.pdf',
+    lea.id,
+  );
+  await assign(
+    slidesWill.id,
+    reviewer.id,
+    admin.id,
+    AssignmentStatus.COMPLETED,
+    'completed-slides-will',
+    {
+      form: {
+        recommendation: 'ACCEPT',
+        score: 8,
+        confidence: 4,
+        commentsToAuthor: 'OK.',
+        commentsToCommittee: 'OK.',
+      },
+    },
+  );
+  await prisma.decision.create({
+    data: {
+      paperId: slidesWill.id,
+      outcome: 'ACCEPTED',
+      letter: 'DEMO-2027-0015 est accepté sans modification.',
+      status: 'PUBLISHED',
+      publishedAt: new Date('2026-10-15T20:00:00.000Z'),
+      decidedById: admin.id,
+    },
+  });
+  await prisma.paper.update({
+    where: { id: slidesWill.id },
+    data: { slidesStatus: SlidesStatus.WILL_DEPOSIT },
+  });
+  await prisma.presentationRemark.createMany({
+    data: [
+      {
+        paperId: slidesWill.id,
+        text: 'Ajouter le logo de la conférence.',
+        status: RemarkStatus.VALIDATED,
+        round: 1,
+        sortOrder: 0,
+        validatedAt: new Date('2026-10-16T11:00:00.000Z'),
+        validatedById: admin.id,
+      },
+      {
+        paperId: slidesWill.id,
+        text: 'Corriger la typo slide 4.',
+        status: RemarkStatus.ADDRESSED,
+        round: 1,
+        sortOrder: 1,
+        addressedAt: new Date('2026-10-16T10:00:00.000Z'),
+      },
+    ],
+  });
+
+  const cameraOpen = await submittedPaper(conference.id, systems?.id, lea, {
+    publicId: 'DEMO-2027-0016',
+    title: 'Camera ready is open — dépôt version finale',
+    abstract: 'Présentation validée. État : Camera ready is open.',
+    keywords: ['camera', 'ouvert'],
+  });
+  await addFile(
+    conference.id,
+    cameraOpen.id,
+    PaperFileKind.MANUSCRIPT,
+    'cam-open.pdf',
+    lea.id,
+  );
+  await addFile(conference.id, cameraOpen.id, PaperFileKind.SLIDES, 'cam-open.ppt', lea.id);
+  await assign(
+    cameraOpen.id,
+    reviewer.id,
+    admin.id,
+    AssignmentStatus.COMPLETED,
+    'completed-camera-open',
+    {
+      form: {
+        recommendation: 'ACCEPT',
+        score: 8,
+        confidence: 4,
+        commentsToAuthor: 'OK.',
+        commentsToCommittee: 'OK.',
+      },
+    },
+  );
+  await prisma.decision.create({
+    data: {
+      paperId: cameraOpen.id,
+      outcome: 'ACCEPTED',
+      letter: 'DEMO-2027-0016 est accepté sans modification.',
+      status: 'PUBLISHED',
+      publishedAt: new Date('2026-10-16T12:00:00.000Z'),
+      decidedById: admin.id,
+    },
+  });
+  await prisma.paper.update({
+    where: { id: cameraOpen.id },
+    data: {
+      slidesStatus: SlidesStatus.VALIDATED,
+      presentedAt: new Date('2026-10-16T13:00:00.000Z'),
+      cameraReadyStatus: CameraReadyStatus.OPEN,
+    },
+  });
+
+  const cameraCheck = await submittedPaper(conference.id, systems?.id, lea, {
+    publicId: 'DEMO-2027-0017',
+    title: 'Camera ready under checking',
+    abstract: 'PDF + Word déposés. État : Under checking.',
+    keywords: ['camera', 'vérification'],
+  });
+  await addFile(
+    conference.id,
+    cameraCheck.id,
+    PaperFileKind.MANUSCRIPT,
+    'cam-check.pdf',
+    lea.id,
+  );
+  await addFile(
+    conference.id,
+    cameraCheck.id,
+    PaperFileKind.SLIDES,
+    'cam-check.ppt',
+    lea.id,
+  );
+  await addFile(
+    conference.id,
+    cameraCheck.id,
+    PaperFileKind.CAMERA_READY,
+    'cam-check-final.pdf',
+    lea.id,
+  );
+  await addFile(
+    conference.id,
+    cameraCheck.id,
+    PaperFileKind.EDITABLE,
+    'cam-check-final.docx',
+    lea.id,
+  );
+  await assign(
+    cameraCheck.id,
+    reviewer.id,
+    admin.id,
+    AssignmentStatus.COMPLETED,
+    'completed-camera-check',
+    {
+      form: {
+        recommendation: 'ACCEPT',
+        score: 8,
+        confidence: 4,
+        commentsToAuthor: 'OK.',
+        commentsToCommittee: 'OK.',
+      },
+    },
+  );
+  await prisma.decision.create({
+    data: {
+      paperId: cameraCheck.id,
+      outcome: 'ACCEPTED',
+      letter: 'DEMO-2027-0017 est accepté sans modification.',
+      status: 'PUBLISHED',
+      publishedAt: new Date('2026-10-16T14:00:00.000Z'),
+      decidedById: admin.id,
+    },
+  });
+  await prisma.paper.update({
+    where: { id: cameraCheck.id },
+    data: {
+      slidesStatus: SlidesStatus.VALIDATED,
+      presentedAt: new Date('2026-10-16T15:00:00.000Z'),
+      cameraReadyStatus: CameraReadyStatus.DEPOSITED,
+    },
+  });
+
+  const cameraMods = await submittedPaper(conference.id, systems?.id, lea, {
+    publicId: 'DEMO-2027-0018',
+    title: 'Camera ready not comfort — checklist mods',
+    abstract: 'Admin a demandé des modifications sur la version finale.',
+    keywords: ['camera', 'mods'],
+  });
+  await addFile(
+    conference.id,
+    cameraMods.id,
+    PaperFileKind.MANUSCRIPT,
+    'cam-mods.pdf',
+    lea.id,
+  );
+  await addFile(conference.id, cameraMods.id, PaperFileKind.SLIDES, 'cam-mods.ppt', lea.id);
+  await addFile(
+    conference.id,
+    cameraMods.id,
+    PaperFileKind.CAMERA_READY,
+    'cam-mods-final.pdf',
+    lea.id,
+  );
+  await addFile(
+    conference.id,
+    cameraMods.id,
+    PaperFileKind.EDITABLE,
+    'cam-mods-final.docx',
+    lea.id,
+  );
+  await assign(
+    cameraMods.id,
+    reviewer.id,
+    admin.id,
+    AssignmentStatus.COMPLETED,
+    'completed-camera-mods',
+    {
+      form: {
+        recommendation: 'ACCEPT',
+        score: 7,
+        confidence: 4,
+        commentsToAuthor: 'OK.',
+        commentsToCommittee: 'OK.',
+      },
+    },
+  );
+  await prisma.decision.create({
+    data: {
+      paperId: cameraMods.id,
+      outcome: 'ACCEPTED',
+      letter: 'DEMO-2027-0018 est accepté sans modification.',
+      status: 'PUBLISHED',
+      publishedAt: new Date('2026-10-16T16:00:00.000Z'),
+      decidedById: admin.id,
+    },
+  });
+  await prisma.paper.update({
+    where: { id: cameraMods.id },
+    data: {
+      slidesStatus: SlidesStatus.VALIDATED,
+      presentedAt: new Date('2026-10-16T17:00:00.000Z'),
+      cameraReadyStatus: CameraReadyStatus.NEEDS_MODS,
+    },
+  });
+  await prisma.cameraReadyRemark.createMany({
+    data: [
+      {
+        paperId: cameraMods.id,
+        text: 'Corriger la numérotation des figures.',
+        status: RemarkStatus.OPEN,
+        round: 1,
+        sortOrder: 0,
+      },
+      {
+        paperId: cameraMods.id,
+        text: 'Remplacer le PDF par la version avec DOI interne.',
+        status: RemarkStatus.OPEN,
+        round: 1,
+        sortOrder: 1,
+      },
+    ],
+  });
+
+  const cameraWill = await submittedPaper(conference.id, systems?.id, lea, {
+    publicId: 'DEMO-2027-0019',
+    title: 'Camera ready will deposer — nouvelle version',
+    abstract: 'Auteur a redéposé après remarques. État : will deposer.',
+    keywords: ['camera', 'will'],
+  });
+  await addFile(
+    conference.id,
+    cameraWill.id,
+    PaperFileKind.MANUSCRIPT,
+    'cam-will.pdf',
+    lea.id,
+  );
+  await addFile(conference.id, cameraWill.id, PaperFileKind.SLIDES, 'cam-will.ppt', lea.id);
+  await addFile(
+    conference.id,
+    cameraWill.id,
+    PaperFileKind.CAMERA_READY,
+    'cam-will-final.pdf',
+    lea.id,
+  );
+  await addFile(
+    conference.id,
+    cameraWill.id,
+    PaperFileKind.EDITABLE,
+    'cam-will-final.zip',
+    lea.id,
+  );
+  await assign(
+    cameraWill.id,
+    reviewer.id,
+    admin.id,
+    AssignmentStatus.COMPLETED,
+    'completed-camera-will',
+    {
+      form: {
+        recommendation: 'ACCEPT',
+        score: 8,
+        confidence: 4,
+        commentsToAuthor: 'OK.',
+        commentsToCommittee: 'OK.',
+      },
+    },
+  );
+  await prisma.decision.create({
+    data: {
+      paperId: cameraWill.id,
+      outcome: 'ACCEPTED',
+      letter: 'DEMO-2027-0019 est accepté sans modification.',
+      status: 'PUBLISHED',
+      publishedAt: new Date('2026-10-16T18:00:00.000Z'),
+      decidedById: admin.id,
+    },
+  });
+  await prisma.paper.update({
+    where: { id: cameraWill.id },
+    data: {
+      slidesStatus: SlidesStatus.VALIDATED,
+      presentedAt: new Date('2026-10-16T19:00:00.000Z'),
+      cameraReadyStatus: CameraReadyStatus.WILL_DEPOSIT,
+    },
+  });
+  await prisma.cameraReadyRemark.createMany({
+    data: [
+      {
+        paperId: cameraWill.id,
+        text: 'Corriger la numérotation des figures.',
+        status: RemarkStatus.VALIDATED,
+        round: 1,
+        sortOrder: 0,
+        validatedAt: new Date('2026-10-17T09:00:00.000Z'),
+        validatedById: admin.id,
+      },
+      {
+        paperId: cameraWill.id,
+        text: 'Mettre à jour la bibliographie.',
+        status: RemarkStatus.ADDRESSED,
+        round: 1,
+        sortOrder: 1,
+        addressedAt: new Date('2026-10-17T08:00:00.000Z'),
+      },
+    ],
+  });
+
+  const simOpen = await submittedPaper(conference.id, systems?.id, lea, {
+    publicId: 'DEMO-2027-0020',
+    title: 'Similarity is open — dépôt rapport',
+    abstract: 'Camera ready validée. État : Similarity is open.',
+    keywords: ['similarité', 'ouvert'],
+  });
+  await addFile(conference.id, simOpen.id, PaperFileKind.MANUSCRIPT, 'sim-open.pdf', lea.id);
+  await addFile(conference.id, simOpen.id, PaperFileKind.SLIDES, 'sim-open.ppt', lea.id);
+  await addFile(
+    conference.id,
+    simOpen.id,
+    PaperFileKind.CAMERA_READY,
+    'sim-open-final.pdf',
+    lea.id,
+  );
+  await addFile(
+    conference.id,
+    simOpen.id,
+    PaperFileKind.EDITABLE,
+    'sim-open-final.docx',
+    lea.id,
+  );
+  await assign(
+    simOpen.id,
+    reviewer.id,
+    admin.id,
+    AssignmentStatus.COMPLETED,
+    'completed-sim-open',
+    {
+      form: {
+        recommendation: 'ACCEPT',
+        score: 8,
+        confidence: 4,
+        commentsToAuthor: 'OK.',
+        commentsToCommittee: 'OK.',
+      },
+    },
+  );
+  await prisma.decision.create({
+    data: {
+      paperId: simOpen.id,
+      outcome: 'ACCEPTED',
+      letter: 'DEMO-2027-0020 est accepté sans modification.',
+      status: 'PUBLISHED',
+      publishedAt: new Date('2026-10-17T10:00:00.000Z'),
+      decidedById: admin.id,
+    },
+  });
+  await prisma.paper.update({
+    where: { id: simOpen.id },
+    data: {
+      slidesStatus: SlidesStatus.VALIDATED,
+      presentedAt: new Date('2026-10-17T11:00:00.000Z'),
+      cameraReadyStatus: CameraReadyStatus.VALIDATED,
+      templateValidatedAt: new Date('2026-10-17T11:30:00.000Z'),
+      similarityStatus: SimilarityStatus.OPEN,
+    },
+  });
+
+  const simCheck = await submittedPaper(conference.id, systems?.id, lea, {
+    publicId: 'DEMO-2027-0021',
+    title: 'Similarity under checking',
+    abstract: 'Rapport déposé (< 20 %). État : Under checking.',
+    keywords: ['similarité', 'vérification'],
+  });
+  await addFile(
+    conference.id,
+    simCheck.id,
+    PaperFileKind.MANUSCRIPT,
+    'sim-check.pdf',
+    lea.id,
+  );
+  await addFile(conference.id, simCheck.id, PaperFileKind.SLIDES, 'sim-check.ppt', lea.id);
+  await addFile(
+    conference.id,
+    simCheck.id,
+    PaperFileKind.CAMERA_READY,
+    'sim-check-final.pdf',
+    lea.id,
+  );
+  await addFile(
+    conference.id,
+    simCheck.id,
+    PaperFileKind.EDITABLE,
+    'sim-check-final.docx',
+    lea.id,
+  );
+  await addFile(
+    conference.id,
+    simCheck.id,
+    PaperFileKind.SIMILARITY,
+    'sim-check-report.pdf',
+    lea.id,
+  );
+  await assign(
+    simCheck.id,
+    reviewer.id,
+    admin.id,
+    AssignmentStatus.COMPLETED,
+    'completed-sim-check',
+    {
+      form: {
+        recommendation: 'ACCEPT',
+        score: 8,
+        confidence: 4,
+        commentsToAuthor: 'OK.',
+        commentsToCommittee: 'OK.',
+      },
+    },
+  );
+  await prisma.decision.create({
+    data: {
+      paperId: simCheck.id,
+      outcome: 'ACCEPTED',
+      letter: 'DEMO-2027-0021 est accepté sans modification.',
+      status: 'PUBLISHED',
+      publishedAt: new Date('2026-10-17T12:00:00.000Z'),
+      decidedById: admin.id,
+    },
+  });
+  await prisma.similarityReport.create({
+    data: {
+      paperId: simCheck.id,
+      percentage: 14.2,
+      note: 'Rapport déposé, en attente de validation admin.',
+    },
+  });
+  await prisma.paper.update({
+    where: { id: simCheck.id },
+    data: {
+      slidesStatus: SlidesStatus.VALIDATED,
+      presentedAt: new Date('2026-10-17T13:00:00.000Z'),
+      cameraReadyStatus: CameraReadyStatus.VALIDATED,
+      templateValidatedAt: new Date('2026-10-17T13:30:00.000Z'),
+      similarityStatus: SimilarityStatus.DEPOSITED,
+    },
+  });
+
+  const copyOpen = await submittedPaper(conference.id, systems?.id, lea, {
+    publicId: 'DEMO-2027-0022',
+    title: 'Copyright is open — dépôt formulaire',
+    abstract: 'Similarité validée. État : Copyright is open.',
+    keywords: ['copyright', 'ouvert'],
+  });
+  await addFile(conference.id, copyOpen.id, PaperFileKind.MANUSCRIPT, 'copy-open.pdf', lea.id);
+  await addFile(conference.id, copyOpen.id, PaperFileKind.SLIDES, 'copy-open.ppt', lea.id);
+  await addFile(
+    conference.id,
+    copyOpen.id,
+    PaperFileKind.CAMERA_READY,
+    'copy-open-final.pdf',
+    lea.id,
+  );
+  await addFile(
+    conference.id,
+    copyOpen.id,
+    PaperFileKind.EDITABLE,
+    'copy-open-final.docx',
+    lea.id,
+  );
+  await addFile(
+    conference.id,
+    copyOpen.id,
+    PaperFileKind.SIMILARITY,
+    'copy-open-sim.pdf',
+    lea.id,
+  );
+  await assign(
+    copyOpen.id,
+    reviewer.id,
+    admin.id,
+    AssignmentStatus.COMPLETED,
+    'completed-copy-open',
+    {
+      form: {
+        recommendation: 'ACCEPT',
+        score: 8,
+        confidence: 4,
+        commentsToAuthor: 'OK.',
+        commentsToCommittee: 'OK.',
+      },
+    },
+  );
+  await prisma.decision.create({
+    data: {
+      paperId: copyOpen.id,
+      outcome: 'ACCEPTED',
+      letter: 'DEMO-2027-0022 est accepté sans modification.',
+      status: 'PUBLISHED',
+      publishedAt: new Date('2026-10-17T14:00:00.000Z'),
+      decidedById: admin.id,
+    },
+  });
+  await prisma.similarityReport.create({
+    data: {
+      paperId: copyOpen.id,
+      percentage: 11.5,
+      note: 'Validé.',
+      verifiedAt: new Date('2026-10-17T14:30:00.000Z'),
+    },
+  });
+  await prisma.paper.update({
+    where: { id: copyOpen.id },
+    data: {
+      slidesStatus: SlidesStatus.VALIDATED,
+      presentedAt: new Date('2026-10-17T15:00:00.000Z'),
+      cameraReadyStatus: CameraReadyStatus.VALIDATED,
+      templateValidatedAt: new Date('2026-10-17T15:10:00.000Z'),
+      similarityStatus: SimilarityStatus.VALIDATED,
+      copyrightStageStatus: CopyrightStageStatus.OPEN,
+    },
+  });
+
+  const copyCheck = await submittedPaper(conference.id, systems?.id, lea, {
+    publicId: 'DEMO-2027-0023',
+    title: 'Copyright under checking',
+    abstract: 'Formulaire déposé. État : Under checking.',
+    keywords: ['copyright', 'vérification'],
+  });
+  await addFile(
+    conference.id,
+    copyCheck.id,
+    PaperFileKind.MANUSCRIPT,
+    'copy-check.pdf',
+    lea.id,
+  );
+  await addFile(conference.id, copyCheck.id, PaperFileKind.SLIDES, 'copy-check.ppt', lea.id);
+  await addFile(
+    conference.id,
+    copyCheck.id,
+    PaperFileKind.CAMERA_READY,
+    'copy-check-final.pdf',
+    lea.id,
+  );
+  await addFile(
+    conference.id,
+    copyCheck.id,
+    PaperFileKind.EDITABLE,
+    'copy-check-final.docx',
+    lea.id,
+  );
+  await addFile(
+    conference.id,
+    copyCheck.id,
+    PaperFileKind.SIMILARITY,
+    'copy-check-sim.pdf',
+    lea.id,
+  );
+  await addFile(
+    conference.id,
+    copyCheck.id,
+    PaperFileKind.COPYRIGHT,
+    'copy-check-form.pdf',
+    lea.id,
+  );
+  await assign(
+    copyCheck.id,
+    reviewer.id,
+    admin.id,
+    AssignmentStatus.COMPLETED,
+    'completed-copy-check',
+    {
+      form: {
+        recommendation: 'ACCEPT',
+        score: 8,
+        confidence: 4,
+        commentsToAuthor: 'OK.',
+        commentsToCommittee: 'OK.',
+      },
+    },
+  );
+  await prisma.decision.create({
+    data: {
+      paperId: copyCheck.id,
+      outcome: 'ACCEPTED',
+      letter: 'DEMO-2027-0023 est accepté sans modification.',
+      status: 'PUBLISHED',
+      publishedAt: new Date('2026-10-17T16:00:00.000Z'),
+      decidedById: admin.id,
+    },
+  });
+  await prisma.similarityReport.create({
+    data: {
+      paperId: copyCheck.id,
+      percentage: 9.8,
+      note: 'Validé.',
+      verifiedAt: new Date('2026-10-17T16:20:00.000Z'),
+    },
+  });
+  await prisma.copyrightRecord.create({
+    data: { paperId: copyCheck.id, status: 'PENDING' },
+  });
+  await prisma.paper.update({
+    where: { id: copyCheck.id },
+    data: {
+      slidesStatus: SlidesStatus.VALIDATED,
+      presentedAt: new Date('2026-10-17T17:00:00.000Z'),
+      cameraReadyStatus: CameraReadyStatus.VALIDATED,
+      templateValidatedAt: new Date('2026-10-17T17:10:00.000Z'),
+      similarityStatus: SimilarityStatus.VALIDATED,
+      copyrightStageStatus: CopyrightStageStatus.DEPOSITED,
+    },
+  });
 
   await prisma.conflictDeclaration.create({
     data: {
@@ -778,14 +1779,50 @@ async function main(): Promise<void> {
     data: {
       sessionId: morning.id,
       paperId: accepted.id,
+      modality: 'IN_PERSON',
       score: 8,
       comment: 'Exposé clair, questions sur l’identifiant public.',
+      presentedAt: new Date('2026-10-12T15:00:00.000Z'),
+    },
+  });
+  await prisma.presentation.create({
+    data: {
+      sessionId: afternoon.id,
+      paperId: cameraOpen.id,
+      modality: 'ONLINE',
+      comment: '',
+    },
+  });
+  await prisma.paper.update({
+    where: { id: cameraOpen.id },
+    data: {
+      sessionChairIds: [reviewer.id],
+      presentedAt: null,
+      sessionComment: '',
+    },
+  });
+  await prisma.presentation.create({
+    data: {
+      sessionId: morning.id,
+      paperId: cameraCheck.id,
+      modality: 'IN_PERSON',
+      score: 9,
+      comment: 'Bonne présentation, questions sur le camera-ready.',
+      presentedAt: new Date('2026-10-16T15:00:00.000Z'),
+    },
+  });
+  await prisma.paper.update({
+    where: { id: cameraCheck.id },
+    data: {
+      sessionChairIds: [admin.id],
+      sessionComment: 'Bonne présentation, questions sur le camera-ready.',
     },
   });
   await prisma.presentation.create({
     data: {
       sessionId: afternoon.id,
       paperId: conditional.id,
+      modality: 'IN_PERSON',
       score: 6,
       comment: 'À préciser pendant la session.',
     },
@@ -801,6 +1838,12 @@ async function main(): Promise<void> {
       },
       {
         conferenceId: conference.id,
+        userId: auteur2.id,
+        status: 'REQUESTED',
+        paymentStatus: 'PENDING',
+      },
+      {
+        conferenceId: conference.id,
         userId: reviewer.id,
         status: 'REQUESTED',
         paymentStatus: 'PENDING',
@@ -813,6 +1856,36 @@ async function main(): Promise<void> {
       },
     ],
   });
+
+  console.log(`
+Seed OK — comptes (mot de passe ${DEMO_PASSWORD}) :
+  admin@demo.scholarflow.test       Admin / chair
+  chercheur@demo.scholarflow.test   Auteur Léa (présentations / workflow)
+  auteur2@demo.scholarflow.test     Auteur Samir (paiement under check)
+  reviewer@demo.scholarflow.test    Évaluateur
+  committee@demo.scholarflow.test   Comité
+  superadmin@demo.scholarflow.test  Superadmin
+
+États utiles :
+  0001  Accepté + Presented (planning + remarques chair) + paiement OK
+  0005  Mods mineures + checklist remarques
+  0006  Mods majeures + checklist + révision déposée
+  0007  Non accepté
+  0010  Accepté, présentation OPEN, copyright rejeté
+  0011  Under check receipt (compte auteur2)
+  0012  Presentation is open
+  0013  Presentation deposited
+  0014  Presentation not comfort + checklist
+  0015  Presentation will deposer
+  0016  Scheduled (online) + Camera ready is open — session chair = reviewer
+  0017  Camera ready under checking
+  0018  Camera ready not comfort + checklist
+  0019  Camera ready will deposer
+  0020  Similarity is open
+  0021  Similarity under checking
+  0022  Copyright is open
+  0023  Copyright under checking
+`);
 
   const doctoral = await prisma.conference.create({
     data: {

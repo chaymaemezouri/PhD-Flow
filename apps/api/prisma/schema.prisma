@@ -51,6 +51,9 @@ model User {
   declaredConflicts   ConflictDeclaration[] @relation("ConflictSubject")
   conflictsDeclared   ConflictDeclaration[] @relation("ConflictDeclarer")
   decisionsMade       Decision[]            @relation("DecisionMaker")
+  remarksValidated    RevisionRemark[]      @relation("RemarkValidator")
+  slidesRemarksValidated PresentationRemark[] @relation("SlidesRemarkValidator")
+  cameraReadyRemarksValidated CameraReadyRemark[] @relation("CameraReadyRemarkValidator")
   registrations       Registration[]
 
   @@map("users")
@@ -204,6 +207,7 @@ enum PaperStatus {
   DRAFT
   SUBMITTED
   WITHDRAWN
+  CANCELLED
 }
 
 enum PaperKind {
@@ -405,10 +409,15 @@ model Paper {
   status       PaperStatus  @default(DRAFT)
   paperKind    PaperKind    @default(FULL) @map("paper_kind")
   scopeStatus  ScopeStatus  @default(PENDING) @map("scope_status")
+  scopeReason  String       @default("") @map("scope_reason")
   submittedAt         DateTime? @map("submitted_at")
   withdrawnAt         DateTime? @map("withdrawn_at")
   templateValidatedAt DateTime? @map("template_validated_at")
   presentedAt         DateTime? @map("presented_at")
+  slidesStatus        SlidesStatus @default(LOCKED) @map("slides_status")
+  cameraReadyStatus   CameraReadyStatus @default(LOCKED) @map("camera_ready_status")
+  similarityStatus    SimilarityStatus @default(LOCKED) @map("similarity_status")
+  copyrightStageStatus CopyrightStageStatus @default(LOCKED) @map("copyright_stage_status")
   sessionComment      String    @default("") @map("session_comment")
   sessionChairIds     String[]  @default([]) @map("session_chair_ids") @db.Uuid
   createdById  String       @map("created_by_id") @db.Uuid
@@ -423,6 +432,9 @@ model Paper {
   assignments  ReviewAssignment[]
   conflicts    ConflictDeclaration[]
   decision     Decision?
+  remarks      RevisionRemark[]
+  slidesRemarks PresentationRemark[]
+  cameraReadyRemarks CameraReadyRemark[]
   similarity   SimilarityReport?
   copyright    CopyrightRecord?
   presentation Presentation?
@@ -549,6 +561,101 @@ model Decision {
   @@map("decisions")
 }
 
+enum SlidesStatus {
+  LOCKED
+  OPEN
+  DEPOSITED
+  NEEDS_MODS
+  WILL_DEPOSIT
+  VALIDATED
+}
+
+enum CameraReadyStatus {
+  LOCKED
+  OPEN
+  DEPOSITED
+  NEEDS_MODS
+  WILL_DEPOSIT
+  VALIDATED
+}
+
+enum SimilarityStatus {
+  LOCKED
+  OPEN
+  DEPOSITED
+  VALIDATED
+}
+
+enum CopyrightStageStatus {
+  LOCKED
+  OPEN
+  DEPOSITED
+  VALIDATED
+}
+
+enum RemarkStatus {
+  OPEN
+  ADDRESSED
+  VALIDATED
+}
+
+model RevisionRemark {
+  id            String       @id @default(uuid()) @db.Uuid
+  paperId       String       @map("paper_id") @db.Uuid
+  text          String
+  status        RemarkStatus @default(OPEN)
+  round         Int          @default(1)
+  sortOrder     Int          @default(0) @map("sort_order")
+  addressedAt   DateTime?    @map("addressed_at")
+  validatedAt   DateTime?    @map("validated_at")
+  validatedById String?      @map("validated_by_id") @db.Uuid
+  createdAt     DateTime     @default(now()) @map("created_at")
+  updatedAt     DateTime     @updatedAt @map("updated_at")
+  paper         Paper        @relation(fields: [paperId], references: [id], onDelete: Cascade)
+  validatedBy   User?        @relation("RemarkValidator", fields: [validatedById], references: [id], onDelete: SetNull)
+
+  @@index([paperId, round, sortOrder])
+  @@map("revision_remarks")
+}
+
+model PresentationRemark {
+  id            String       @id @default(uuid()) @db.Uuid
+  paperId       String       @map("paper_id") @db.Uuid
+  text          String
+  status        RemarkStatus @default(OPEN)
+  round         Int          @default(1)
+  sortOrder     Int          @default(0) @map("sort_order")
+  addressedAt   DateTime?    @map("addressed_at")
+  validatedAt   DateTime?    @map("validated_at")
+  validatedById String?      @map("validated_by_id") @db.Uuid
+  createdAt     DateTime     @default(now()) @map("created_at")
+  updatedAt     DateTime     @updatedAt @map("updated_at")
+  paper         Paper        @relation(fields: [paperId], references: [id], onDelete: Cascade)
+  validatedBy   User?        @relation("SlidesRemarkValidator", fields: [validatedById], references: [id], onDelete: SetNull)
+
+  @@index([paperId, round, sortOrder])
+  @@map("presentation_remarks")
+}
+
+model CameraReadyRemark {
+  id            String       @id @default(uuid()) @db.Uuid
+  paperId       String       @map("paper_id") @db.Uuid
+  text          String
+  status        RemarkStatus @default(OPEN)
+  round         Int          @default(1)
+  sortOrder     Int          @default(0) @map("sort_order")
+  addressedAt   DateTime?    @map("addressed_at")
+  validatedAt   DateTime?    @map("validated_at")
+  validatedById String?      @map("validated_by_id") @db.Uuid
+  createdAt     DateTime     @default(now()) @map("created_at")
+  updatedAt     DateTime     @updatedAt @map("updated_at")
+  paper         Paper        @relation(fields: [paperId], references: [id], onDelete: Cascade)
+  validatedBy   User?        @relation("CameraReadyRemarkValidator", fields: [validatedById], references: [id], onDelete: SetNull)
+
+  @@index([paperId, round, sortOrder])
+  @@map("camera_ready_remarks")
+}
+
 model SimilarityReport {
   id         String   @id @default(uuid()) @db.Uuid
   paperId    String   @unique @map("paper_id") @db.Uuid
@@ -610,14 +717,21 @@ model ProgramSession {
   @@map("program_sessions")
 }
 
+enum PresentationModality {
+  IN_PERSON
+  ONLINE
+}
+
 model Presentation {
-  id        String         @id @default(uuid()) @db.Uuid
-  sessionId String         @map("session_id") @db.Uuid
-  paperId   String         @unique @map("paper_id") @db.Uuid
-  score     Int?
-  comment   String         @default("")
-  session   ProgramSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-  paper     Paper          @relation(fields: [paperId], references: [id], onDelete: Cascade)
+  id          String               @id @default(uuid()) @db.Uuid
+  sessionId   String               @map("session_id") @db.Uuid
+  paperId     String               @unique @map("paper_id") @db.Uuid
+  modality    PresentationModality @default(IN_PERSON)
+  score       Int?
+  comment     String               @default("")
+  presentedAt DateTime?            @map("presented_at")
+  session     ProgramSession       @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  paper       Paper                @relation(fields: [paperId], references: [id], onDelete: Cascade)
 
   @@map("presentations")
 }

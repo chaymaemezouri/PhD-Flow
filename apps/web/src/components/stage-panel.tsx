@@ -50,5 +50,25 @@ export function StagePanel({
   );
 }
 
+export function InfoGrid({
+  items,
+}: {
+  items: { label: string; value: string }[];
+}) {
+  if (items.length === 0) {
+    return null;
+  }
+  return (
+    <dl className="grid gap-2 text-sm sm:grid-cols-2">
+      {items.map((item) => (
+        <div key={`${item.label}-${item.value}`}>
+          <dt className="text-xs font-extrabold text-[#8b909a]">{item.label}</dt>
+          <dd className="font-semibold text-[#1c2744]">{item.value}</dd>
+        </div>
+      ))}
+    </dl>
+  );
+}
+
 export const stageField =
   'mt-1.5 block w-full rounded-xl border border-[#c5cad6] bg-white px-3 py-2.5 text-sm font-semibold text-[#1c2744] outline-none focus:border-[#3d4fd4] focus:ring-2 focus:ring-[#3d4fd4]/20';

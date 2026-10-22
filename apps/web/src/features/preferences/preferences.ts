@@ -8,7 +8,7 @@ import type {
 export const PREFERENCES_KEY = 'scholarflow.preferences';
 
 export const defaultPreferences: InterfacePreferences = {
-  theme: 'system',
+  theme: 'light',
   language: 'en',
 };
 

@@ -1,16 +1,13 @@
 import { useQuery } from '@tanstack/react-query';
 import { Search } from 'lucide-react';
-import { type ReactNode, useState } from 'react';
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, Navigate, useSearchParams } from 'react-router';
+import { ChairAssignmentPanel } from '@/components/chair-assignment-panel';
 import { PaperWorkCard, type WorkPaper } from '@/components/paper-work-card';
-import { Button } from '@/components/ui/button';
 import { focusStep, type PaperStep } from '@/components/step-bar';
 import { useCurrentUser } from '@/features/auth/use-account';
-import {
-  canStartSubmission,
-  canSubmitToConference,
-} from '@/features/navigation/can-submit';
+import { canSubmitToConference } from '@/features/navigation/can-submit';
 import { homePathFor } from '@/features/navigation/home-path';
 import { pickConference } from '@/features/navigation/pick-conference';
 import type { WorkspaceRole } from '@/features/navigation/modules';
@@ -89,14 +86,11 @@ export function RoleDashboardPage({ role }: { role: WorkspaceRole }) {
 
 function AuthorDashboard() {
   const { t } = useTranslation();
-  const account = useCurrentUser();
   const [query, setQuery] = useState('');
   const [board, setBoard] = useState<'all' | 'waiting' | 'blocked' | 'clear'>('all');
   const needle = query.trim().toLowerCase();
   const papers = useQuery({ queryKey: ['papers'], queryFn: loadPapers });
   const memberships = useQuery({ queryKey: ['conferences'], queryFn: loadMemberships });
-  const profile = account.data?.profile;
-  const firstName = profile?.firstName ?? t('top.guest');
   const counts = {
     total: papers.data?.length ?? 0,
     draft: papers.data?.filter((paper) => paper.status === 'DRAFT').length ?? 0,
@@ -130,9 +124,12 @@ function AuthorDashboard() {
     }
     return true;
   });
-  const conference = memberships.data?.find((item) => item.membershipStatus === 'ACTIVE');
   const openConferences =
     memberships.data?.filter((item) => item.membershipStatus === 'OPEN') ?? [];
+  const conference =
+    memberships.data?.find((item) => item.membershipStatus === 'ACTIVE') ??
+    openConferences[0] ??
+    null;
 
   const filters = [
     ['all', 'home.boardAll'],
@@ -141,50 +138,8 @@ function AuthorDashboard() {
     ['clear', 'home.boardClear'],
   ] as const;
 
-  const fullName = profile ? `${profile.firstName} ${profile.lastName}` : firstName;
-  const roleLabel = conference
-    ? t(`conferences.roles.${conference.role}`, { defaultValue: conference.role })
-    : null;
-
   return (
     <div className="space-y-5 lg:space-y-3">
-      <header className="flex flex-col gap-4 rounded-2xl border border-[#e4e7ee] bg-white px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5 lg:gap-3 lg:px-4 lg:py-3">
-        <div className="flex min-w-0 items-center gap-3 lg:gap-2.5">
-          {profile?.photoPath ? (
-            <img
-              src={profile.photoPath}
-              alt=""
-              className="size-12 rounded-full object-cover lg:size-10"
-            />
-          ) : (
-            <div className="grid size-12 place-items-center rounded-full bg-[#eef2ff] text-base font-extrabold text-[#3d4fd4] lg:size-10 lg:text-sm">
-              {firstName.slice(0, 1)}
-            </div>
-          )}
-          <div className="min-w-0">
-            <h1 className="truncate text-lg font-extrabold lg:text-base">{fullName}</h1>
-            <p className="truncate text-sm text-[#5c6578] lg:text-xs">
-              {[profile?.academicTitle, conference?.name, roleLabel]
-                .filter(Boolean)
-                .join(' · ') || t('home.noConference')}
-            </p>
-          </div>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <Link
-            to="/workspace/account"
-            className="rounded-full bg-[#f4f7ff] px-3 py-2 text-sm font-bold text-[#3d4fd4] no-underline lg:px-2.5 lg:py-1.5 lg:text-xs"
-          >
-            {t('auth.profileTitle')}
-          </Link>
-          {canStartSubmission(false, memberships.data) ? (
-            <Button asChild>
-              <Link to="/workspace/submissions/new">{t('papers.new')}</Link>
-            </Button>
-          ) : null}
-        </div>
-      </header>
-
       {openConferences.some((item) =>
         canSubmitToConference(false, memberships.data ?? [], item),
       ) ? (
@@ -328,7 +283,6 @@ function AuthorDashboard() {
 
 function ChairDashboard({ variant = 'admin' }: { variant?: 'admin' | 'committee' }) {
   const { t } = useTranslation();
-  const account = useCurrentUser();
   const [params, setParams] = useSearchParams();
   const [query, setQuery] = useState('');
   const boardParam = params.get('board');
@@ -377,12 +331,6 @@ function ChairDashboard({ variant = 'admin' }: { variant?: 'admin' | 'committee'
     },
     enabled: Boolean(managed),
   });
-  const profile = account.data?.profile;
-  const firstName = profile?.firstName ?? t('top.guest');
-  const fullName = profile ? `${profile.firstName} ${profile.lastName}` : firstName;
-  const roleLabel = managed
-    ? t(`conferences.roles.${managed.role}`, { defaultValue: managed.role })
-    : null;
   const byStatus = stats.data?.papersByStatus ?? {};
   const rows = papers.data ?? [];
   const decisionCount = rows.filter(
@@ -441,16 +389,7 @@ function ChairDashboard({ variant = 'admin' }: { variant?: 'admin' | 'committee'
 
   return (
     <div className="space-y-5 lg:space-y-3">
-      <Identity
-        name={fullName}
-        photo={profile?.photoPath}
-        initial={firstName.slice(0, 1)}
-        line={
-          [profile?.academicTitle, managed?.name, roleLabel]
-            .filter(Boolean)
-            .join(' · ') || t('home.noConference')
-        }
-      >
+      <div className="flex flex-wrap items-center gap-2">
         {managed ? (
           <Link
             to={`/workspace/conferences/${managed.id}`}
@@ -465,6 +404,12 @@ function ChairDashboard({ variant = 'admin' }: { variant?: 'admin' | 'committee'
         >
           {t('nav.reviews')}
         </Link>
+        <Link
+          to="/workspace/session-chair"
+          className="rounded-full bg-[#f4f7ff] px-3 py-2 text-sm font-bold text-[#3d4fd4] no-underline lg:px-2.5 lg:py-1.5 lg:text-xs"
+        >
+          {t('nav.sessionChair')}
+        </Link>
         <button
           type="button"
           onClick={() => setBoard('decisions')}
@@ -473,7 +418,7 @@ function ChairDashboard({ variant = 'admin' }: { variant?: 'admin' | 'committee'
           {t('home.decisions')}
           {decisionCount > 0 ? ` · ${decisionCount}` : ''}
         </button>
-      </Identity>
+      </div>
       <p className="text-sm text-[#5c6578]">
         {t(variant === 'committee' ? 'home.committeeIntro' : 'home.chairIntro')}
       </p>
@@ -530,6 +475,11 @@ function ChairDashboard({ variant = 'admin' }: { variant?: 'admin' | 'committee'
           hint={t('home.overdueHint')}
         />
       </section>
+      {managed ? (
+        <section className="rounded-2xl border border-[#e4e7ee] bg-white p-3 sm:p-5">
+          <ChairAssignmentPanel conferenceId={managed.id} />
+        </section>
+      ) : null}
       <section className="space-y-3 rounded-2xl border border-[#e4e7ee] bg-white p-3 sm:space-y-4 sm:p-5">
         <div className="flex flex-col gap-2.5 sm:flex-row sm:items-end sm:justify-between sm:gap-3">
           <div>
@@ -583,7 +533,6 @@ function ChairDashboard({ variant = 'admin' }: { variant?: 'admin' | 'committee'
 
 function ReviewerDashboard() {
   const { t } = useTranslation();
-  const account = useCurrentUser();
   const [board, setBoard] = useState<'all' | 'invited' | 'active' | 'done'>('all');
   const memberships = useQuery({ queryKey: ['conferences'], queryFn: loadMemberships });
   const reviews = useQuery({
@@ -607,12 +556,6 @@ function ReviewerDashboard() {
     },
   });
   const conference = memberships.data?.find((item) => item.membershipStatus === 'ACTIVE');
-  const profile = account.data?.profile;
-  const firstName = profile?.firstName ?? t('top.guest');
-  const fullName = profile ? `${profile.firstName} ${profile.lastName}` : firstName;
-  const roleLabel = conference
-    ? t(`conferences.roles.${conference.role}`, { defaultValue: conference.role })
-    : null;
   const items = reviews.data ?? [];
   const invited = items.filter((item) => item.status === 'INVITED');
   const active = items.filter(
@@ -651,23 +594,20 @@ function ReviewerDashboard() {
 
   return (
     <div className="space-y-5 lg:space-y-3">
-      <Identity
-        name={fullName}
-        photo={profile?.photoPath}
-        initial={firstName.slice(0, 1)}
-        line={
-          [profile?.academicTitle, conference?.name, roleLabel]
-            .filter(Boolean)
-            .join(' · ') || t('home.noConference')
-        }
-      >
+      <div className="flex flex-wrap items-center gap-2">
         <Link
           to="/workspace/reviews"
           className="rounded-full bg-[#5d74ff] px-3 py-2 text-sm font-bold text-white no-underline lg:px-2.5 lg:py-1.5 lg:text-xs"
         >
           {t('home.reviewQueue')}
         </Link>
-      </Identity>
+        <Link
+          to="/workspace/session-chair"
+          className="rounded-full bg-[#f4f7ff] px-3 py-2 text-sm font-bold text-[#3d4fd4] no-underline lg:px-2.5 lg:py-1.5 lg:text-xs"
+        >
+          {t('nav.sessionChair')}
+        </Link>
+      </div>
       <p className="text-sm text-[#5c6578]">{t('home.reviewerIntro')}</p>
       <section className="grid grid-cols-2 gap-2 sm:gap-3 xl:grid-cols-4">
         <Metric
@@ -768,43 +708,6 @@ function ReviewerDashboard() {
         </ul>
       </section>
     </div>
-  );
-}
-
-function Identity({
-  name,
-  photo,
-  initial,
-  line,
-  children,
-}: {
-  name: string;
-  photo?: string | null;
-  initial: string;
-  line: string;
-  children?: ReactNode;
-}) {
-  return (
-    <header className="flex flex-col gap-4 rounded-2xl border border-[#e4e7ee] bg-white px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5 lg:gap-3 lg:px-4 lg:py-3">
-      <div className="flex min-w-0 items-center gap-3 lg:gap-2.5">
-        {photo ? (
-          <img
-            src={photo}
-            alt=""
-            className="size-12 rounded-full object-cover lg:size-10"
-          />
-        ) : (
-          <div className="grid size-12 place-items-center rounded-full bg-[#eef2ff] text-base font-extrabold text-[#3d4fd4] lg:size-10 lg:text-sm">
-            {initial}
-          </div>
-        )}
-        <div className="min-w-0">
-          <h1 className="truncate text-lg font-extrabold lg:text-base">{name}</h1>
-          <p className="truncate text-sm text-[#5c6578] lg:text-xs">{line}</p>
-        </div>
-      </div>
-      <div className="flex flex-wrap items-center gap-2">{children}</div>
-    </header>
   );
 }
 

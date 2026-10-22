@@ -25,6 +25,12 @@ import {
   PaymentStatus,
   PlatformRole,
   RegistrationStatus,
+  CameraReadyStatus,
+  CopyrightStageStatus,
+  PresentationModality,
+  RemarkStatus,
+  SimilarityStatus,
+  SlidesStatus,
 } from '../../generated/prisma/client.js';
 import { certificatePdf } from './certificate-pdf.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
@@ -38,12 +44,17 @@ const CHAIRS = new Set<ConferenceRole>([
   ConferenceRole.ADMINISTRATOR,
   ConferenceRole.COMMITTEE,
 ]);
-const ACCEPTED = new Set<DecisionOutcome>([
-  DecisionOutcome.ACCEPTED,
+/** Final acceptance only — unlocks registration and later stages. */
+const ACCEPTED = new Set<DecisionOutcome>([DecisionOutcome.ACCEPTED]);
+const NEEDS_REVISION = new Set<DecisionOutcome>([
   DecisionOutcome.CONDITIONALLY_ACCEPTED,
+  DecisionOutcome.REVISION_REQUIRED,
 ]);
 
 type DecisionInput = z.infer<typeof decisionSchema>;
+type RemarkStatusInput = 'OPEN' | 'ADDRESSED' | 'VALIDATED';
+type SlidesDecisionInput = { outcome: 'VALIDATED' | 'NEEDS_MODS'; note: string };
+type CameraReadyDecisionInput = { outcome: 'VALIDATED' | 'NEEDS_MODS'; note: string };
 type SimilarityInput = z.infer<typeof similaritySchema>;
 type RoomInput = z.infer<typeof roomSchema>;
 type SessionInput = z.infer<typeof sessionSchema>;
@@ -180,10 +191,66 @@ export class WorkflowService {
         decidedById: actor.id,
       },
     });
+    if (input.publish && NEEDS_REVISION.has(input.outcome)) {
+      await this.seedRevisionRemarks(paperId, input.letter);
+    }
     if (input.publish) {
       await this.notifyAuthors(paper, 'Decision on your paper', input.letter);
     }
     return decision;
+  }
+
+  async updateRemark(
+    actor: AuthenticatedUser,
+    paperId: string,
+    remarkId: string,
+    status: RemarkStatusInput,
+  ) {
+    const paper = await this.loadPaper(paperId);
+    const remark = await this.prisma.revisionRemark.findFirst({
+      where: { id: remarkId, paperId },
+    });
+    if (!remark) {
+      throw new NotFoundException('Remark not found');
+    }
+    const chair = this.isChair(actor, paper.conference.memberships);
+    const author =
+      paper.createdById === actor.id ||
+      paper.authors.some((item) => item.email === actor.email.toLowerCase());
+    if (status === 'VALIDATED' || (status === 'OPEN' && remark.status === RemarkStatus.VALIDATED)) {
+      if (!chair) {
+        throw new ForbiddenException('Only the committee can validate remarks');
+      }
+    } else if (status === 'ADDRESSED' || status === 'OPEN') {
+      if (!author && !chair) {
+        throw new ForbiddenException('Only the author can mark a remark as addressed');
+      }
+    } else {
+      throw new BadRequestException('Unsupported remark status');
+    }
+    const outcome =
+      paper.decision?.status === DecisionStatus.PUBLISHED ? paper.decision.outcome : null;
+    if (!outcome || !NEEDS_REVISION.has(outcome)) {
+      throw new ForbiddenException('Remarks can only change while a revision is open');
+    }
+    const updated = await this.prisma.revisionRemark.update({
+      where: { id: remarkId },
+      data: {
+        status: RemarkStatus[status],
+        addressedAt:
+          status === 'ADDRESSED'
+            ? new Date()
+            : status === 'OPEN'
+              ? null
+              : remark.addressedAt,
+        validatedAt: status === 'VALIDATED' ? new Date() : null,
+        validatedById: status === 'VALIDATED' ? actor.id : null,
+      },
+    });
+    if (status === 'VALIDATED') {
+      await this.maybeAcceptAfterRemarks(paperId, actor.id);
+    }
+    return updated;
   }
 
   async storeFile(
@@ -206,16 +273,68 @@ export class WorkflowService {
     }
     const outcome =
       paper.decision?.status === DecisionStatus.PUBLISHED ? paper.decision.outcome : null;
-    if (
-      kind === 'REVISION' &&
-      outcome !== DecisionOutcome.REVISION_REQUIRED &&
-      outcome !== DecisionOutcome.CONDITIONALLY_ACCEPTED
-    ) {
+    if (kind === 'REVISION' && (!outcome || !NEEDS_REVISION.has(outcome))) {
       throw new ForbiddenException(
         'A revision file is allowed after a revision decision',
       );
     }
-    if (kind !== 'REVISION' && (!outcome || !ACCEPTED.has(outcome))) {
+    if (kind === 'SLIDES') {
+      if (paper.slidesStatus === SlidesStatus.LOCKED) {
+        await this.ensurePresentationOpen(paper);
+        paper.slidesStatus = SlidesStatus.OPEN;
+      }
+      const slidesOk =
+        paper.slidesStatus === SlidesStatus.OPEN ||
+        paper.slidesStatus === SlidesStatus.DEPOSITED ||
+        paper.slidesStatus === SlidesStatus.NEEDS_MODS ||
+        paper.slidesStatus === SlidesStatus.WILL_DEPOSIT;
+      if (!slidesOk) {
+        throw new ForbiddenException(
+          'Slides can be uploaded when presentation is open',
+        );
+      }
+    } else if (kind === 'CAMERA_READY' || kind === 'EDITABLE') {
+      if (paper.cameraReadyStatus === CameraReadyStatus.LOCKED) {
+        await this.ensureCameraReadyOpen(paper);
+        paper.cameraReadyStatus = CameraReadyStatus.OPEN;
+      }
+      const cameraOk =
+        paper.cameraReadyStatus === CameraReadyStatus.OPEN ||
+        paper.cameraReadyStatus === CameraReadyStatus.DEPOSITED ||
+        paper.cameraReadyStatus === CameraReadyStatus.NEEDS_MODS ||
+        paper.cameraReadyStatus === CameraReadyStatus.WILL_DEPOSIT;
+      if (!cameraOk) {
+        throw new ForbiddenException(
+          'Camera-ready files can be uploaded when the stage is open',
+        );
+      }
+    } else if (kind === 'SIMILARITY') {
+      if (paper.similarityStatus === SimilarityStatus.LOCKED) {
+        await this.ensureSimilarityOpen(paper);
+        paper.similarityStatus = SimilarityStatus.OPEN;
+      }
+      const similarityOk =
+        paper.similarityStatus === SimilarityStatus.OPEN ||
+        paper.similarityStatus === SimilarityStatus.DEPOSITED;
+      if (!similarityOk) {
+        throw new ForbiddenException(
+          'Similarity report can be uploaded when the stage is open',
+        );
+      }
+    } else if (kind === 'COPYRIGHT') {
+      if (paper.copyrightStageStatus === CopyrightStageStatus.LOCKED) {
+        await this.ensureCopyrightOpen(paper);
+        paper.copyrightStageStatus = CopyrightStageStatus.OPEN;
+      }
+      const copyrightOk =
+        paper.copyrightStageStatus === CopyrightStageStatus.OPEN ||
+        paper.copyrightStageStatus === CopyrightStageStatus.DEPOSITED;
+      if (!copyrightOk) {
+        throw new ForbiddenException(
+          'Copyright form can be uploaded when the stage is open',
+        );
+      }
+    } else if (kind !== 'REVISION' && (!outcome || !ACCEPTED.has(outcome))) {
       throw new ForbiddenException('This file is allowed after acceptance');
     }
     this.assertUpload(kind, file);
@@ -240,6 +359,47 @@ export class WorkflowService {
         create: { paperId, status: CopyrightStatus.PENDING },
         update: { status: CopyrightStatus.PENDING },
       });
+      if (paper.copyrightStageStatus !== CopyrightStageStatus.VALIDATED) {
+        await this.prisma.paper.update({
+          where: { id: paperId },
+          data: { copyrightStageStatus: CopyrightStageStatus.DEPOSITED },
+        });
+      }
+    }
+    if (kind === 'PAYMENT_PROOF') {
+      await this.prisma.registration.upsert({
+        where: {
+          conferenceId_userId: {
+            conferenceId: paper.conferenceId,
+            userId: paper.createdById,
+          },
+        },
+        create: {
+          conferenceId: paper.conferenceId,
+          userId: paper.createdById,
+          status: RegistrationStatus.REQUESTED,
+          paymentStatus: PaymentStatus.PENDING,
+        },
+        update: {
+          paymentStatus: PaymentStatus.PENDING,
+        },
+      });
+    }
+    if (kind === 'SLIDES') {
+      const next =
+        paper.slidesStatus === SlidesStatus.NEEDS_MODS
+          ? SlidesStatus.WILL_DEPOSIT
+          : SlidesStatus.DEPOSITED;
+      await this.prisma.paper.update({
+        where: { id: paperId },
+        data: { slidesStatus: next },
+      });
+    }
+    if (kind === 'CAMERA_READY' || kind === 'EDITABLE') {
+      await this.refreshCameraReadyAfterUpload(paperId, paper.cameraReadyStatus);
+    }
+    if (kind === 'SIMILARITY') {
+      await this.refreshSimilarityAfterDeposit(paperId);
     }
     if (kind === 'REVISION') {
       await this.prisma.reviewAssignment.updateMany({
@@ -247,6 +407,199 @@ export class WorkflowService {
         data: { status: AssignmentStatus.IN_PROGRESS },
       });
     }
+  }
+
+  async decideSlides(
+    actor: AuthenticatedUser,
+    paperId: string,
+    input: SlidesDecisionInput,
+  ) {
+    const paper = await this.loadPaper(paperId);
+    this.assertChair(actor, paper.conference.memberships);
+    if (
+      paper.slidesStatus !== SlidesStatus.DEPOSITED &&
+      paper.slidesStatus !== SlidesStatus.WILL_DEPOSIT &&
+      paper.slidesStatus !== SlidesStatus.NEEDS_MODS
+    ) {
+      throw new ForbiddenException('Wait for the author to deposit the slides');
+    }
+    if (!paper.files.some((file) => file.kind === PaperFileKind.SLIDES)) {
+      throw new BadRequestException('No slides file found');
+    }
+    if (input.outcome === 'VALIDATED') {
+      const updated = await this.prisma.paper.update({
+        where: { id: paperId },
+        data: {
+          slidesStatus: SlidesStatus.VALIDATED,
+          sessionComment: input.note || paper.sessionComment,
+          cameraReadyStatus:
+            paper.cameraReadyStatus === CameraReadyStatus.LOCKED
+              ? CameraReadyStatus.OPEN
+              : paper.cameraReadyStatus,
+        },
+      });
+      return updated;
+    }
+    await this.seedPresentationRemarks(paperId, input.note);
+    return this.prisma.paper.update({
+      where: { id: paperId },
+      data: {
+        slidesStatus: SlidesStatus.NEEDS_MODS,
+        sessionComment: input.note || paper.sessionComment,
+      },
+    });
+  }
+
+  async decideCameraReady(
+    actor: AuthenticatedUser,
+    paperId: string,
+    input: CameraReadyDecisionInput,
+  ) {
+    const paper = await this.loadPaper(paperId);
+    this.assertChair(actor, paper.conference.memberships);
+    if (
+      paper.cameraReadyStatus !== CameraReadyStatus.DEPOSITED &&
+      paper.cameraReadyStatus !== CameraReadyStatus.WILL_DEPOSIT &&
+      paper.cameraReadyStatus !== CameraReadyStatus.NEEDS_MODS
+    ) {
+      throw new ForbiddenException('Wait for the author to deposit the final version');
+    }
+    const hasPdf = paper.files.some((file) => file.kind === PaperFileKind.CAMERA_READY);
+    const hasEditable = paper.files.some((file) => file.kind === PaperFileKind.EDITABLE);
+    if (!hasPdf || !hasEditable) {
+      throw new BadRequestException('Both PDF and editable/ZIP files are required');
+    }
+    if (input.outcome === 'VALIDATED') {
+      return this.prisma.paper.update({
+        where: { id: paperId },
+        data: {
+          cameraReadyStatus: CameraReadyStatus.VALIDATED,
+          similarityStatus:
+            paper.similarityStatus === SimilarityStatus.LOCKED
+              ? SimilarityStatus.OPEN
+              : paper.similarityStatus,
+        },
+      });
+    }
+    await this.seedCameraReadyRemarks(paperId, input.note);
+    return this.prisma.paper.update({
+      where: { id: paperId },
+      data: { cameraReadyStatus: CameraReadyStatus.NEEDS_MODS },
+    });
+  }
+
+  async updateCameraReadyRemark(
+    actor: AuthenticatedUser,
+    paperId: string,
+    remarkId: string,
+    status: RemarkStatusInput,
+  ) {
+    const paper = await this.loadPaper(paperId);
+    const remark = await this.prisma.cameraReadyRemark.findFirst({
+      where: { id: remarkId, paperId },
+    });
+    if (!remark) {
+      throw new NotFoundException('Remark not found');
+    }
+    const chair = this.isChair(actor, paper.conference.memberships);
+    const author =
+      paper.createdById === actor.id ||
+      paper.authors.some((item) => item.email === actor.email.toLowerCase());
+    if (
+      status === 'VALIDATED' ||
+      (status === 'OPEN' && remark.status === RemarkStatus.VALIDATED)
+    ) {
+      if (!chair) {
+        throw new ForbiddenException('Only the committee can validate remarks');
+      }
+    } else if (status === 'ADDRESSED' || status === 'OPEN') {
+      if (!author && !chair) {
+        throw new ForbiddenException('Only the author can mark a remark as addressed');
+      }
+    } else {
+      throw new BadRequestException('Unsupported remark status');
+    }
+    if (
+      paper.cameraReadyStatus !== CameraReadyStatus.NEEDS_MODS &&
+      paper.cameraReadyStatus !== CameraReadyStatus.WILL_DEPOSIT
+    ) {
+      throw new ForbiddenException('Remarks can only change while modifications are open');
+    }
+    const updated = await this.prisma.cameraReadyRemark.update({
+      where: { id: remarkId },
+      data: {
+        status: RemarkStatus[status],
+        addressedAt:
+          status === 'ADDRESSED'
+            ? new Date()
+            : status === 'OPEN'
+              ? null
+              : remark.addressedAt,
+        validatedAt: status === 'VALIDATED' ? new Date() : null,
+        validatedById: status === 'VALIDATED' ? actor.id : null,
+      },
+    });
+    if (status === 'VALIDATED') {
+      await this.maybeValidateCameraReadyAfterRemarks(paperId);
+    }
+    return updated;
+  }
+
+  async updatePresentationRemark(
+    actor: AuthenticatedUser,
+    paperId: string,
+    remarkId: string,
+    status: RemarkStatusInput,
+  ) {
+    const paper = await this.loadPaper(paperId);
+    const remark = await this.prisma.presentationRemark.findFirst({
+      where: { id: remarkId, paperId },
+    });
+    if (!remark) {
+      throw new NotFoundException('Remark not found');
+    }
+    const chair = this.isChair(actor, paper.conference.memberships);
+    const author =
+      paper.createdById === actor.id ||
+      paper.authors.some((item) => item.email === actor.email.toLowerCase());
+    if (
+      status === 'VALIDATED' ||
+      (status === 'OPEN' && remark.status === RemarkStatus.VALIDATED)
+    ) {
+      if (!chair) {
+        throw new ForbiddenException('Only the committee can validate remarks');
+      }
+    } else if (status === 'ADDRESSED' || status === 'OPEN') {
+      if (!author && !chair) {
+        throw new ForbiddenException('Only the author can mark a remark as addressed');
+      }
+    } else {
+      throw new BadRequestException('Unsupported remark status');
+    }
+    if (
+      paper.slidesStatus !== SlidesStatus.NEEDS_MODS &&
+      paper.slidesStatus !== SlidesStatus.WILL_DEPOSIT
+    ) {
+      throw new ForbiddenException('Remarks can only change while modifications are open');
+    }
+    const updated = await this.prisma.presentationRemark.update({
+      where: { id: remarkId },
+      data: {
+        status: RemarkStatus[status],
+        addressedAt:
+          status === 'ADDRESSED'
+            ? new Date()
+            : status === 'OPEN'
+              ? null
+              : remark.addressedAt,
+        validatedAt: status === 'VALIDATED' ? new Date() : null,
+        validatedById: status === 'VALIDATED' ? actor.id : null,
+      },
+    });
+    if (status === 'VALIDATED') {
+      await this.maybeValidateSlidesAfterRemarks(paperId, actor.id);
+    }
+    return updated;
   }
 
   async assignSessionChair(actor: AuthenticatedUser, paperId: string, userId: string) {
@@ -287,10 +640,21 @@ export class WorkflowService {
         'Upload the slides before marking the paper presented',
       );
     }
-    return this.prisma.paper.update({
-      where: { id: paperId },
-      data: { presentedAt: paper.presentedAt ?? new Date(), sessionComment: comment },
-    });
+    const now = paper.presentedAt ?? new Date();
+    await this.prisma.$transaction([
+      this.prisma.paper.update({
+        where: { id: paperId },
+        data: { presentedAt: now, sessionComment: comment },
+      }),
+      this.prisma.presentation.updateMany({
+        where: { paperId },
+        data: {
+          presentedAt: now,
+          comment: comment || undefined,
+        },
+      }),
+    ]);
+    return { presentedAt: now.toISOString(), sessionComment: comment };
   }
 
   async sendPaymentNotice(actor: AuthenticatedUser, paperId: string) {
@@ -322,7 +686,7 @@ export class WorkflowService {
     if (!paper.files.some((file) => file.kind === PaperFileKind.PAYMENT_PROOF)) {
       throw new NotFoundException('Payment receipt not found');
     }
-    return this.prisma.registration.upsert({
+    const registration = await this.prisma.registration.upsert({
       where: {
         conferenceId_userId: {
           conferenceId: paper.conferenceId,
@@ -340,6 +704,8 @@ export class WorkflowService {
         paymentStatus: PaymentStatus.VERIFIED,
       },
     });
+    await this.openPresentation(paper.conferenceId, paper.createdById);
+    return registration;
   }
 
   async document(
@@ -397,12 +763,20 @@ export class WorkflowService {
   ) {
     const paper = await this.loadPaper(paperId);
     this.assertAuthor(actor, paper);
-    const outcome =
-      paper.decision?.status === DecisionStatus.PUBLISHED ? paper.decision.outcome : null;
-    if (!outcome || !ACCEPTED.has(outcome)) {
-      throw new ForbiddenException('A similarity report follows acceptance');
+    if (paper.similarityStatus === SimilarityStatus.LOCKED) {
+      await this.ensureSimilarityOpen(paper);
+      paper.similarityStatus = SimilarityStatus.OPEN;
     }
-    return this.prisma.similarityReport.upsert({
+    if (
+      paper.similarityStatus !== SimilarityStatus.OPEN &&
+      paper.similarityStatus !== SimilarityStatus.DEPOSITED
+    ) {
+      throw new ForbiddenException('Similarity can be submitted when the stage is open');
+    }
+    if (input.percentage >= 20) {
+      throw new BadRequestException('Similarity must be strictly under 20 percent');
+    }
+    const report = await this.prisma.similarityReport.upsert({
       where: { paperId },
       create: {
         paperId,
@@ -412,6 +786,8 @@ export class WorkflowService {
       },
       update: { percentage: input.percentage, note: input.note, verifiedAt: null },
     });
+    await this.refreshSimilarityAfterDeposit(paperId);
+    return report;
   }
 
   async validateTemplate(actor: AuthenticatedUser, paperId: string) {
@@ -427,6 +803,12 @@ export class WorkflowService {
   async verifySimilarity(actor: AuthenticatedUser, paperId: string) {
     const paper = await this.loadPaper(paperId);
     this.assertChair(actor, paper.conference.memberships);
+    if (
+      paper.similarityStatus !== SimilarityStatus.DEPOSITED &&
+      paper.similarityStatus !== SimilarityStatus.OPEN
+    ) {
+      throw new ForbiddenException('Wait for the author to deposit the similarity report');
+    }
     if (!paper.similarity) {
       throw new NotFoundException('Similarity report not found');
     }
@@ -437,10 +819,23 @@ export class WorkflowService {
     if (!reportFile) {
       throw new ForbiddenException('Upload the similarity report before verification');
     }
-    return this.prisma.similarityReport.update({
-      where: { paperId },
-      data: { verifiedAt: new Date() },
-    });
+    const [report] = await this.prisma.$transaction([
+      this.prisma.similarityReport.update({
+        where: { paperId },
+        data: { verifiedAt: new Date() },
+      }),
+      this.prisma.paper.update({
+        where: { id: paperId },
+        data: {
+          similarityStatus: SimilarityStatus.VALIDATED,
+          copyrightStageStatus:
+            paper.copyrightStageStatus === CopyrightStageStatus.LOCKED
+              ? CopyrightStageStatus.OPEN
+              : paper.copyrightStageStatus,
+        },
+      }),
+    ]);
+    return report;
   }
 
   async copyrightTemplate(actor: AuthenticatedUser, conferenceId: string) {
@@ -472,10 +867,32 @@ export class WorkflowService {
     if (!paper.copyright) {
       throw new NotFoundException('Copyright file not found');
     }
-    return this.prisma.copyrightRecord.update({
-      where: { paperId },
-      data: { status: accept ? CopyrightStatus.VALIDATED : CopyrightStatus.REJECTED },
-    });
+    if (
+      accept &&
+      paper.copyrightStageStatus !== CopyrightStageStatus.DEPOSITED &&
+      paper.copyrightStageStatus !== CopyrightStageStatus.OPEN
+    ) {
+      throw new ForbiddenException('Wait for the author to deposit the copyright form');
+    }
+    const hasFile = paper.files.some((file) => file.kind === PaperFileKind.COPYRIGHT);
+    if (accept && !hasFile) {
+      throw new ForbiddenException('Upload the copyright form before validation');
+    }
+    const [record] = await this.prisma.$transaction([
+      this.prisma.copyrightRecord.update({
+        where: { paperId },
+        data: { status: accept ? CopyrightStatus.VALIDATED : CopyrightStatus.REJECTED },
+      }),
+      this.prisma.paper.update({
+        where: { id: paperId },
+        data: {
+          copyrightStageStatus: accept
+            ? CopyrightStageStatus.VALIDATED
+            : CopyrightStageStatus.OPEN,
+        },
+      }),
+    ]);
+    return record;
   }
 
   async register(actor: AuthenticatedUser, conferenceId: string) {
@@ -514,10 +931,12 @@ export class WorkflowService {
     if (row.paymentStatus === PaymentStatus.PENDING) {
       throw new ForbiddenException('The registration fee is still unpaid');
     }
-    return this.prisma.registration.update({
+    const updated = await this.prisma.registration.update({
       where: { id: row.id },
       data: { status: RegistrationStatus.VERIFIED },
     });
+    await this.openPresentation(conferenceId, userId);
+    return updated;
   }
 
   async pay(actor: AuthenticatedUser, conferenceId: string) {
@@ -531,13 +950,15 @@ export class WorkflowService {
     if (!conference.paymentsEnabled && row.paymentStatus !== PaymentStatus.PENDING) {
       throw new ForbiddenException('Payment is not required');
     }
-    return this.prisma.registration.update({
+    const updated = await this.prisma.registration.update({
       where: { id: row.id },
       data: {
         paymentStatus: PaymentStatus.VERIFIED,
         status: RegistrationStatus.VERIFIED,
       },
     });
+    await this.openPresentation(conferenceId, actor.id);
+    return updated;
   }
 
   async addRoom(actor: AuthenticatedUser, conferenceId: string, input: RoomInput) {
@@ -562,14 +983,73 @@ export class WorkflowService {
         include: {
           room: true,
           presentations: {
-            include: { paper: { select: { title: true, publicId: true } } },
+            include: {
+              paper: {
+                select: {
+                  id: true,
+                  title: true,
+                  publicId: true,
+                  presentedAt: true,
+                  sessionComment: true,
+                  sessionChairIds: true,
+                },
+              },
+            },
           },
         },
         orderBy: { startsAt: 'asc' },
       }),
       this.prisma.room.findMany({ where: { conferenceId }, orderBy: { name: 'asc' } }),
     ]);
-    return { sessions, rooms };
+    const chairIds = [
+      ...new Set(
+        sessions.flatMap((session) =>
+          session.presentations.flatMap((item) => item.paper.sessionChairIds),
+        ),
+      ),
+    ];
+    const chairs =
+      chairIds.length === 0
+        ? []
+        : await this.prisma.user.findMany({
+            where: { id: { in: chairIds } },
+            include: { profile: true },
+          });
+    const chairName = new Map(
+      chairs.map((user) => [
+        user.id,
+        `${user.profile?.firstName ?? ''} ${user.profile?.lastName ?? ''}`.trim() ||
+          user.email,
+      ]),
+    );
+    return {
+      sessions: sessions.map((session) => ({
+        id: session.id,
+        title: session.title,
+        startsAt: session.startsAt,
+        endsAt: session.endsAt,
+        room: session.room,
+        presentations: session.presentations.map((item) => ({
+          id: item.id,
+          modality: item.modality,
+          score: item.score,
+          comment: item.comment,
+          presentedAt: item.presentedAt ?? item.paper.presentedAt,
+          paper: {
+            id: item.paper.id,
+            title: item.paper.title,
+            publicId: item.paper.publicId,
+            sessionComment: item.paper.sessionComment,
+            sessionChairs: item.paper.sessionChairIds.map((id) => ({
+              userId: id,
+              name: chairName.get(id) ?? id,
+              mine: id === actor.id,
+            })),
+          },
+        })),
+      })),
+      rooms,
+    };
   }
 
   async publishDoi(actor: AuthenticatedUser, paperId: string) {
@@ -626,32 +1106,60 @@ export class WorkflowService {
     if (!outcome || !ACCEPTED.has(outcome)) {
       throw new ForbiddenException('Only an accepted paper can be scheduled');
     }
+    const modality =
+      input.modality === 'ONLINE'
+        ? PresentationModality.ONLINE
+        : PresentationModality.IN_PERSON;
     return this.prisma.presentation.upsert({
       where: { paperId: input.paperId },
-      create: { sessionId, paperId: input.paperId },
-      update: { sessionId },
+      create: { sessionId, paperId: input.paperId, modality },
+      update: { sessionId, modality },
     });
   }
 
   async assessPresentation(
     actor: AuthenticatedUser,
     presentationId: string,
-    input: { score: number; comment: string },
+    input: { score?: number; comment: string; presented?: boolean },
   ) {
     const row = await this.prisma.presentation.findUnique({
       where: { id: presentationId },
       include: {
+        paper: true,
         session: { include: { conference: { include: { memberships: true } } } },
       },
     });
     if (!row) {
       throw new NotFoundException('Presentation not found');
     }
-    this.assertChair(actor, row.session.conference.memberships);
-    return this.prisma.presentation.update({
-      where: { id: presentationId },
-      data: { score: input.score, comment: input.comment },
-    });
+    const sessionChair = row.paper.sessionChairIds.includes(actor.id);
+    if (!sessionChair) {
+      this.assertChair(actor, row.session.conference.memberships);
+    }
+    const markPresented = input.presented !== false;
+    const now = row.presentedAt ?? row.paper.presentedAt ?? new Date();
+    const [presentation] = await this.prisma.$transaction([
+      this.prisma.presentation.update({
+        where: { id: presentationId },
+        data: {
+          score: input.score ?? row.score,
+          comment: input.comment,
+          presentedAt: markPresented ? now : row.presentedAt,
+        },
+      }),
+      ...(markPresented
+        ? [
+            this.prisma.paper.update({
+              where: { id: row.paperId },
+              data: {
+                presentedAt: row.paper.presentedAt ?? now,
+                sessionComment: input.comment || row.paper.sessionComment,
+              },
+            }),
+          ]
+        : []),
+    ]);
+    return presentation;
   }
 
   async statistics(actor: AuthenticatedUser, conferenceId: string) {
@@ -759,19 +1267,29 @@ export class WorkflowService {
     files: { kind: PaperFileKind }[];
     presentedAt?: Date | null;
     presentation?: { id: string } | null;
+    cameraReadyStatus?: CameraReadyStatus;
+    similarityStatus?: SimilarityStatus;
+    copyrightStageStatus?: CopyrightStageStatus;
+    slidesStatus?: SlidesStatus;
   }) {
     const published = paper.decision?.status === DecisionStatus.PUBLISHED;
     const accepted =
       published && paper.decision ? ACCEPTED.has(paper.decision.outcome) : false;
-    const cameraReady = paper.files.some(
-      (file) => file.kind === PaperFileKind.CAMERA_READY,
-    );
+    const cameraReady =
+      paper.cameraReadyStatus === CameraReadyStatus.VALIDATED ||
+      paper.files.some((file) => file.kind === PaperFileKind.CAMERA_READY);
     const similarityOk =
-      paper.similarity !== null &&
-      paper.similarity.percentage < 20 &&
-      paper.similarity.verifiedAt !== null;
-    const copyrightOk = paper.copyright?.status === CopyrightStatus.VALIDATED;
-    const presented = Boolean(paper.presentedAt) || Boolean(paper.presentation);
+      paper.similarityStatus === SimilarityStatus.VALIDATED ||
+      (paper.similarity !== null &&
+        paper.similarity.percentage < 20 &&
+        paper.similarity.verifiedAt !== null);
+    const copyrightOk =
+      paper.copyrightStageStatus === CopyrightStageStatus.VALIDATED ||
+      paper.copyright?.status === CopyrightStatus.VALIDATED;
+    const presented =
+      paper.slidesStatus === SlidesStatus.VALIDATED ||
+      Boolean(paper.presentedAt) ||
+      Boolean(paper.presentation);
     return {
       accepted,
       cameraReady,
@@ -781,11 +1299,382 @@ export class WorkflowService {
       ready:
         paper.status !== PaperStatus.WITHDRAWN &&
         accepted &&
-        cameraReady &&
-        similarityOk &&
-        copyrightOk &&
+        paper.cameraReadyStatus === CameraReadyStatus.VALIDATED &&
+        paper.similarityStatus === SimilarityStatus.VALIDATED &&
+        paper.copyrightStageStatus === CopyrightStageStatus.VALIDATED &&
         presented,
     };
+  }
+
+  private async openPresentation(conferenceId: string, userId: string) {
+    await this.prisma.paper.updateMany({
+      where: {
+        conferenceId,
+        createdById: userId,
+        slidesStatus: SlidesStatus.LOCKED,
+        decision: {
+          status: DecisionStatus.PUBLISHED,
+          outcome: DecisionOutcome.ACCEPTED,
+        },
+      },
+      data: { slidesStatus: SlidesStatus.OPEN },
+    });
+  }
+
+  private async ensurePresentationOpen(paper: {
+    id: string;
+    conferenceId: string;
+    createdById: string;
+    slidesStatus: SlidesStatus;
+    decision: { status: DecisionStatus; outcome: DecisionOutcome } | null;
+  }) {
+    if (paper.slidesStatus !== SlidesStatus.LOCKED) {
+      return;
+    }
+    if (
+      paper.decision?.status !== DecisionStatus.PUBLISHED ||
+      paper.decision.outcome !== DecisionOutcome.ACCEPTED
+    ) {
+      throw new ForbiddenException('Slides can be uploaded when presentation is open');
+    }
+    const registration = await this.prisma.registration.findUnique({
+      where: {
+        conferenceId_userId: {
+          conferenceId: paper.conferenceId,
+          userId: paper.createdById,
+        },
+      },
+    });
+    const ready =
+      registration?.status === RegistrationStatus.VERIFIED ||
+      registration?.paymentStatus === PaymentStatus.VERIFIED;
+    if (!ready) {
+      throw new ForbiddenException('Complete registration and payment first');
+    }
+    await this.prisma.paper.update({
+      where: { id: paper.id },
+      data: { slidesStatus: SlidesStatus.OPEN },
+    });
+  }
+
+  private async seedPresentationRemarks(paperId: string, note: string) {
+    const latest = await this.prisma.presentationRemark.findFirst({
+      where: { paperId },
+      orderBy: { round: 'desc' },
+      select: { round: true },
+    });
+    const texts = splitRemarkTexts(note);
+    if (texts.length === 0) {
+      texts.push(note.trim() || 'Update the presentation according to the admin comments.');
+    }
+    const round = (latest?.round ?? 0) + 1;
+    await this.prisma.presentationRemark.createMany({
+      data: texts.map((text, index) => ({
+        paperId,
+        text,
+        round,
+        sortOrder: index,
+        status: RemarkStatus.OPEN,
+      })),
+    });
+  }
+
+  private async maybeValidateSlidesAfterRemarks(paperId: string, actorId: string) {
+    const latest = await this.prisma.presentationRemark.findFirst({
+      where: { paperId },
+      orderBy: { round: 'desc' },
+      select: { round: true },
+    });
+    if (!latest) {
+      return;
+    }
+    const open = await this.prisma.presentationRemark.count({
+      where: {
+        paperId,
+        round: latest.round,
+        status: { not: RemarkStatus.VALIDATED },
+      },
+    });
+    if (open > 0) {
+      return;
+    }
+    const paper = await this.prisma.paper.findUnique({ where: { id: paperId } });
+    if (!paper || paper.slidesStatus === SlidesStatus.VALIDATED) {
+      return;
+    }
+    if (
+      paper.slidesStatus !== SlidesStatus.WILL_DEPOSIT &&
+      paper.slidesStatus !== SlidesStatus.DEPOSITED
+    ) {
+      return;
+    }
+    await this.prisma.paper.update({
+      where: { id: paperId },
+      data: {
+        slidesStatus: SlidesStatus.VALIDATED,
+        cameraReadyStatus:
+          paper.cameraReadyStatus === CameraReadyStatus.LOCKED
+            ? CameraReadyStatus.OPEN
+            : paper.cameraReadyStatus,
+      },
+    });
+    void actorId;
+  }
+
+  private async ensureCameraReadyOpen(paper: {
+    id: string;
+    slidesStatus: SlidesStatus;
+    cameraReadyStatus: CameraReadyStatus;
+    presentedAt: Date | null;
+  }) {
+    if (paper.cameraReadyStatus !== CameraReadyStatus.LOCKED) {
+      return;
+    }
+    const slidesDone =
+      paper.slidesStatus === SlidesStatus.VALIDATED || paper.presentedAt !== null;
+    if (!slidesDone) {
+      throw new ForbiddenException(
+        'Camera-ready opens after the presentation is validated',
+      );
+    }
+    await this.prisma.paper.update({
+      where: { id: paper.id },
+      data: { cameraReadyStatus: CameraReadyStatus.OPEN },
+    });
+  }
+
+  private async refreshCameraReadyAfterUpload(
+    paperId: string,
+    previous: CameraReadyStatus,
+  ) {
+    const files = await this.prisma.paperFile.findMany({
+      where: { paperId },
+      select: { kind: true },
+      distinct: ['kind'],
+    });
+    const hasPdf = files.some((file) => file.kind === PaperFileKind.CAMERA_READY);
+    const hasEditable = files.some((file) => file.kind === PaperFileKind.EDITABLE);
+    if (!hasPdf || !hasEditable) {
+      return;
+    }
+    const next =
+      previous === CameraReadyStatus.NEEDS_MODS
+        ? CameraReadyStatus.WILL_DEPOSIT
+        : CameraReadyStatus.DEPOSITED;
+    if (
+      previous === next ||
+      previous === CameraReadyStatus.VALIDATED ||
+      previous === CameraReadyStatus.LOCKED
+    ) {
+      return;
+    }
+    await this.prisma.paper.update({
+      where: { id: paperId },
+      data: { cameraReadyStatus: next },
+    });
+  }
+
+  private async seedCameraReadyRemarks(paperId: string, note: string) {
+    const latest = await this.prisma.cameraReadyRemark.findFirst({
+      where: { paperId },
+      orderBy: { round: 'desc' },
+      select: { round: true },
+    });
+    const texts = splitRemarkTexts(note);
+    if (texts.length === 0) {
+      texts.push(
+        note.trim() || 'Update the camera-ready files according to the admin comments.',
+      );
+    }
+    const round = (latest?.round ?? 0) + 1;
+    await this.prisma.cameraReadyRemark.createMany({
+      data: texts.map((text, index) => ({
+        paperId,
+        text,
+        round,
+        sortOrder: index,
+        status: RemarkStatus.OPEN,
+      })),
+    });
+  }
+
+  private async maybeValidateCameraReadyAfterRemarks(paperId: string) {
+    const latest = await this.prisma.cameraReadyRemark.findFirst({
+      where: { paperId },
+      orderBy: { round: 'desc' },
+      select: { round: true },
+    });
+    if (!latest) {
+      return;
+    }
+    const open = await this.prisma.cameraReadyRemark.count({
+      where: {
+        paperId,
+        round: latest.round,
+        status: { not: RemarkStatus.VALIDATED },
+      },
+    });
+    if (open > 0) {
+      return;
+    }
+    const paper = await this.prisma.paper.findUnique({ where: { id: paperId } });
+    if (!paper || paper.cameraReadyStatus === CameraReadyStatus.VALIDATED) {
+      return;
+    }
+    if (
+      paper.cameraReadyStatus !== CameraReadyStatus.WILL_DEPOSIT &&
+      paper.cameraReadyStatus !== CameraReadyStatus.DEPOSITED
+    ) {
+      return;
+    }
+    await this.prisma.paper.update({
+      where: { id: paperId },
+      data: {
+        cameraReadyStatus: CameraReadyStatus.VALIDATED,
+        similarityStatus:
+          paper.similarityStatus === SimilarityStatus.LOCKED
+            ? SimilarityStatus.OPEN
+            : paper.similarityStatus,
+      },
+    });
+  }
+
+  private async ensureSimilarityOpen(paper: {
+    id: string;
+    cameraReadyStatus: CameraReadyStatus;
+    similarityStatus: SimilarityStatus;
+  }) {
+    if (paper.similarityStatus !== SimilarityStatus.LOCKED) {
+      return;
+    }
+    if (paper.cameraReadyStatus !== CameraReadyStatus.VALIDATED) {
+      throw new ForbiddenException(
+        'Similarity opens after the camera-ready version is validated',
+      );
+    }
+    await this.prisma.paper.update({
+      where: { id: paper.id },
+      data: { similarityStatus: SimilarityStatus.OPEN },
+    });
+  }
+
+  private async ensureCopyrightOpen(paper: {
+    id: string;
+    similarityStatus: SimilarityStatus;
+    copyrightStageStatus: CopyrightStageStatus;
+  }) {
+    if (paper.copyrightStageStatus !== CopyrightStageStatus.LOCKED) {
+      return;
+    }
+    if (paper.similarityStatus !== SimilarityStatus.VALIDATED) {
+      throw new ForbiddenException(
+        'Copyright opens after the similarity check is validated',
+      );
+    }
+    await this.prisma.paper.update({
+      where: { id: paper.id },
+      data: { copyrightStageStatus: CopyrightStageStatus.OPEN },
+    });
+  }
+
+  private async refreshSimilarityAfterDeposit(paperId: string) {
+    const [paper, report, files] = await Promise.all([
+      this.prisma.paper.findUnique({ where: { id: paperId } }),
+      this.prisma.similarityReport.findUnique({ where: { paperId } }),
+      this.prisma.paperFile.findMany({
+        where: { paperId, kind: PaperFileKind.SIMILARITY },
+        take: 1,
+      }),
+    ]);
+    if (!paper || paper.similarityStatus === SimilarityStatus.VALIDATED) {
+      return;
+    }
+    if (
+      paper.similarityStatus !== SimilarityStatus.OPEN &&
+      paper.similarityStatus !== SimilarityStatus.DEPOSITED
+    ) {
+      return;
+    }
+    const ready =
+      files.length > 0 && report !== null && report.percentage < 20;
+    if (!ready) {
+      if (paper.similarityStatus === SimilarityStatus.DEPOSITED) {
+        await this.prisma.paper.update({
+          where: { id: paperId },
+          data: { similarityStatus: SimilarityStatus.OPEN },
+        });
+      }
+      return;
+    }
+    if (paper.similarityStatus !== SimilarityStatus.DEPOSITED) {
+      await this.prisma.paper.update({
+        where: { id: paperId },
+        data: { similarityStatus: SimilarityStatus.DEPOSITED },
+      });
+    }
+  }
+
+  private async seedRevisionRemarks(paperId: string, letter: string) {
+    const [forms, latest] = await Promise.all([
+      this.prisma.reviewForm.findMany({
+        where: { assignment: { paperId } },
+        select: { commentsToAuthor: true },
+      }),
+      this.prisma.revisionRemark.findFirst({
+        where: { paperId },
+        orderBy: { round: 'desc' },
+        select: { round: true },
+      }),
+    ]);
+    const texts = splitRemarkTexts(
+      letter,
+      ...forms.map((form) => form.commentsToAuthor),
+    );
+    if (texts.length === 0) {
+      texts.push(
+        letter.trim() || 'Address the reviewer comments in a new version.',
+      );
+    }
+    const round = (latest?.round ?? 0) + 1;
+    await this.prisma.revisionRemark.createMany({
+      data: texts.map((text, index) => ({
+        paperId,
+        text,
+        round,
+        sortOrder: index,
+        status: RemarkStatus.OPEN,
+      })),
+    });
+  }
+
+  private async maybeAcceptAfterRemarks(paperId: string, actorId: string) {
+    const latest = await this.prisma.revisionRemark.findFirst({
+      where: { paperId },
+      orderBy: { round: 'desc' },
+      select: { round: true },
+    });
+    if (!latest) {
+      return;
+    }
+    const open = await this.prisma.revisionRemark.count({
+      where: {
+        paperId,
+        round: latest.round,
+        status: { not: RemarkStatus.VALIDATED },
+      },
+    });
+    if (open > 0) {
+      return;
+    }
+    await this.prisma.decision.update({
+      where: { paperId },
+      data: {
+        outcome: DecisionOutcome.ACCEPTED,
+        status: DecisionStatus.PUBLISHED,
+        publishedAt: new Date(),
+        decidedById: actorId,
+      },
+    });
   }
 
   private async notifyAuthors(
@@ -942,4 +1831,24 @@ function safeUploadName(value: string): string {
   const base = value.split(/[/\\]/).pop() ?? 'document';
   const cleaned = base.replace(/[^A-Za-z0-9._-]/g, '_').slice(0, 180);
   return cleaned.length > 0 ? cleaned : 'document';
+}
+
+function splitRemarkTexts(...blocks: string[]): string[] {
+  const items: string[] = [];
+  for (const block of blocks) {
+    const raw = block.trim();
+    if (!raw) {
+      continue;
+    }
+    const lines = raw
+      .split(/\r?\n|(?:^|\s)[•·\-–—*]\s+|(?:^|\s)\d+[).]\s+/)
+      .map((line) => line.replace(/^[\d).:\s•·\-–—*]+/, '').trim())
+      .filter((line) => line.length >= 8);
+    if (lines.length > 1) {
+      items.push(...lines);
+    } else {
+      items.push(raw);
+    }
+  }
+  return [...new Set(items)].slice(0, 40);
 }

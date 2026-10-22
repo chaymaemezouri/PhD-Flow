@@ -149,6 +149,11 @@ export class ReviewService {
     if (!paper || paper.status !== PaperStatus.SUBMITTED) {
       throw new NotFoundException('Paper not found');
     }
+    if (paper.scopeStatus !== 'ACCEPTED') {
+      throw new ForbiddenException(
+        'Accept the paper for presentation before assigning reviewers',
+      );
+    }
     this.assertManager(actor, paper.conference.memberships);
     const reviewer = paper.conference.memberships.find(
       (item) => item.userId === input.reviewerId,

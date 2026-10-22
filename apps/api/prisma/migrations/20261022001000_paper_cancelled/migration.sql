@@ -1,0 +1,1 @@
+ALTER TYPE "PaperStatus" ADD VALUE 'CANCELLED';

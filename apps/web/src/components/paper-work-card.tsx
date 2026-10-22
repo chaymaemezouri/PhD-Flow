@@ -8,6 +8,7 @@ export interface WorkPaper {
   title: string;
   status: string;
   publicId: string | null;
+  conferenceName?: string | null;
   steps?: PaperStep[];
 }
 
@@ -105,7 +106,14 @@ export function PaperWorkCard({ paper }: { paper: WorkPaper }) {
           {meta.statusLabel}
         </span>
       </div>
-      <h3 className="mt-2 truncate text-base font-extrabold lg:text-sm">{paper.title}</h3>
+      {paper.conferenceName ? (
+        <p className="mt-1.5 truncate text-[11px] font-bold text-[#8b909a]">
+          {paper.conferenceName}
+        </p>
+      ) : null}
+      <h3 className="mt-1 truncate text-base font-extrabold lg:mt-2 lg:text-sm">
+        {paper.title}
+      </h3>
       {meta.label === meta.stepName ? null : (
         <p className={`mt-1 text-sm font-semibold lg:text-xs ${styles.text}`}>
           {meta.label}
@@ -140,6 +148,11 @@ export function PaperWorkListRow({ paper }: { paper: WorkPaper }) {
         </p>
       </td>
       <td className="max-w-[18rem] px-3 py-3 align-middle sm:max-w-none">
+        {paper.conferenceName ? (
+          <p className="mb-0.5 truncate text-[11px] font-bold text-[#8b909a]">
+            {paper.conferenceName}
+          </p>
+        ) : null}
         <Link
           to={meta.href}
           className="block truncate text-sm font-extrabold text-[#1c2744] no-underline"
