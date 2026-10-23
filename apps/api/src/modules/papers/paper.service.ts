@@ -821,6 +821,15 @@ export class PaperService {
     const activeCameraRemarks = cameraReadyRemarks.filter(
       (item) => item.round === cameraRound,
     );
+    // Fully registered only when status is verified, and payment too if required.
+    const registeredNow =
+      registration?.status === 'VERIFIED' &&
+      (!row.conference.paymentsEnabled ||
+        registration.paymentStatus === 'VERIFIED');
+    const scheduledNow = registeredNow && presentation !== null;
+    const presentedNow =
+      scheduledNow &&
+      (row.presentedAt !== null || presentation?.presentedAt !== null);
     return {
       paperKind: row.paperKind,
       scopeStatus: row.scopeStatus,
@@ -841,20 +850,21 @@ export class PaperService {
         ? { percentage: similarity.percentage, verified: similarity.verifiedAt !== null }
         : null,
       copyrightStatus: copyright?.status ?? null,
-      presented: row.presentedAt !== null || presentation?.presentedAt !== null,
-      presentedAt:
-        (presentation?.presentedAt ?? row.presentedAt)?.toISOString() ?? null,
-      scheduled: presentation !== null,
-      schedule: presentation
+      presented: presentedNow,
+      presentedAt: presentedNow
+        ? ((presentation?.presentedAt ?? row.presentedAt)?.toISOString() ?? null)
+        : null,
+      scheduled: scheduledNow,
+      schedule: scheduledNow
         ? {
-            presentationId: presentation.id,
-            sessionTitle: presentation.session.title,
-            roomName: presentation.session.room.name,
-            startsAt: presentation.session.startsAt.toISOString(),
-            endsAt: presentation.session.endsAt.toISOString(),
-            modality: presentation.modality,
-            score: presentation.score,
-            chairRemarks: presentation.comment || row.sessionComment || null,
+            presentationId: presentation!.id,
+            sessionTitle: presentation!.session.title,
+            roomName: presentation!.session.room.name,
+            startsAt: presentation!.session.startsAt.toISOString(),
+            endsAt: presentation!.session.endsAt.toISOString(),
+            modality: presentation!.modality,
+            score: presentation!.score,
+            chairRemarks: presentation!.comment || row.sessionComment || null,
           }
         : null,
       slidesStatus: row.slidesStatus,

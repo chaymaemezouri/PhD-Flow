@@ -116,6 +116,12 @@ describe('publication workflow', () => {
       .send({});
     expect(submitted.status).toBe(201);
 
+    const scoped = await chair.agent
+      .post(`/api/v1/papers/${paperId}/scope`)
+      .set('x-csrf-token', chair.csrf)
+      .send({ accept: true });
+    expect(scoped.status).toBe(201);
+
     const reviewerUser = await prisma.user.findUniqueOrThrow({
       where: { email: `reviewer-${stamp}@workflow.test` },
     });
@@ -185,15 +191,42 @@ describe('publication workflow', () => {
     expect(template.status).toBe(200);
     expect(template.body.subject.length).toBeGreaterThan(0);
 
-    await author.agent
+    // Similarity opens only after presentation + camera-ready are validated.
+    const authorUser = await prisma.user.findUniqueOrThrow({
+      where: { email: `author-${stamp}@workflow.test` },
+    });
+    await prisma.registration.upsert({
+      where: {
+        conferenceId_userId: {
+          conferenceId,
+          userId: authorUser.id,
+        },
+      },
+      create: {
+        conferenceId,
+        userId: authorUser.id,
+        status: 'VERIFIED',
+        paymentStatus: 'NOT_REQUIRED',
+      },
+      update: {
+        status: 'VERIFIED',
+        paymentStatus: 'NOT_REQUIRED',
+      },
+    });
+    await prisma.paper.update({
+      where: { id: paperId },
+      data: {
+        slidesStatus: 'VALIDATED',
+        cameraReadyStatus: 'VALIDATED',
+        presentedAt: new Date(),
+      },
+    });
+
+    const atThreshold = await author.agent
       .post(`/api/v1/papers/${paperId}/similarity`)
       .set('x-csrf-token', author.csrf)
       .send({ percentage: 20, note: '' });
-    const atThreshold = await chair.agent
-      .post(`/api/v1/papers/${paperId}/similarity/verify`)
-      .set('x-csrf-token', chair.csrf)
-      .send({});
-    expect(atThreshold.status).toBe(403);
+    expect(atThreshold.status).toBe(400);
 
     await author.agent
       .post(`/api/v1/papers/${paperId}/similarity`)

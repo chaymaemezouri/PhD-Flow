@@ -1,4 +1,4 @@
-import { FileText, Image as ImageIcon, Presentation, Maximize2 } from 'lucide-react';
+import { Download, ExternalLink, FileText, Image as ImageIcon, Presentation } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
@@ -51,12 +51,15 @@ function isSlides(file: PaperFileInfo) {
   );
 }
 
-function usePaperFileUrl(paperId: string, kind: string, asPdf: boolean) {
+function usePaperFileUrl(paperId: string, kind: string, asPdf: boolean, enabled: boolean) {
   const [url, setUrl] = useState<string | null>(null);
   const [failed, setFailed] = useState(false);
   const [tick, setTick] = useState(0);
 
   useEffect(() => {
+    if (!enabled) {
+      return;
+    }
     let active = true;
     let objectUrl: string | null = null;
     setFailed(false);
@@ -94,13 +97,30 @@ function usePaperFileUrl(paperId: string, kind: string, asPdf: boolean) {
         URL.revokeObjectURL(objectUrl);
       }
     };
-  }, [asPdf, kind, paperId, tick]);
+  }, [asPdf, enabled, kind, paperId, tick]);
 
   return {
     url,
     failed,
     retry: () => setTick((value) => value + 1),
   };
+}
+
+function FileGlyph({ image, slides }: { image: boolean; slides: boolean }) {
+  if (slides) {
+    return <Presentation className="size-5" strokeWidth={2.25} />;
+  }
+  if (image) {
+    return <ImageIcon className="size-5" strokeWidth={2.25} />;
+  }
+  return <FileText className="size-5" strokeWidth={2.25} />;
+}
+
+function typeBadge(pdf: boolean, image: boolean, slides: boolean) {
+  if (slides) return 'PPT';
+  if (image) return 'IMG';
+  if (pdf) return 'PDF';
+  return 'FILE';
 }
 
 export function PaperFileThumb({
@@ -119,12 +139,18 @@ export function PaperFileThumb({
   const pdf = isPdf(file);
   const image = isImage(file);
   const slides = isSlides(file);
-  const { url, failed, retry } = usePaperFileUrl(paperId, file.kind, pdf && !image);
+  const { url, failed, retry } = usePaperFileUrl(
+    paperId,
+    file.kind,
+    pdf && !image,
+    open,
+  );
   const label = t(`dossier.fileKinds.${file.kind}`, { defaultValue: file.kind });
   const size =
     typeof file.sizeBytes === 'number' && file.sizeBytes > 0
       ? `${Math.max(1, Math.ceil(file.sizeBytes / 1024))} Ko`
       : null;
+  const badge = typeBadge(pdf, image, slides);
 
   return (
     <>
@@ -132,60 +158,46 @@ export function PaperFileThumb({
         type="button"
         onClick={() => setOpen(true)}
         className={cn(
-          'group flex shrink-0 flex-col overflow-hidden rounded-2xl border border-[#c5cad6] bg-white text-left shadow-[0_4px_14px_rgba(28,39,68,0.06)] transition hover:border-[#3d4fd4]',
-          compact ? 'w-full flex-row' : 'w-[8.5rem]',
+          'group flex w-full items-center gap-3 rounded-xl border border-[#e4e7ee] bg-white px-3 py-3 text-left transition hover:border-[#3d4fd4]/55 hover:bg-[#f8f9fd]',
+          compact ? '' : '',
           className,
         )}
       >
-        <div
+        <span
           className={cn(
-            'relative overflow-hidden bg-[#eef1f8]',
-            compact ? 'h-24 w-20 shrink-0' : 'h-32 w-full',
+            'grid size-11 shrink-0 place-items-center rounded-lg',
+            pdf
+              ? 'bg-[#eef2ff] text-[#3d4fd4]'
+              : slides
+                ? 'bg-[#fff4e8] text-[#c47a1a]'
+                : image
+                  ? 'bg-[#e8f8ef] text-[#1c9a57]'
+                  : 'bg-[#f0f2f7] text-[#5c6578]',
           )}
         >
-          {url && pdf ? (
-            <object
-              data={`${url}#page=1&view=FitH&toolbar=0&navpanes=0`}
-              type="application/pdf"
-              className="pointer-events-none absolute inset-0 h-full w-full border-0 bg-white"
-              aria-label={file.originalName}
-            >
-              <div className="grid h-full place-items-center text-[#3d4fd4]">
-                <FileText className="size-8" />
-              </div>
-            </object>
-          ) : url && image ? (
-            <img src={url} alt="" className="h-full w-full object-cover" />
-          ) : (
-            <div className="grid h-full place-items-center text-[#3d4fd4]">
-              {slides ? (
-                <Presentation className="size-8" />
-              ) : image ? (
-                <ImageIcon className="size-8" />
-              ) : (
-                <div className="flex flex-col items-center gap-1">
-                  <FileText className="size-8" />
-                  <span className="rounded bg-[#5d74ff] px-1.5 py-0.5 text-[9px] font-extrabold text-white">
-                    {pdf ? 'PDF' : slides ? 'PPT' : 'FILE'}
-                  </span>
-                </div>
-              )}
-            </div>
-          )}
-          <span className="absolute right-1.5 bottom-1.5 grid size-7 place-items-center rounded-full bg-white/90 text-[#3d4fd4] opacity-0 shadow group-hover:opacity-100">
-            <Maximize2 className="size-3.5" />
+          <FileGlyph image={image} slides={slides} />
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="flex items-center gap-2">
+            <span className="truncate text-xs font-extrabold uppercase tracking-wide text-[#3d4fd4]">
+              {label}
+            </span>
+            <span className="shrink-0 rounded bg-[#f0f2f7] px-1.5 py-0.5 text-[10px] font-extrabold text-[#5c6578]">
+              {badge}
+            </span>
           </span>
-        </div>
-        <div className={cn('min-w-0 space-y-0.5 px-2.5 py-2', compact && 'flex-1')}>
-          <p className="truncate text-[11px] font-extrabold uppercase tracking-wide text-[#3d4fd4]">
-            {label}
-          </p>
-          <p className="truncate text-xs font-bold text-[#1c2744]">{file.originalName}</p>
-          {size ? <p className="text-[10px] font-bold text-[#8b909a]">{size}</p> : null}
-          {!url && !failed ? (
-            <p className="text-[10px] font-bold text-[#8b909a]">{t('common.loading')}</p>
+          <span className="mt-0.5 block truncate text-sm font-semibold text-[#1c2744]">
+            {file.originalName}
+          </span>
+          {size ? (
+            <span className="mt-0.5 block text-[11px] font-semibold text-[#8b909a]">
+              {size}
+            </span>
           ) : null}
-        </div>
+        </span>
+        <span className="shrink-0 text-xs font-extrabold text-[#3d4fd4] opacity-0 transition group-hover:opacity-100">
+          {t('dossier.fileOpenTab')}
+        </span>
       </button>
 
       <Dialog open={open} onOpenChange={setOpen}>
@@ -195,21 +207,15 @@ export function PaperFileThumb({
           </DialogTitle>
           <DialogDescription className="mt-1 break-all text-sm text-[#5c6578]">
             {file.originalName}
+            {size ? ` · ${size}` : ''}
           </DialogDescription>
-          <div className="mt-4 overflow-hidden rounded-2xl border border-[#d8dce6] bg-[#f6f7fb]">
+          <div className="mt-4 overflow-hidden rounded-xl border border-[#e4e7ee] bg-[#f6f7fb]">
             {url && pdf ? (
-              <object
-                data={`${url}#toolbar=1`}
-                type="application/pdf"
-                className="h-[min(70vh,36rem)] w-full bg-white"
-                aria-label={file.originalName}
-              >
-                <iframe
-                  title={file.originalName}
-                  src={`${url}#toolbar=1`}
-                  className="h-[min(70vh,36rem)] w-full bg-white"
-                />
-              </object>
+              <iframe
+                title={file.originalName}
+                src={`${url}#toolbar=1&navpanes=0`}
+                className="h-[min(70vh,36rem)] w-full border-0 bg-white"
+              />
             ) : url && image ? (
               <img
                 src={url}
@@ -246,15 +252,17 @@ export function PaperFileThumb({
                 href={url}
                 target="_blank"
                 rel="noreferrer"
-                className="inline-flex min-h-10 items-center rounded-full bg-[#5d74ff] px-4 text-sm font-extrabold text-white no-underline"
+                className="inline-flex min-h-10 items-center gap-2 rounded-full bg-[#3d4fd4] px-4 text-sm font-extrabold text-white no-underline"
               >
+                <ExternalLink className="size-3.5" />
                 {t('dossier.fileOpenTab')}
               </a>
               <a
                 href={url}
                 download={file.originalName}
-                className="inline-flex min-h-10 items-center rounded-full border border-[#c5cad6] bg-white px-4 text-sm font-extrabold text-[#3d4fd4] no-underline"
+                className="inline-flex min-h-10 items-center gap-2 rounded-full border border-[#c5cad6] bg-white px-4 text-sm font-extrabold text-[#3d4fd4] no-underline"
               >
+                <Download className="size-3.5" />
                 {t('dossier.downloadFile')}
               </a>
             </div>
@@ -289,15 +297,13 @@ export function PaperFilesStrip({
       <p className="text-xs font-extrabold uppercase tracking-wide text-[#8b909a]">
         {t('dossier.filesOnRecord')}
       </p>
-      <div className="touch-scroll mt-2 flex gap-3 overflow-x-auto pb-1">
+      <ul className="mt-2 grid gap-2 sm:grid-cols-2">
         {visible.map((file) => (
-          <PaperFileThumb
-            key={`${file.kind}-${file.originalName}`}
-            paperId={paperId}
-            file={file}
-          />
+          <li key={`${file.kind}-${file.originalName}`}>
+            <PaperFileThumb paperId={paperId} file={file} />
+          </li>
         ))}
-      </div>
+      </ul>
     </div>
   );
 }
@@ -324,7 +330,7 @@ export function PaperFileSlot({
 }) {
   const { t } = useTranslation();
   return (
-    <div className="rounded-2xl border border-[#d8dce6] bg-[#f6f7fb] p-3 sm:p-4">
+    <div className="rounded-xl border border-[#e4e7ee] bg-white p-3 sm:p-4">
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div className="min-w-0">
           <p className="text-sm font-extrabold text-[#1c2744]">{title}</p>
@@ -334,22 +340,25 @@ export function PaperFileSlot({
         </div>
         <span
           className={`rounded-full px-2.5 py-1 text-[11px] font-extrabold ${
-            done || file ? 'bg-[#2fbf71]/14 text-[#1c9a57]' : 'bg-white text-[#8b909a]'
+            done || file ? 'bg-[#2fbf71]/14 text-[#1c9a57]' : 'bg-[#f0f2f7] text-[#8b909a]'
           }`}
         >
           {done || file ? t('dossier.ready') : t('dossier.missing')}
         </span>
       </div>
-      <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-end">
+      <div className="mt-3 flex flex-col gap-3">
         {file ? (
-          <PaperFileThumb paperId={paperId} file={file} compact className="sm:max-w-xs" />
+          <PaperFileThumb paperId={paperId} file={file} compact />
         ) : (
-          <div className="grid h-24 w-20 place-items-center rounded-2xl border border-dashed border-[#c5cad6] bg-white text-[#8b909a]">
-            <FileText className="size-7" />
+          <div className="flex items-center gap-3 rounded-xl border border-dashed border-[#d0d5e0] bg-[#fafbfc] px-3 py-3 text-[#8b909a]">
+            <span className="grid size-11 place-items-center rounded-lg bg-white">
+              <FileText className="size-5" />
+            </span>
+            <span className="text-sm font-semibold">{t('dossier.missing')}</span>
           </div>
         )}
         {onUpload ? (
-          <label className="inline-flex min-h-10 cursor-pointer items-center justify-center rounded-full border border-[#c5cad6] bg-white px-4 text-sm font-extrabold text-[#3d4fd4]">
+          <label className="inline-flex min-h-10 w-fit cursor-pointer items-center justify-center rounded-full border border-[#c5cad6] bg-white px-4 text-sm font-extrabold text-[#3d4fd4]">
             {file ? t('dossier.replaceFile') : uploadLabel}
             <input
               type="file"

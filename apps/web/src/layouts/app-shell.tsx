@@ -1,7 +1,6 @@
 import {
   CalendarRange,
   ClipboardList,
-  CreditCard,
   Home,
   KeyRound,
   Library,
@@ -144,13 +143,6 @@ function tabsFor(home: string): NavTab[] {
       end: false,
     },
     {
-      id: 'registration',
-      to: '/workspace/registration',
-      label: 'nav.registration',
-      icon: CreditCard,
-      end: false,
-    },
-    {
       id: 'followUp',
       to: '/workspace/follow-up',
       label: 'nav.followUp',
@@ -177,7 +169,7 @@ function tabsFor(home: string): NavTab[] {
 
   const hidden = new Set(
     audience === 'reviewer'
-      ? ['registration', 'followUp', 'program']
+      ? ['followUp', 'program']
       : audience === 'author'
         ? ['reviews', 'sessionChair']
         : [],
@@ -338,10 +330,6 @@ export function AppShell() {
         })
       : null;
   const roleLine = roleLabel ?? t('home.noConference');
-  const profileLine =
-    [profile?.academicTitle, activeConference?.name, roleLabel]
-      .filter(Boolean)
-      .join(' · ') || t('home.noConference');
   const showNewSubmission = canStartSubmission(Boolean(platformAdmin), memberships.data);
 
   useEffect(() => {
@@ -458,26 +446,10 @@ export function AppShell() {
               {menuOpen ? <X className="size-5" /> : <Menu className="size-5" />}
             </button>
 
-            <div className="flex min-w-0 flex-1 items-center gap-2.5 sm:gap-3">
-              {profile?.photoPath ? (
-                <img
-                  src={profile.photoPath}
-                  alt=""
-                  className="size-10 shrink-0 rounded-full object-cover lg:size-11"
-                />
-              ) : (
-                <span className="grid size-10 shrink-0 place-items-center rounded-full bg-[#eef2ff] text-sm font-extrabold text-[#3d4fd4] lg:size-11">
-                  {displayName.slice(0, 1)}
-                </span>
-              )}
-              <div className="min-w-0">
-                <p className="truncate text-sm font-extrabold text-[#1c2744] sm:text-[15px]">
-                  {displayName}
-                </p>
-                <p className="truncate text-[11px] font-semibold text-[#5c6578] sm:text-xs">
-                  {profileLine}
-                </p>
-              </div>
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm font-extrabold text-[#1c2744] sm:text-[15px]">
+                {displayName}
+              </p>
             </div>
 
             <div className="flex w-full shrink-0 flex-wrap items-center justify-end gap-2 sm:ml-auto sm:w-auto">
@@ -493,6 +465,17 @@ export function AppShell() {
                   <Link to="/workspace/submissions/new">{t('papers.new')}</Link>
                 </Button>
               ) : null}
+              {profile?.photoPath ? (
+                <img
+                  src={profile.photoPath}
+                  alt=""
+                  className="size-10 shrink-0 rounded-full object-cover lg:size-11"
+                />
+              ) : (
+                <span className="grid size-10 shrink-0 place-items-center rounded-full bg-[#eef2ff] text-sm font-extrabold text-[#3d4fd4] lg:size-11">
+                  {displayName.slice(0, 1)}
+                </span>
+              )}
             </div>
           </header>
           <main

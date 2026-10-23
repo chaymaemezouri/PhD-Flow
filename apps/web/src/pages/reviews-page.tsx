@@ -18,6 +18,16 @@ interface Assignment {
   recommendation: string | null;
   commentsToAuthor: string | null;
   expiresAt: string;
+  decisionOutcome?: string | null;
+  hasRevision?: boolean;
+  revisionFile?: {
+    kind: string;
+    originalName: string;
+    contentType?: string | null;
+    sizeBytes?: number | null;
+  } | null;
+  awaitingAuthorRevision?: boolean;
+  needsRereview?: boolean;
 }
 
 interface Membership {
@@ -193,76 +203,181 @@ export function ReviewsPage() {
           {t('reviews.empty')}
         </p>
       ) : null}
-      <ul className="grid gap-4">
-        {mine.data?.map((item) => {
-          const canOpen =
-            item.status === 'ACCEPTED' ||
-            item.status === 'IN_PROGRESS' ||
-            item.status === 'OVERDUE' ||
-            item.status === 'COMPLETED';
-          return (
-            <li
-              key={item.id}
-              id={`review-${item.id}`}
-              className="space-y-3 rounded-[28px] border border-[#e4e7ee] bg-white p-4 sm:p-5"
-            >
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="text-xs font-extrabold tracking-wide text-[#8b909a]">
-                    {item.publicId ?? t('reviews.title')}
-                  </p>
-                  <h2 className="mt-1 text-lg font-extrabold leading-snug text-[#1c2744]">
-                    {item.paperTitle}
-                  </h2>
-                  <p className="mt-2 text-sm text-[#5c6578]">
-                    {t(`reviews.statuses.${item.status}`, { defaultValue: item.status })}
-                    {item.expiresAt
-                      ? ` · ${new Date(item.expiresAt).toLocaleDateString()}`
-                      : ''}
-                  </p>
-                </div>
-                {canOpen ? (
-                  <Link
-                    to={`/workspace/submissions/${item.paperId}`}
-                    className="inline-flex min-h-10 items-center rounded-full bg-[#3d4fd4] px-4 text-sm font-extrabold text-white no-underline"
-                  >
-                    {t('reviews.openPaper')}
-                  </Link>
-                ) : null}
-              </div>
+      {mine.data && mine.data.length > 0
+        ? (
+            [
+              {
+                key: 'rereview',
+                title: t('reviews.sectionRereview'),
+                items: mine.data.filter((item) => item.needsRereview),
+              },
+              {
+                key: 'open',
+                title: t('reviews.sectionOpen'),
+                items: mine.data.filter(
+                  (item) =>
+                    !item.needsRereview &&
+                    !item.awaitingAuthorRevision &&
+                    (item.status === 'INVITED' ||
+                      item.status === 'ACCEPTED' ||
+                      item.status === 'IN_PROGRESS' ||
+                      item.status === 'OVERDUE'),
+                ),
+              },
+              {
+                key: 'waiting',
+                title: t('reviews.sectionWaiting'),
+                items: mine.data.filter((item) => item.awaitingAuthorRevision),
+              },
+              {
+                key: 'done',
+                title: t('reviews.sectionDone'),
+                items: mine.data.filter(
+                  (item) =>
+                    !item.needsRereview &&
+                    !item.awaitingAuthorRevision &&
+                    item.status === 'COMPLETED',
+                ),
+              },
+            ] as const
+          )
+            .filter((section) => section.items.length > 0)
+            .map((section) => (
+              <section key={section.key} className="space-y-3">
+                <h2 className="text-sm font-extrabold uppercase tracking-wide text-[#8b909a]">
+                  {section.title}
+                </h2>
+                <ul className="grid gap-4">
+                  {section.items.map((item) => {
+                    const canOpen =
+                      item.status === 'ACCEPTED' ||
+                      item.status === 'IN_PROGRESS' ||
+                      item.status === 'OVERDUE' ||
+                      item.status === 'COMPLETED';
+                    const canReview =
+                      item.status === 'ACCEPTED' ||
+                      item.status === 'IN_PROGRESS' ||
+                      item.status === 'OVERDUE';
+                    const decisionBadge =
+                      item.decisionOutcome === 'CONDITIONALLY_ACCEPTED'
+                        ? t('reviews.decisionMinor')
+                        : item.decisionOutcome === 'REVISION_REQUIRED'
+                          ? t('reviews.decisionMajor')
+                          : null;
 
-              {canOpen ? <ManuscriptPreview paperId={item.paperId} /> : null}
+                    return (
+                      <li
+                        key={item.id}
+                        id={`review-${item.id}`}
+                        className="space-y-3 rounded-[28px] border border-[#e4e7ee] bg-white p-4 sm:p-5"
+                      >
+                        <div className="flex flex-wrap items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="text-xs font-extrabold tracking-wide text-[#8b909a]">
+                              {item.publicId ?? t('reviews.title')}
+                            </p>
+                            <h3 className="mt-1 text-lg font-extrabold leading-snug text-[#1c2744]">
+                              {item.paperTitle}
+                            </h3>
+                            <p className="mt-2 text-sm text-[#5c6578]">
+                              {t(`reviews.statuses.${item.status}`, {
+                                defaultValue: item.status,
+                              })}
+                              {item.expiresAt
+                                ? ` · ${new Date(item.expiresAt).toLocaleDateString()}`
+                                : ''}
+                            </p>
+                            {decisionBadge ? (
+                              <p className="mt-2 inline-flex rounded-full bg-[#fff4e8] px-2.5 py-1 text-xs font-extrabold text-[#c47a1a]">
+                                {decisionBadge}
+                              </p>
+                            ) : null}
+                            {item.awaitingAuthorRevision ? (
+                              <p className="mt-2 text-sm font-semibold text-[#5c6578]">
+                                {t('reviews.awaitingRevision')}
+                              </p>
+                            ) : null}
+                          </div>
+                          {canOpen ? (
+                            <Link
+                              to={`/workspace/submissions/${item.paperId}`}
+                              className="inline-flex min-h-10 items-center rounded-full bg-[#3d4fd4] px-4 text-sm font-extrabold text-white no-underline"
+                            >
+                              {t('reviews.openPaper')}
+                            </Link>
+                          ) : null}
+                        </div>
 
-              {item.score !== null ? (
-                <StagePanel
-                  title={t('reviews.sent')}
-                  status={`${item.score}/10`}
-                  statusTone="ok"
-                >
-                  <p className="text-sm font-semibold text-[#5c6578]">
-                    {t(`reviews.recommendations.${item.recommendation ?? ''}`, {
-                      defaultValue: item.recommendation ?? '',
-                    })}
-                  </p>
-                  {item.commentsToAuthor ? (
-                    <p className="mt-2 text-sm leading-relaxed text-[#5c6578]">
-                      {item.commentsToAuthor}
-                    </p>
-                  ) : null}
-                </StagePanel>
-              ) : (
-                <ReviewAssignmentForm
-                  assignmentId={item.id}
-                  status={item.status}
-                  onAccept={() => void respond(item.id, true)}
-                  onDecline={() => void respond(item.id, false)}
-                  onSubmit={(payload) => void submitReview(item.id, payload)}
-                />
-              )}
-            </li>
-          );
-        })}
-      </ul>
+                        {canOpen ? <ManuscriptPreview paperId={item.paperId} /> : null}
+                        {item.revisionFile ? (
+                          <div>
+                            <p className="mb-2 text-xs font-extrabold uppercase tracking-wide text-[#8b909a]">
+                              {t('reviews.revisionFile')}
+                            </p>
+                            <PaperFileThumb
+                              paperId={item.paperId}
+                              file={item.revisionFile}
+                              compact
+                              className="max-w-sm"
+                            />
+                          </div>
+                        ) : null}
+
+                        {item.score !== null ? (
+                          <StagePanel
+                            title={
+                              item.needsRereview
+                                ? t('reviews.previousReview')
+                                : t('reviews.sent')
+                            }
+                            status={`${item.score}/10`}
+                            statusTone="ok"
+                          >
+                            <p className="text-sm font-semibold text-[#5c6578]">
+                              {t(`reviews.recommendations.${item.recommendation ?? ''}`, {
+                                defaultValue: item.recommendation ?? '',
+                              })}
+                            </p>
+                            {item.commentsToAuthor ? (
+                              <p className="mt-2 text-sm leading-relaxed text-[#5c6578]">
+                                {item.commentsToAuthor}
+                              </p>
+                            ) : null}
+                          </StagePanel>
+                        ) : null}
+
+                        {item.needsRereview ? (
+                          <div className="space-y-2">
+                            <p className="text-sm font-semibold text-[#5c6578]">
+                              {t('reviews.rereviewHint')}
+                            </p>
+                            <ReviewAssignmentForm
+                              assignmentId={item.id}
+                              status={item.status}
+                              onSubmit={(payload) => void submitReview(item.id, payload)}
+                              compact
+                            />
+                          </div>
+                        ) : null}
+
+                        {!item.needsRereview && (canReview || item.status === 'INVITED') ? (
+                          item.score === null ? (
+                            <ReviewAssignmentForm
+                              assignmentId={item.id}
+                              status={item.status}
+                              onAccept={() => void respond(item.id, true)}
+                              onDecline={() => void respond(item.id, false)}
+                              onSubmit={(payload) => void submitReview(item.id, payload)}
+                            />
+                          ) : null
+                        ) : null}
+                      </li>
+                    );
+                  })}
+                </ul>
+              </section>
+            ))
+        : null}
 
       {managed.length > 0 ? (
         <StagePanel

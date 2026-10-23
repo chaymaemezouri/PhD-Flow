@@ -1,4 +1,5 @@
-import { type ReactNode, useState } from 'react';
+import { ListChecks, X } from 'lucide-react';
+import { type ReactNode, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { PaperFilesStrip, type PaperFileInfo } from '@/components/paper-file-preview';
 import { InfoGrid, StagePanel } from '@/components/stage-panel';
@@ -90,6 +91,15 @@ interface WorkflowPaper {
   publicId: string | null;
   submittedAt: string | null;
   conferenceName?: string | null;
+  title?: string | null;
+  abstract?: string | null;
+  keywords?: string[] | null;
+  authors?: {
+    firstName: string;
+    lastName: string;
+    email: string;
+    corresponding?: boolean;
+  }[];
   decision: { outcome: string; status: string; letter?: string } | null;
   dossier?: PaperDossier;
 }
@@ -157,53 +167,66 @@ export function PaperWorkflow({
     }
     return null;
   };
+  // Fully registered: admin confirmed, and payment verified when the conference requires it.
   const registered =
-    dossier?.registration?.status === 'VERIFIED' ||
-    dossier?.registration?.paymentStatus === 'VERIFIED';
+    dossier?.registration?.status === 'VERIFIED' &&
+    (!dossier?.paymentsEnabled ||
+      dossier.registration.paymentStatus === 'VERIFIED');
   const slidesStatus = dossier?.slidesStatus ?? 'LOCKED';
+  // Presentation stage only after registration — never from leftover / early flags.
   const presentationOpen =
-    registered ||
-    slidesStatus === 'OPEN' ||
-    slidesStatus === 'DEPOSITED' ||
-    slidesStatus === 'NEEDS_MODS' ||
-    slidesStatus === 'WILL_DEPOSIT' ||
-    slidesStatus === 'VALIDATED';
-  const slidesValidated = slidesStatus === 'VALIDATED';
-  const deliveryPresented = Boolean(dossier?.presented || dossier?.presentedAt);
-  const scheduled = Boolean(dossier?.scheduled || dossier?.schedule);
+    registered &&
+    (slidesStatus === 'OPEN' ||
+      slidesStatus === 'DEPOSITED' ||
+      slidesStatus === 'NEEDS_MODS' ||
+      slidesStatus === 'WILL_DEPOSIT' ||
+      slidesStatus === 'VALIDATED' ||
+      slidesStatus === 'LOCKED');
+  const slidesValidated = registered && slidesStatus === 'VALIDATED';
+  const scheduled =
+    registered && Boolean(dossier?.scheduled || dossier?.schedule);
+  // "Presented" only after a scheduled session was explicitly marked — not leftover presentedAt.
+  const deliveryPresented =
+    registered &&
+    scheduled &&
+    Boolean(dossier?.presented || dossier?.presentedAt);
   const cameraStatus = dossier?.cameraReadyStatus ?? 'LOCKED';
+  // Camera ready only after slides are validated — never while presentation is merely scheduled.
   const cameraOpen =
-    slidesValidated ||
-    cameraStatus === 'OPEN' ||
-    cameraStatus === 'DEPOSITED' ||
-    cameraStatus === 'NEEDS_MODS' ||
-    cameraStatus === 'WILL_DEPOSIT' ||
-    cameraStatus === 'VALIDATED';
+    slidesValidated &&
+    (cameraStatus === 'OPEN' ||
+      cameraStatus === 'DEPOSITED' ||
+      cameraStatus === 'NEEDS_MODS' ||
+      cameraStatus === 'WILL_DEPOSIT' ||
+      cameraStatus === 'VALIDATED' ||
+      cameraStatus === 'LOCKED');
   const cameraValidated = cameraStatus === 'VALIDATED';
   const similarityStatus = dossier?.similarityStatus ?? 'LOCKED';
   const similarityOpen =
-    cameraValidated ||
-    similarityStatus === 'OPEN' ||
-    similarityStatus === 'DEPOSITED' ||
-    similarityStatus === 'VALIDATED';
+    cameraValidated &&
+    (similarityStatus === 'OPEN' ||
+      similarityStatus === 'DEPOSITED' ||
+      similarityStatus === 'VALIDATED' ||
+      similarityStatus === 'LOCKED');
   const similarityValidated =
     similarityStatus === 'VALIDATED' ||
     (Boolean(dossier?.similarity?.verified) &&
       (dossier?.similarity?.percentage ?? 100) < 20);
   const copyrightStage = dossier?.copyrightStageStatus ?? 'LOCKED';
   const copyrightOpen =
-    similarityValidated ||
-    copyrightStage === 'OPEN' ||
-    copyrightStage === 'DEPOSITED' ||
-    copyrightStage === 'VALIDATED';
+    similarityValidated &&
+    (copyrightStage === 'OPEN' ||
+      copyrightStage === 'DEPOSITED' ||
+      copyrightStage === 'VALIDATED' ||
+      copyrightStage === 'LOCKED');
   const copyrightValidated =
     copyrightStage === 'VALIDATED' || dossier?.copyrightStatus === 'VALIDATED';
   const slidesLabel = () => {
+    if (!registered) {
+      return t('dossier.later');
+    }
     if (deliveryPresented) {
       return t('dossier.presentationPresented');
-    }
-    if (scheduled) {
-      return t('dossier.presentationScheduled');
     }
     if (slidesStatus === 'VALIDATED') {
       return t('dossier.presentationValidated');
@@ -217,12 +240,18 @@ export function PaperWorkflow({
     if (slidesStatus === 'DEPOSITED') {
       return t('dossier.presentationDeposited');
     }
-    if (slidesStatus === 'OPEN' || (registered && slidesStatus === 'LOCKED')) {
+    if (scheduled) {
+      return t('dossier.presentationScheduled');
+    }
+    if (slidesStatus === 'OPEN' || slidesStatus === 'LOCKED') {
       return t('dossier.presentationOpen');
     }
     return t('dossier.later');
   };
   const cameraLabel = () => {
+    if (!slidesValidated) {
+      return t('dossier.later');
+    }
     if (cameraStatus === 'VALIDATED') {
       return t('dossier.cameraValidated');
     }
@@ -235,7 +264,7 @@ export function PaperWorkflow({
     if (cameraStatus === 'DEPOSITED') {
       return t('dossier.cameraUnderCheck');
     }
-    if (cameraStatus === 'OPEN' || (slidesValidated && cameraStatus === 'LOCKED')) {
+    if (cameraStatus === 'OPEN' || cameraStatus === 'LOCKED') {
       return t('dossier.cameraOpen');
     }
     return t('dossier.later');
@@ -337,6 +366,7 @@ export function PaperWorkflow({
         paper?.publicId
           ? { label: t('dossier.paperId'), value: paper.publicId }
           : null,
+        paper?.title ? { label: t('papers.paperTitle'), value: paper.title } : null,
         kindLabel ? { label: t('papers.kind'), value: kindLabel } : null,
         dossier?.trackName
           ? { label: t('papers.track'), value: dossier.trackName }
@@ -347,6 +377,22 @@ export function PaperWorkflow({
               value: paper?.conferenceName || dossier?.conferenceName || '',
             }
           : null,
+        paper?.keywords && paper.keywords.length > 0
+          ? { label: t('papers.keywords'), value: paper.keywords.join(', ') }
+          : null,
+        paper?.authors && paper.authors.length > 0
+          ? {
+              label: t('papers.stepAuthors'),
+              value: paper.authors
+                .map(
+                  (author) =>
+                    `${author.firstName} ${author.lastName}${
+                      author.corresponding ? ` (${t('papers.corresponding')})` : ''
+                    }`,
+                )
+                .join(' · '),
+            }
+          : null,
         paper?.submittedAt
           ? {
               label: t('dossier.scheduleDate'),
@@ -354,6 +400,7 @@ export function PaperWorkflow({
             }
           : null,
       ].filter(Boolean) as { label: string; value: string }[],
+      note: paper?.abstract?.trim() ? paper.abstract.trim() : null,
       extra: null,
     },
     {
@@ -577,7 +624,7 @@ export function PaperWorkflow({
       key: 'presentation',
       title: t('dossier.presentation'),
       actor: t('dossier.presentationActor'),
-      tone: deliveryPresented
+      tone: deliveryPresented || slidesValidated
         ? 'done'
         : presentationOpen || scheduled
           ? slidesStatus === 'NEEDS_MODS' || slidesStatus === 'WILL_DEPOSIT'
@@ -763,21 +810,358 @@ export function PaperWorkflow({
     },
   ];
 
-  const openIndex = stages.findIndex(
-    (stage) => stage.tone === 'current' || stage.tone === 'wait' || stage.tone === 'stop',
+  // Doctorant: action menu = ses étapes, débloquées seulement si la précédente est terminée.
+  const doctorantView = Boolean(dossier?.isAuthor) && !dossier?.canManage;
+  const doctorantActionKeys = [
+    'deposit',
+    'decision',
+    'registration',
+    'presentation',
+    'camera',
+    'similarity',
+    'copyright',
+    'final',
+  ] as const;
+  const doctorantUnlocked = (key: (typeof doctorantActionKeys)[number]) => {
+    switch (key) {
+      case 'deposit':
+        return true;
+      case 'decision':
+        return submitted;
+      case 'registration':
+        return accepted;
+      case 'presentation':
+        return registered;
+      case 'camera':
+        return slidesValidated;
+      case 'similarity':
+        return cameraValidated;
+      case 'copyright':
+        return similarityValidated;
+      case 'final':
+        return copyrightValidated;
+      default:
+        return false;
+    }
+  };
+  const menuStages = doctorantView
+    ? stages.filter(
+        (item) =>
+          doctorantActionKeys.includes(
+            item.key as (typeof doctorantActionKeys)[number],
+          ) && doctorantUnlocked(item.key as (typeof doctorantActionKeys)[number]),
+      )
+    : stages;
+
+  const openMenuIndex = menuStages.findIndex(
+    (item) => item.tone === 'current' || item.tone === 'wait' || item.tone === 'stop',
   );
-  const [picked, setPicked] = useState<number | null>(null);
-  const selected = picked ?? (openIndex >= 0 ? openIndex : 0);
-  const stage = stages[selected];
+  const [pickedKey, setPickedKey] = useState<string | null>(null);
+  const [actionsOpen, setActionsOpen] = useState(false);
+  const [celebrateStep, setCelebrateStep] = useState<string | null>(null);
+  const prevDoneKeys = useRef<Set<string>>(new Set());
+  const fallbackKey =
+    menuStages[openMenuIndex >= 0 ? openMenuIndex : 0]?.key ?? stages[0]?.key ?? null;
+  const activeKey =
+    pickedKey && menuStages.some((item) => item.key === pickedKey)
+      ? pickedKey
+      : fallbackKey;
+  const stage = stages.find((item) => item.key === activeKey) ?? menuStages[0];
+  const stageNumber = stage
+    ? stages.findIndex((item) => item.key === stage.key) + 1
+    : 0;
+
+  const currentIndex = stages.findIndex(
+    (item) => item.tone === 'current' || item.tone === 'wait' || item.tone === 'stop',
+  );
+  const currentStage =
+    currentIndex >= 0
+      ? stages[currentIndex]
+      : stages.find((item) => item.tone === 'done')
+        ? stages[stages.length - 1]
+        : stages[0];
+  const currentNumber =
+    currentStage != null
+      ? stages.findIndex((item) => item.key === currentStage.key) + 1
+      : 0;
+  const currentBannerTone =
+    currentStage?.tone === 'done'
+      ? 'border-[#2fbf71]/35 bg-[#e8f8ef]'
+      : currentStage?.tone === 'stop'
+        ? 'border-[#e35d5d]/35 bg-[#fdecec]'
+        : currentStage?.tone === 'wait'
+          ? 'border-[#f0a04b]/40 bg-[#fff6ea]'
+          : 'border-[#5d74ff]/30 bg-[#eef2ff]';
+  const currentBadgeTone =
+    currentStage?.tone === 'done'
+      ? 'bg-[#2fbf71]/18 text-[#1c9a57]'
+      : currentStage?.tone === 'stop'
+        ? 'bg-[#e35d5d]/15 text-[#c54545]'
+        : currentStage?.tone === 'wait'
+          ? 'bg-[#f0a04b]/20 text-[#9a6410]'
+          : 'bg-[#5d74ff]/18 text-[#3d4fd4]';
+
+  useEffect(() => {
+    const doneNow = new Set(
+      stages.filter((item) => item.tone === 'done').map((item) => item.key),
+    );
+    if (prevDoneKeys.current.size > 0) {
+      for (const key of doneNow) {
+        if (!prevDoneKeys.current.has(key)) {
+          const completed = stages.find((item) => item.key === key);
+          if (completed) {
+            setCelebrateStep(completed.title);
+            const nextOpen = menuStages.find(
+              (item) =>
+                item.tone === 'current' || item.tone === 'wait' || item.tone === 'stop',
+            );
+            if (nextOpen) {
+              setPickedKey(nextOpen.key);
+            }
+          }
+          break;
+        }
+      }
+    }
+    prevDoneKeys.current = doneNow;
+  }, [stages, menuStages]);
+
+  useEffect(() => {
+    if (!celebrateStep) {
+      return;
+    }
+    const timer = window.setTimeout(() => setCelebrateStep(null), 4500);
+    return () => window.clearTimeout(timer);
+  }, [celebrateStep]);
+
+  function renderStageBody(item: (typeof stages)[number], number: number) {
+    return (
+      <section className="rounded-[28px] border border-[#e4e7ee] bg-white p-4 sm:p-5 lg:rounded-2xl">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 className="text-base font-extrabold text-[#1c2744] sm:text-lg">
+              {number}. {item.title}
+            </h2>
+            <p className="mt-1 text-xs font-bold text-[#8b909a]">{item.actor}</p>
+          </div>
+          <span className="rounded-full bg-[#f6f7fb] px-3 py-1 text-xs font-extrabold text-[#1c2744]">
+            {item.status}
+          </span>
+        </div>
+        {item.facts.length > 0 ? (
+          <div className="mt-4">
+            {item.key === 'presentation' ? (
+              <StagePanel
+                title={t('dossier.scheduleTitle')}
+                hint={t('dossier.scheduleHint')}
+              >
+                <InfoGrid items={item.facts} />
+              </StagePanel>
+            ) : (
+              <div className="rounded-2xl border border-[#d8dce6] bg-[#f6f7fb] p-3 sm:p-4">
+                <InfoGrid items={item.facts} />
+                {item.note ? (
+                  <div className="mt-3">
+                    {item.key === 'deposit' ? (
+                      <p className="text-xs font-extrabold text-[#8b909a]">
+                        {t('papers.abstract')}
+                      </p>
+                    ) : null}
+                    <p className="mt-0.5 whitespace-pre-wrap text-sm leading-relaxed text-[#5c6578]">
+                      {item.note}
+                    </p>
+                  </div>
+                ) : null}
+              </div>
+            )}
+          </div>
+        ) : item.note ? (
+          <p className="mt-3 whitespace-pre-wrap text-sm leading-relaxed text-[#5c6578]">
+            {item.note}
+          </p>
+        ) : null}
+        {item.key === 'deposit' &&
+        paper?.id &&
+        dossier?.files?.some((file) => file.kind === 'MANUSCRIPT') ? (
+          <div className="mt-4">
+            <PaperFilesStrip
+              paperId={paper.id}
+              files={dossier.files}
+              kinds={['MANUSCRIPT', 'REVISION']}
+            />
+          </div>
+        ) : null}
+        {paper?.id && dossier?.files?.length && item.key === 'decision' ? (
+          <PaperFilesStrip
+            paperId={paper.id}
+            files={dossier.files}
+            kinds={['REVISION']}
+          />
+        ) : null}
+        {item.key === 'deposit' && children ? (
+          <div className="mt-5 border-t border-[#e4e7ee] pt-5">{children}</div>
+        ) : null}
+        {item.extra}
+        {extras?.[item.key] ? (
+          <div className="mt-4">
+            <p className="mb-2 text-[11px] font-extrabold uppercase tracking-[0.12em] text-[#9aa3b5]">
+              {t('dossier.currentDeposit')}
+            </p>
+            {extras[item.key]}
+          </div>
+        ) : null}
+      </section>
+    );
+  }
+
+  const actionsNav = (
+    <nav
+      className="rounded-2xl border border-[#e4e7ee] bg-white p-2 sm:p-3"
+      aria-label={t('dossier.actionsMenu')}
+    >
+      <p className="mb-2 px-2 pt-1 text-[11px] font-extrabold uppercase tracking-[0.12em] text-[#9aa3b5]">
+        {t('dossier.actionsMenu')}
+      </p>
+      <ul className="grid gap-0.5">
+        {menuStages.map((item) => {
+          const active = item.key === activeKey;
+          const number = stages.findIndex((entry) => entry.key === item.key) + 1;
+          return (
+            <li key={item.key}>
+              <button
+                type="button"
+                aria-current={active ? 'step' : undefined}
+                className={`flex w-full items-start gap-2 rounded-xl px-2.5 py-2 text-left transition-colors ${
+                  active
+                    ? 'bg-[#5d74ff]/15 text-[#3d4fd4]'
+                    : 'text-[#5c6578] hover:bg-[#f4f5f7] hover:text-[#1c2744]'
+                }`}
+                onClick={() => {
+                  setPickedKey(item.key);
+                  setActionsOpen(false);
+                }}
+              >
+                <span
+                  className={`mt-1 size-2 shrink-0 rounded-full ${
+                    item.tone === 'done'
+                      ? 'bg-[#2fbf71]'
+                      : item.tone === 'stop'
+                        ? 'bg-[#e35d5d]'
+                        : item.tone === 'later'
+                          ? 'bg-[#d8dce6]'
+                          : 'bg-[#f0a04b]'
+                  }`}
+                  aria-hidden
+                />
+                <span className="min-w-0">
+                  <span className="block text-xs font-extrabold leading-snug">
+                    {number}. {item.title}
+                  </span>
+                  <span className="mt-0.5 block text-[10px] font-bold leading-snug opacity-80">
+                    {item.status}
+                  </span>
+                </span>
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+    </nav>
+  );
+
+  const finalFiles =
+    paper?.id && dossier?.files && dossier.files.length > 0 ? (
+      <section className="rounded-2xl border border-[#e4e7ee] bg-white p-4 sm:p-5">
+        <h2 className="text-base font-extrabold text-[#1c2744]">{t('dossier.finalFiles')}</h2>
+        <p className="mt-1 text-xs font-semibold text-[#8b909a]">
+          {t('dossier.finalFilesHint')}
+        </p>
+        <div className="mt-3">
+          <PaperFilesStrip
+            paperId={paper.id}
+            files={dossier.files}
+            kinds={[
+              'MANUSCRIPT',
+              'REVISION',
+              'SLIDES',
+              'CAMERA_READY',
+              'EDITABLE',
+              'SIMILARITY',
+              'COPYRIGHT',
+              'PAYMENT_PROOF',
+            ]}
+          />
+        </div>
+      </section>
+    ) : null;
 
   return (
     <div className="space-y-5">
+      {celebrateStep ? (
+        <div
+          role="status"
+          className="rounded-2xl border border-[#2fbf71]/40 bg-[#e8f8ef] px-4 py-4 sm:px-5"
+        >
+          <p className="text-[11px] font-extrabold uppercase tracking-[0.14em] text-[#1c9a57]">
+            {t('dossier.stepCompleteTitle')}
+          </p>
+          <p className="mt-1 text-sm font-semibold text-[#1c2744]">
+            {t('dossier.stepCompleteBody', { step: celebrateStep })}
+          </p>
+        </div>
+      ) : null}
+
+      {currentStage ? (
+        <section
+          aria-label={t('dossier.currentState')}
+          className={`rounded-2xl border px-4 py-4 sm:px-5 ${currentBannerTone}`}
+        >
+          <p className="text-[11px] font-extrabold uppercase tracking-[0.14em] text-[#8b909a]">
+            {t('dossier.currentState')}
+          </p>
+          <div className="mt-2 flex flex-wrap items-center justify-between gap-3">
+            <div className="min-w-0">
+              <h2 className="text-lg font-extrabold text-[#1c2744] sm:text-xl">
+                {currentNumber}. {currentStage.title}
+              </h2>
+              <p className="mt-1 text-sm font-semibold text-[#5c6578]">
+                {currentStage.actor}
+              </p>
+            </div>
+            <span
+              className={`rounded-full px-3.5 py-1.5 text-sm font-extrabold ${currentBadgeTone}`}
+            >
+              {currentStage.status}
+            </span>
+          </div>
+        </section>
+      ) : null}
+
       <section aria-label={t('dossier.evolutionTitle')}>
-        <div className="mb-3">
-          <h2 className="text-base font-extrabold text-[#1c2744] sm:text-lg">
-            {t('dossier.evolutionTitle')}
-          </h2>
-          <p className="mt-0.5 text-xs text-[#8b909a] sm:text-sm">{t('dossier.evolutionHint')}</p>
+        <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
+          <div>
+            <h2 className="text-base font-extrabold text-[#1c2744] sm:text-lg">
+              {t('dossier.evolutionTitle')}
+            </h2>
+            <p className="mt-0.5 text-xs text-[#8b909a] sm:text-sm">
+              {t('dossier.evolutionHint')}
+            </p>
+          </div>
+          {doctorantView ? (
+            <Button
+              type="button"
+              variant="outline"
+              size="icon"
+              className="border-[#c5cad6]"
+              aria-expanded={actionsOpen}
+              aria-label={
+                actionsOpen ? t('dossier.actionsMenuClose') : t('dossier.actionsMenuOpen')
+              }
+              onClick={() => setActionsOpen((open) => !open)}
+            >
+              {actionsOpen ? <X className="size-4" /> : <ListChecks className="size-4" />}
+            </Button>
+          ) : null}
         </div>
         <ol className="touch-scroll -mx-1 flex gap-2 overflow-x-auto px-1 pb-2 snap-x snap-mandatory">
           {stages.map((item, index) => (
@@ -805,118 +1189,21 @@ export function PaperWorkflow({
         </ol>
       </section>
 
-      <div className="grid gap-4 lg:grid-cols-[13.5rem_minmax(0,1fr)]">
-        <nav
-          className="rounded-2xl border border-[#e4e7ee] bg-white p-2 sm:p-3"
-          aria-label={t('dossier.actionsMenu')}
-        >
-          <p className="mb-2 px-2 pt-1 text-[11px] font-extrabold uppercase tracking-[0.12em] text-[#9aa3b5]">
-            {t('dossier.actionsMenu')}
-          </p>
-          <ul className="grid gap-0.5">
-            {stages.map((item, index) => {
-              const active = index === selected;
-              return (
-                <li key={item.key}>
-                  <button
-                    type="button"
-                    aria-current={active ? 'step' : undefined}
-                    className={`flex w-full items-start gap-2 rounded-xl px-2.5 py-2 text-left transition-colors ${
-                      active
-                        ? 'bg-[#5d74ff]/15 text-[#3d4fd4]'
-                        : 'text-[#5c6578] hover:bg-[#f4f5f7] hover:text-[#1c2744]'
-                    }`}
-                    onClick={() => setPicked(index)}
-                  >
-                    <span
-                      className={`mt-1 size-2 shrink-0 rounded-full ${
-                        item.tone === 'done'
-                          ? 'bg-[#2fbf71]'
-                          : item.tone === 'stop'
-                            ? 'bg-[#e35d5d]'
-                            : item.tone === 'later'
-                              ? 'bg-[#d8dce6]'
-                              : 'bg-[#f0a04b]'
-                      }`}
-                      aria-hidden
-                    />
-                    <span className="min-w-0">
-                      <span className="block text-xs font-extrabold leading-snug">
-                        {index + 1}. {item.title}
-                      </span>
-                      <span className="mt-0.5 block text-[10px] font-bold leading-snug opacity-80">
-                        {item.status}
-                      </span>
-                    </span>
-                  </button>
-                </li>
-              );
-            })}
-          </ul>
-        </nav>
-
-        {stage ? (
-          <section className="rounded-[28px] border border-[#e4e7ee] bg-white p-4 sm:p-5 lg:rounded-2xl">
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div>
-                <h2 className="text-base font-extrabold text-[#1c2744] sm:text-lg">
-                  {selected + 1}. {stage.title}
-                </h2>
-                <p className="mt-1 text-xs font-bold text-[#8b909a]">{stage.actor}</p>
-              </div>
-              <span className="rounded-full bg-[#f6f7fb] px-3 py-1 text-xs font-extrabold text-[#1c2744]">
-                {stage.status}
-              </span>
-            </div>
-            {stage.facts.length > 0 ? (
-              <div className="mt-4">
-                {stage.key === 'presentation' ? (
-                  <StagePanel
-                    title={t('dossier.scheduleTitle')}
-                    hint={t('dossier.scheduleHint')}
-                  >
-                    <InfoGrid items={stage.facts} />
-                  </StagePanel>
-                ) : (
-                  <div className="rounded-2xl border border-[#d8dce6] bg-[#f6f7fb] p-3 sm:p-4">
-                    <InfoGrid items={stage.facts} />
-                    {stage.note ? (
-                      <p className="mt-3 text-sm leading-relaxed text-[#5c6578]">
-                        {stage.note}
-                      </p>
-                    ) : null}
-                  </div>
-                )}
-              </div>
-            ) : stage.note ? (
-              <p className="mt-3 text-sm leading-relaxed text-[#5c6578]">{stage.note}</p>
-            ) : null}
-            {stage.key === 'deposit' &&
-            paper?.id &&
-            dossier?.files?.some((file) => file.kind === 'MANUSCRIPT') ? (
-              <div className="mt-4">
-                <PaperFilesStrip
-                  paperId={paper.id}
-                  files={dossier.files}
-                  kinds={['MANUSCRIPT', 'REVISION']}
-                />
-              </div>
-            ) : null}
-            {paper?.id && dossier?.files?.length && stage.key === 'decision' ? (
-              <PaperFilesStrip
-                paperId={paper.id}
-                files={dossier.files}
-                kinds={['REVISION']}
-              />
-            ) : null}
-            {stage.key === 'deposit' && children ? (
-              <div className="mt-5 border-t border-[#e4e7ee] pt-5">{children}</div>
-            ) : null}
-            {stage.extra}
-            {extras?.[stage.key]}
-          </section>
-        ) : null}
-      </div>
+      {doctorantView ? (
+        <div className="space-y-4">
+          {actionsOpen ? actionsNav : null}
+          {stage ? renderStageBody(stage, stageNumber) : null}
+          {finalFiles}
+        </div>
+      ) : (
+        <div className="grid gap-4 lg:grid-cols-[13.5rem_minmax(0,1fr)]">
+          {actionsNav}
+          <div className="space-y-4">
+            {stage ? renderStageBody(stage, stageNumber) : null}
+            {finalFiles}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -452,6 +452,7 @@ export function SubmissionEditorPage() {
         extras={extras}
       >
         {!current || current.dossier?.isAuthor ? (
+        locked && current ? null : (
         <div className="space-y-4">
           <div className="flex flex-wrap items-end justify-between gap-2">
             <div>
@@ -773,6 +774,7 @@ export function SubmissionEditorPage() {
             </StagePanel>
           ) : null}
         </div>
+        )
         ) : null}
       </PaperWorkflow>
     </div>

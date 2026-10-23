@@ -1,9 +1,9 @@
 import { useQuery } from '@tanstack/react-query';
 import { type ReactNode, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Link } from 'react-router';
 import { PaperFileSlot, PaperFilesStrip } from '@/components/paper-file-preview';
 import type { PaperDossier } from '@/components/paper-workflow';
+import { RegistrationPaymentPanel } from '@/components/registration-payment-panel';
 import { StagePanel, stageField } from '@/components/stage-panel';
 import { Button } from '@/components/ui/button';
 import { apiErrorMessage, apiFetch } from '@/services/api';
@@ -82,8 +82,9 @@ export function usePaperStageExtras(
 
   const dossier = paper.dossier;
   const registeredNow =
-    dossier.registration?.status === 'VERIFIED' ||
-    dossier.registration?.paymentStatus === 'VERIFIED';
+    dossier.registration?.status === 'VERIFIED' &&
+    (!dossier.paymentsEnabled ||
+      dossier.registration.paymentStatus === 'VERIFIED');
   const manager = dossier.canManage;
   const author = Boolean(dossier.isAuthor);
   const sessionChair = dossier.sessionChairs.some((item) => item.mine);
@@ -403,35 +404,32 @@ export function usePaperStageExtras(
     );
   }
 
-  // Same full workflow for every role; action panels only for who can act.
+  // Registration is per submission (dossier), not a global sidebar page.
   if (open && (author || manager)) {
     actions.registration = (
-      <div className="mt-4">
-        <StagePanel
-          title={t('dossier.registration')}
-          hint={t('dossier.registrationSidebarHint')}
-        >
-          <Button asChild>
-            <Link to={`/workspace/registration?paper=${paper.id}`}>
-              {t('dossier.openRegistrationPage')}
-            </Link>
-          </Button>
-        </StagePanel>
-      </div>
+      <RegistrationPaymentPanel
+        paperId={paper.id}
+        conferenceId={paper.conferenceId}
+        createdById={paper.createdById}
+        dossier={dossier}
+        onChanged={onChanged}
+        onError={onError}
+      />
     );
   }
 
   if (open) {
     const slidesStatus = dossier.slidesStatus ?? 'LOCKED';
+    // Actions only when registration unlocked the stage — not from leftover flags.
     const presentationReady =
-      registeredNow ||
-      slidesStatus === 'OPEN' ||
-      slidesStatus === 'DEPOSITED' ||
-      slidesStatus === 'NEEDS_MODS' ||
-      slidesStatus === 'WILL_DEPOSIT' ||
-      slidesStatus === 'VALIDATED' ||
-      Boolean(dossier.schedule) ||
-      sessionChair;
+      registeredNow &&
+      (slidesStatus === 'OPEN' ||
+        slidesStatus === 'DEPOSITED' ||
+        slidesStatus === 'NEEDS_MODS' ||
+        slidesStatus === 'WILL_DEPOSIT' ||
+        slidesStatus === 'VALIDATED' ||
+        slidesStatus === 'LOCKED' ||
+        Boolean(dossier.schedule));
     const canUploadSlides =
       author &&
       (slidesStatus === 'OPEN' ||
@@ -515,15 +513,22 @@ export function usePaperStageExtras(
           </StagePanel>
         ) : null;
 
-      if (!(author || manager || chairFollowUp || chairRemarksBlock)) {
-        // Reviewer / other roles: full workflow info only, no presentation controls.
+      const authorSlidesRemarks =
+        (slidesStatus === 'NEEDS_MODS' || slidesStatus === 'WILL_DEPOSIT') &&
+        (dossier.slidesRemarks?.length ?? 0) > 0;
+      // Chercheur: only deposit + comments. Procedure stays in the workflow grids.
+      const authorPresentationWork =
+        author && (canUploadSlides || authorSlidesRemarks || Boolean(chairRemarksBlock));
+
+      if (!(manager || chairFollowUp || authorPresentationWork)) {
+        // Reviewer / idle author: workflow info only.
       } else {
       actions.presentation = (
         <div className="mt-4 grid gap-4">
           {chairRemarksBlock}
           {chairFollowUp}
 
-          {author || manager ? (
+          {canUploadSlides || manager ? (
             <StagePanel
               title={t('dossier.presentation')}
               hint={t('dossier.presentationHint')}
@@ -552,9 +557,7 @@ export function usePaperStageExtras(
             </StagePanel>
           ) : null}
 
-          {(author || manager) &&
-          (slidesStatus === 'NEEDS_MODS' || slidesStatus === 'WILL_DEPOSIT') &&
-          (dossier.slidesRemarks?.length ?? 0) > 0 ? (
+          {authorSlidesRemarks ? (
             <RemarksChecklist
               paperId={paper.id}
               remarks={dossier.slidesRemarks ?? []}
@@ -671,54 +674,59 @@ export function usePaperStageExtras(
         cameraStatus === 'LOCKED');
     const cameraPendingReview =
       cameraStatus === 'DEPOSITED' || cameraStatus === 'WILL_DEPOSIT';
+    const authorCameraRemarks =
+      (cameraStatus === 'NEEDS_MODS' || cameraStatus === 'WILL_DEPOSIT') &&
+      (dossier.cameraReadyRemarks?.length ?? 0) > 0;
+    const authorCameraWork = author && (canUploadCamera || authorCameraRemarks);
 
-    if (cameraReadyStage) {
+    if (cameraReadyStage && (manager || authorCameraWork)) {
     actions.camera = (
       <div className="mt-4 space-y-3">
-        <StagePanel title={t('dossier.camera')} hint={t('dossier.cameraHint')}>
-          <div className="grid gap-3 lg:grid-cols-2">
-            <PaperFileSlot
-              paperId={paper.id}
-              title={t('dossier.cameraWord')}
-              hint={
-                cameraStatus === 'NEEDS_MODS'
-                  ? t('dossier.cameraModsHint')
-                  : t('dossier.cameraWordHint')
-              }
-              kind="EDITABLE"
-              file={dossier.files.find((item) => item.kind === 'EDITABLE') ?? null}
-              accept=".pdf,.doc,.docx,.tex,.zip"
-              uploadLabel={t('dossier.uploadEditable')}
-              onUpload={
-                canUploadCamera
-                  ? (file) => upload(`/api/v1/papers/${paper.id}/editable`, file)
-                  : undefined
-              }
-              done={dossier.files.some((item) => item.kind === 'EDITABLE')}
-            />
-            <PaperFileSlot
-              paperId={paper.id}
-              title={t('dossier.cameraPdf')}
-              hint={
-                cameraStatus === 'NEEDS_MODS'
-                  ? t('dossier.cameraModsHint')
-                  : t('dossier.cameraPdfHint')
-              }
-              kind="CAMERA_READY"
-              file={dossier.files.find((item) => item.kind === 'CAMERA_READY') ?? null}
-              uploadLabel={t('dossier.uploadPdf')}
-              onUpload={
-                canUploadCamera
-                  ? (file) => upload(`/api/v1/papers/${paper.id}/camera-ready`, file)
-                  : undefined
-              }
-              done={dossier.files.some((item) => item.kind === 'CAMERA_READY')}
-            />
-          </div>
-        </StagePanel>
+        {canUploadCamera || manager ? (
+          <StagePanel title={t('dossier.camera')} hint={t('dossier.cameraHint')}>
+            <div className="grid gap-3 lg:grid-cols-2">
+              <PaperFileSlot
+                paperId={paper.id}
+                title={t('dossier.cameraWord')}
+                hint={
+                  cameraStatus === 'NEEDS_MODS'
+                    ? t('dossier.cameraModsHint')
+                    : t('dossier.cameraWordHint')
+                }
+                kind="EDITABLE"
+                file={dossier.files.find((item) => item.kind === 'EDITABLE') ?? null}
+                accept=".pdf,.doc,.docx,.tex,.zip"
+                uploadLabel={t('dossier.uploadEditable')}
+                onUpload={
+                  canUploadCamera
+                    ? (file) => upload(`/api/v1/papers/${paper.id}/editable`, file)
+                    : undefined
+                }
+                done={dossier.files.some((item) => item.kind === 'EDITABLE')}
+              />
+              <PaperFileSlot
+                paperId={paper.id}
+                title={t('dossier.cameraPdf')}
+                hint={
+                  cameraStatus === 'NEEDS_MODS'
+                    ? t('dossier.cameraModsHint')
+                    : t('dossier.cameraPdfHint')
+                }
+                kind="CAMERA_READY"
+                file={dossier.files.find((item) => item.kind === 'CAMERA_READY') ?? null}
+                uploadLabel={t('dossier.uploadPdf')}
+                onUpload={
+                  canUploadCamera
+                    ? (file) => upload(`/api/v1/papers/${paper.id}/camera-ready`, file)
+                    : undefined
+                }
+                done={dossier.files.some((item) => item.kind === 'CAMERA_READY')}
+              />
+            </div>
+          </StagePanel>
+        ) : null}
 
-        {(cameraStatus === 'NEEDS_MODS' || cameraStatus === 'WILL_DEPOSIT') &&
-        (dossier.cameraReadyRemarks?.length ?? 0) > 0 ? (
+        {authorCameraRemarks ? (
           <RemarksChecklist
             paperId={paper.id}
             remarks={dossier.cameraReadyRemarks ?? []}
@@ -820,70 +828,97 @@ export function usePaperStageExtras(
         !dossier.similarity?.verified &&
         similarityStatus !== 'VALIDATED');
 
-    if (similarityReady) {
+    const authorSimilarityWork =
+      author &&
+      (canUploadSimilarity ||
+        (similarityStatus === 'OPEN' ||
+          similarityStatus === 'DEPOSITED' ||
+          similarityStatus === 'LOCKED'));
+
+    if (similarityReady && (manager || authorSimilarityWork)) {
       actions.similarity = (
         <div className="mt-4 space-y-3">
-          <StagePanel
-            title={t('dossier.similarity')}
-            hint={t('dossier.similarityStageHint')}
-          >
-            <div className="grid gap-3 lg:grid-cols-2">
-              <PaperFileSlot
-                paperId={paper.id}
-                title={t('dossier.similarityReport')}
-                hint={t('dossier.similarityHint')}
-                kind="SIMILARITY"
-                file={dossier.files.find((item) => item.kind === 'SIMILARITY') ?? null}
-                uploadLabel={t('dossier.uploadSimilarity')}
-                onUpload={
-                  canUploadSimilarity
-                    ? (file) =>
-                        upload(`/api/v1/papers/${paper.id}/similarity-report`, file)
-                    : undefined
-                }
-                done={dossier.files.some((item) => item.kind === 'SIMILARITY')}
-              />
-              <StagePanel
-                title={t('dossier.cameraSimilarity')}
-                hint={t('dossier.similarityPercentHint')}
-              >
+          {canUploadSimilarity ||
+          (author &&
+            (similarityStatus === 'OPEN' ||
+              similarityStatus === 'DEPOSITED' ||
+              similarityStatus === 'LOCKED')) ||
+          manager ? (
+            <StagePanel
+              title={t('dossier.similarity')}
+              hint={t('dossier.similarityStageHint')}
+            >
+              <div className="grid gap-3 lg:grid-cols-2">
+                {canUploadSimilarity || manager ? (
+                  <PaperFileSlot
+                    paperId={paper.id}
+                    title={t('dossier.similarityReport')}
+                    hint={t('dossier.similarityHint')}
+                    kind="SIMILARITY"
+                    file={dossier.files.find((item) => item.kind === 'SIMILARITY') ?? null}
+                    uploadLabel={t('dossier.uploadSimilarity')}
+                    onUpload={
+                      canUploadSimilarity
+                        ? (file) =>
+                            upload(`/api/v1/papers/${paper.id}/similarity-report`, file)
+                        : undefined
+                    }
+                    done={dossier.files.some((item) => item.kind === 'SIMILARITY')}
+                  />
+                ) : null}
                 {author &&
                 (similarityStatus === 'OPEN' ||
                   similarityStatus === 'DEPOSITED' ||
                   similarityStatus === 'LOCKED') ? (
-                  <form
-                    className="flex flex-wrap items-end gap-2"
-                    onSubmit={(event) => {
-                      event.preventDefault();
-                      const percentage = Number(
-                        new FormData(event.currentTarget).get('percentage'),
-                      );
-                      void send(
-                        `/api/v1/papers/${paper.id}/similarity`,
-                        { percentage, note: '' } as unknown as BodyInit,
-                        true,
-                      );
-                    }}
+                  <StagePanel
+                    title={t('dossier.cameraSimilarity')}
+                    hint={t('dossier.similarityPercentHint')}
                   >
-                    <label className="min-w-[8rem] flex-1 text-xs font-extrabold text-[#5c6578]">
-                      {t('dossier.similarityValue')}
-                      <input
-                        name="percentage"
-                        type="number"
-                        min={0}
-                        max={19.9}
-                        step="0.1"
-                        required
-                        defaultValue={dossier.similarity?.percentage ?? ''}
-                        className={stageField}
-                      />
-                    </label>
-                    <Button type="submit">{t('workflow.save')}</Button>
-                  </form>
+                    <form
+                      className="flex flex-wrap items-end gap-2"
+                      onSubmit={(event) => {
+                        event.preventDefault();
+                        const percentage = Number(
+                          new FormData(event.currentTarget).get('percentage'),
+                        );
+                        void send(
+                          `/api/v1/papers/${paper.id}/similarity`,
+                          { percentage, note: '' } as unknown as BodyInit,
+                          true,
+                        );
+                      }}
+                    >
+                      <label className="min-w-[8rem] flex-1 text-xs font-extrabold text-[#5c6578]">
+                        {t('dossier.similarityValue')}
+                        <input
+                          name="percentage"
+                          type="number"
+                          min={0}
+                          max={19.9}
+                          step="0.1"
+                          required
+                          defaultValue={dossier.similarity?.percentage ?? ''}
+                          className={stageField}
+                        />
+                      </label>
+                      <Button type="submit">{t('workflow.save')}</Button>
+                    </form>
+                  </StagePanel>
+                ) : manager ? (
+                  <StagePanel
+                    title={t('dossier.cameraSimilarity')}
+                    hint={t('dossier.similarityPercentHint')}
+                  >
+                    <p className="text-sm font-semibold text-[#1c2744]">
+                      {dossier.similarity
+                        ? `${dossier.similarity.percentage} %`
+                        : t('dossier.missing')}
+                    </p>
+                  </StagePanel>
                 ) : null}
-              </StagePanel>
-            </div>
-          </StagePanel>
+              </div>
+            </StagePanel>
+          ) : null}
 
           {manager && similarityPending ? (
             <StagePanel
@@ -929,60 +964,66 @@ export function usePaperStageExtras(
         dossier.files.some((item) => item.kind === 'COPYRIGHT') &&
         copyrightStage !== 'VALIDATED');
 
-    if (copyrightReady) {
+    const authorCopyrightWork = author && canUploadCopyright;
+
+    if (copyrightReady && (manager || authorCopyrightWork)) {
     actions.copyright = (
       <div className="mt-4 space-y-3">
-        <StagePanel
-          title={t('dossier.copyright')}
-          hint={t('dossier.copyrightStageHint')}
-        >
-          <div className="grid gap-3 lg:grid-cols-2">
-            <PaperFileSlot
-              paperId={paper.id}
-              title={t('dossier.copyright')}
-              hint={t('dossier.copyrightHint')}
-              kind="COPYRIGHT"
-              file={dossier.files.find((item) => item.kind === 'COPYRIGHT') ?? null}
-              uploadLabel={t('dossier.uploadCopyright')}
-              onUpload={
-                canUploadCopyright
-                  ? (file) => upload(`/api/v1/papers/${paper.id}/copyright`, file)
-                  : undefined
-              }
-              done={
-                copyrightStage === 'VALIDATED' ||
-                dossier.copyrightStatus === 'VALIDATED' ||
-                Boolean(dossier.files.find((item) => item.kind === 'COPYRIGHT'))
-              }
-            />
-            <StagePanel
-              title={t('workflow.model')}
-              hint={t('dossier.copyrightModelHint')}
-            >
-              {template.data ? (
-                <div className="space-y-2">
-                  <button
-                    type="button"
-                    className="text-sm font-extrabold text-[#3d4fd4]"
-                    onClick={() => setModelOpen((value) => !value)}
-                  >
-                    {modelOpen ? t('nav.close') : t('workflow.model')}
-                  </button>
-                  {modelOpen ? (
-                    <div className="rounded-xl border border-[#d8dce6] bg-white px-4 py-3">
-                      <p className="text-sm font-extrabold">{template.data.subject}</p>
-                      <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-[#5c6578]">
-                        {template.data.body}
-                      </p>
+        {canUploadCopyright || manager ? (
+          <StagePanel
+            title={t('dossier.copyright')}
+            hint={t('dossier.copyrightStageHint')}
+          >
+            <div className="grid gap-3 lg:grid-cols-2">
+              <PaperFileSlot
+                paperId={paper.id}
+                title={t('dossier.copyright')}
+                hint={t('dossier.copyrightHint')}
+                kind="COPYRIGHT"
+                file={dossier.files.find((item) => item.kind === 'COPYRIGHT') ?? null}
+                uploadLabel={t('dossier.uploadCopyright')}
+                onUpload={
+                  canUploadCopyright
+                    ? (file) => upload(`/api/v1/papers/${paper.id}/copyright`, file)
+                    : undefined
+                }
+                done={
+                  copyrightStage === 'VALIDATED' ||
+                  dossier.copyrightStatus === 'VALIDATED' ||
+                  Boolean(dossier.files.find((item) => item.kind === 'COPYRIGHT'))
+                }
+              />
+              {canUploadCopyright || manager ? (
+                <StagePanel
+                  title={t('workflow.model')}
+                  hint={t('dossier.copyrightModelHint')}
+                >
+                  {template.data ? (
+                    <div className="space-y-2">
+                      <button
+                        type="button"
+                        className="text-sm font-extrabold text-[#3d4fd4]"
+                        onClick={() => setModelOpen((value) => !value)}
+                      >
+                        {modelOpen ? t('nav.close') : t('workflow.model')}
+                      </button>
+                      {modelOpen ? (
+                        <div className="rounded-xl border border-[#d8dce6] bg-white px-4 py-3">
+                          <p className="text-sm font-extrabold">{template.data.subject}</p>
+                          <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-[#5c6578]">
+                            {template.data.body}
+                          </p>
+                        </div>
+                      ) : null}
                     </div>
-                  ) : null}
-                </div>
-              ) : (
-                <p className="text-sm text-[#8b909a]">{t('dossier.noModel')}</p>
-              )}
-            </StagePanel>
-          </div>
-        </StagePanel>
+                  ) : (
+                    <p className="text-sm text-[#8b909a]">{t('dossier.noModel')}</p>
+                  )}
+                </StagePanel>
+              ) : null}
+            </div>
+          </StagePanel>
+        ) : null}
 
         {manager && copyrightPending ? (
           <StagePanel
@@ -1036,7 +1077,30 @@ export function usePaperStageExtras(
     (dossier.copyrightStageStatus === 'VALIDATED' ||
       dossier.copyrightStatus === 'VALIDATED');
 
-  if ((author || manager) && (dossier.doi || readyForPublication)) {
+  // Chercheur: attestation download only. Waiting / publish stay in workflow + admin actions.
+  if (author && !manager && dossier.doi) {
+    actions.final = (
+      <div className="mt-4">
+        <StagePanel
+          title={t('dossier.final')}
+          hint={`${t('dossier.finalReady')} ${dossier.doi}`}
+          status={t('dossier.finalReady')}
+          statusTone="ok"
+        >
+          <Button
+            type="button"
+            variant="outline"
+            className="border-[#c5cad6]"
+            onClick={() =>
+              void download(`/api/v1/papers/${paper.id}/attestation`, 'attestation.pdf')
+            }
+          >
+            {t('dossier.downloadAttestation')}
+          </Button>
+        </StagePanel>
+      </div>
+    );
+  } else if (manager && (dossier.doi || readyForPublication)) {
     actions.final = (
       <div className="mt-4 space-y-3">
         {!dossier.doi ? (
@@ -1062,11 +1126,6 @@ export function usePaperStageExtras(
             <p className="relative mt-2 max-w-lg text-sm font-semibold text-[#5c6578]">
               {t('dossier.finalCongratsBody')}
             </p>
-            {author && !manager ? (
-              <p className="relative mt-4 text-xs font-extrabold text-[#1c9a57]">
-                {t('dossier.finalWaitingAdmin')}
-              </p>
-            ) : null}
           </div>
         ) : null}
 
@@ -1090,9 +1149,7 @@ export function usePaperStageExtras(
               : t('dossier.finalWaitingAdmin')
           }
           status={
-            dossier.doi
-              ? t('dossier.finalReady')
-              : t('dossier.readyToPublish')
+            dossier.doi ? t('dossier.finalReady') : t('dossier.readyToPublish')
           }
           statusTone={dossier.doi ? 'ok' : 'wait'}
         >
@@ -1107,7 +1164,7 @@ export function usePaperStageExtras(
             >
               {t('dossier.downloadAttestation')}
             </Button>
-          ) : manager ? (
+          ) : (
             <Button
               type="button"
               onClick={() =>
@@ -1116,7 +1173,7 @@ export function usePaperStageExtras(
             >
               {t('dossier.attestation')}
             </Button>
-          ) : null}
+          )}
         </StagePanel>
       </div>
     );

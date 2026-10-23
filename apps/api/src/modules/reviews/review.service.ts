@@ -18,8 +18,10 @@ import {
   DecisionOutcome,
   DecisionStatus,
   MembershipStatus,
+  PaperFileKind,
   PaperStatus,
   PlatformRole,
+  RemarkStatus,
   ReviewMode,
 } from '../../generated/prisma/client.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
@@ -219,7 +221,26 @@ export class ReviewService {
     }
     const fresh = await this.prisma.reviewAssignment.findMany({
       where: { reviewerId: actor.id },
-      include: { paper: { include: { conference: true } }, form: true },
+      include: {
+        paper: {
+          include: {
+            conference: true,
+            decision: true,
+            files: {
+              where: { kind: PaperFileKind.REVISION },
+              select: {
+                kind: true,
+                originalName: true,
+                contentType: true,
+                sizeBytes: true,
+              },
+              orderBy: { createdAt: 'desc' },
+              take: 1,
+            },
+          },
+        },
+        form: true,
+      },
       orderBy: { createdAt: 'desc' },
     });
     return fresh.map((row) => this.present(row, false));
@@ -313,6 +334,11 @@ export class ReviewService {
       throw new ForbiddenException('Accept the invitation before sending a review');
     }
     const outcome = this.outcomeFromAdvice(input.recommendation);
+    const existing = row.paper.decision;
+    const revisionRound =
+      existing?.status === DecisionStatus.PUBLISHED &&
+      (existing.outcome === DecisionOutcome.CONDITIONALLY_ACCEPTED ||
+        existing.outcome === DecisionOutcome.REVISION_REQUIRED);
     await this.prisma.$transaction(async (tx) => {
       await tx.reviewForm.upsert({
         where: { assignmentId: id },
@@ -323,7 +349,7 @@ export class ReviewService {
         where: { id },
         data: { status: AssignmentStatus.COMPLETED },
       });
-      if (!row.paper.decision) {
+      if (!existing) {
         await tx.decision.create({
           data: {
             paperId: row.paperId,
@@ -334,17 +360,56 @@ export class ReviewService {
             decidedById: actor.id,
           },
         });
+      } else if (revisionRound) {
+        // After author resubmits, reviewer can accept or ask for more mods.
+        await tx.decision.update({
+          where: { paperId: row.paperId },
+          data: {
+            outcome,
+            letter: input.commentsToAuthor,
+            status: DecisionStatus.PUBLISHED,
+            publishedAt: new Date(),
+            decidedById: actor.id,
+          },
+        });
       }
     });
+    if (
+      revisionRound &&
+      (outcome === DecisionOutcome.CONDITIONALLY_ACCEPTED ||
+        outcome === DecisionOutcome.REVISION_REQUIRED)
+    ) {
+      await this.seedMoreRemarks(row.paperId, input.commentsToAuthor);
+    }
     const recipients = row.paper.authors.filter((item) => item.corresponding);
     for (const author of recipients) {
       const outboxId = await this.email.enqueue(author.email, 'review.response');
       await this.email.deliver(outboxId, {
         to: author.email,
-        subject: `Review on ${row.paper.publicId ?? row.paper.title}`,
+        subject: revisionRound
+          ? `Revision review on ${row.paper.publicId ?? row.paper.title}`
+          : `Review on ${row.paper.publicId ?? row.paper.title}`,
         text: input.commentsToAuthor,
       });
     }
+  }
+
+  private async seedMoreRemarks(paperId: string, letter: string) {
+    const latest = await this.prisma.revisionRemark.findFirst({
+      where: { paperId },
+      orderBy: { round: 'desc' },
+      select: { round: true },
+    });
+    const text = letter.trim() || 'Address the remaining reviewer comments.';
+    await this.prisma.revisionRemark.create({
+      data: {
+        paperId,
+        text,
+        round: (latest?.round ?? 0) + 1,
+        sortOrder: 0,
+        status: RemarkStatus.OPEN,
+      },
+    });
   }
 
   private outcomeFromAdvice(
@@ -499,7 +564,21 @@ export class ReviewService {
       reviewerId: string;
       status: AssignmentStatus;
       expiresAt: Date;
-      paper: { title: string; publicId: string | null; conferenceId: string };
+      paper: {
+        title: string;
+        publicId: string | null;
+        conferenceId: string;
+        decision?: {
+          status: DecisionStatus;
+          outcome: DecisionOutcome;
+        } | null;
+        files?: {
+          kind: string;
+          originalName: string;
+          contentType: string | null;
+          sizeBytes: number;
+        }[];
+      };
       reviewer?: {
         email: string;
         profile: { firstName: string; lastName: string } | null;
@@ -512,6 +591,18 @@ export class ReviewService {
     },
     revealReviewer: boolean,
   ) {
+    const decision =
+      row.paper.decision?.status === DecisionStatus.PUBLISHED
+        ? row.paper.decision.outcome
+        : null;
+    const revisionFile = row.paper.files?.[0] ?? null;
+    const needsRevision =
+      decision === DecisionOutcome.CONDITIONALLY_ACCEPTED ||
+      decision === DecisionOutcome.REVISION_REQUIRED;
+    const openForReview =
+      row.status === AssignmentStatus.ACCEPTED ||
+      row.status === AssignmentStatus.IN_PROGRESS ||
+      row.status === AssignmentStatus.OVERDUE;
     return {
       id: row.id,
       paperId: row.paperId,
@@ -528,6 +619,18 @@ export class ReviewService {
       score: row.form?.score ?? null,
       recommendation: row.form?.recommendation ?? null,
       commentsToAuthor: row.form?.commentsToAuthor ?? null,
+      decisionOutcome: decision,
+      hasRevision: Boolean(revisionFile),
+      revisionFile: revisionFile
+        ? {
+            kind: revisionFile.kind,
+            originalName: revisionFile.originalName,
+            contentType: revisionFile.contentType,
+            sizeBytes: revisionFile.sizeBytes,
+          }
+        : null,
+      awaitingAuthorRevision: needsRevision && !revisionFile,
+      needsRereview: needsRevision && Boolean(revisionFile) && openForReview,
     };
   }
 

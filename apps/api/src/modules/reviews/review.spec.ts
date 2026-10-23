@@ -114,6 +114,12 @@ describe('review assignments', () => {
       .send({});
     expect(submitted.status).toBe(201);
 
+    const scoped = await chair.agent
+      .post(`/api/v1/papers/${paperId}/scope`)
+      .set('x-csrf-token', chair.csrf)
+      .send({ accept: true });
+    expect(scoped.status).toBe(201);
+
     const reviewerUser = await prisma.user.findUniqueOrThrow({
       where: { email: `reviewer-${stamp}@review.test` },
     });

@@ -634,12 +634,7 @@ export class WorkflowService {
     if (!sessionChair) {
       this.assertChair(actor, paper.conference.memberships);
     }
-    const slides = paper.files.some((file) => file.kind === PaperFileKind.SLIDES);
-    if (!slides) {
-      throw new ForbiddenException(
-        'Upload the slides before marking the paper presented',
-      );
-    }
+    await this.assertCanMarkPresented(paper);
     const now = paper.presentedAt ?? new Date();
     await this.prisma.$transaction([
       this.prisma.paper.update({
@@ -730,8 +725,9 @@ export class WorkflowService {
       },
     });
     const registered =
-      registration?.status === RegistrationStatus.VERIFIED ||
-      registration?.paymentStatus === PaymentStatus.VERIFIED;
+      registration?.status === RegistrationStatus.VERIFIED &&
+      (registration.paymentStatus === PaymentStatus.VERIFIED ||
+        registration.paymentStatus === PaymentStatus.NOT_REQUIRED);
     if ((kind === 'certificate' || kind === 'receipt') && !registered) {
       throw new ForbiddenException('The registration is not validated yet');
     }
@@ -1137,6 +1133,10 @@ export class WorkflowService {
       this.assertChair(actor, row.session.conference.memberships);
     }
     const markPresented = input.presented !== false;
+    if (markPresented) {
+      const paper = await this.loadPaper(row.paperId);
+      await this.assertCanMarkPresented(paper);
+    }
     const now = row.presentedAt ?? row.paper.presentedAt ?? new Date();
     const [presentation] = await this.prisma.$transaction([
       this.prisma.presentation.update({
@@ -1346,8 +1346,9 @@ export class WorkflowService {
       },
     });
     const ready =
-      registration?.status === RegistrationStatus.VERIFIED ||
-      registration?.paymentStatus === PaymentStatus.VERIFIED;
+      registration?.status === RegistrationStatus.VERIFIED &&
+      (registration.paymentStatus === PaymentStatus.VERIFIED ||
+        registration.paymentStatus === PaymentStatus.NOT_REQUIRED);
     if (!ready) {
       throw new ForbiddenException('Complete registration and payment first');
     }
@@ -1727,6 +1728,59 @@ export class WorkflowService {
     const pdf = file.buffer.subarray(0, 5).toString('utf8') === '%PDF-';
     if (!pdf || file.size > 20 * 1024 * 1024) {
       throw new BadRequestException('Upload a PDF of at most 20 MB');
+    }
+  }
+
+  /** Presented only after accept + registration (+ payment) + scheduled session + slides. */
+  private async assertCanMarkPresented(paper: {
+    id: string;
+    conferenceId: string;
+    createdById: string;
+    decision: { status: DecisionStatus; outcome: DecisionOutcome } | null;
+    files: { kind: PaperFileKind }[];
+    presentation: { id: string } | null;
+  }) {
+    const accepted =
+      paper.decision?.status === DecisionStatus.PUBLISHED &&
+      ACCEPTED.has(paper.decision.outcome);
+    if (!accepted) {
+      throw new ForbiddenException(
+        'Presentation follows a published acceptance',
+      );
+    }
+    const [registration, conference] = await Promise.all([
+      this.prisma.registration.findUnique({
+        where: {
+          conferenceId_userId: {
+            conferenceId: paper.conferenceId,
+            userId: paper.createdById,
+          },
+        },
+      }),
+      this.prisma.conference.findUnique({
+        where: { id: paper.conferenceId },
+        select: { paymentsEnabled: true },
+      }),
+    ]);
+    const registered =
+      registration?.status === RegistrationStatus.VERIFIED &&
+      (!conference?.paymentsEnabled ||
+        registration.paymentStatus === PaymentStatus.VERIFIED);
+    if (!registered) {
+      throw new ForbiddenException(
+        'Mark as presented only after registration and payment are validated',
+      );
+    }
+    if (!paper.presentation) {
+      throw new ForbiddenException(
+        'Schedule the presentation before marking it presented',
+      );
+    }
+    const slides = paper.files.some((file) => file.kind === PaperFileKind.SLIDES);
+    if (!slides) {
+      throw new ForbiddenException(
+        'Upload the slides before marking the paper presented',
+      );
     }
   }
 
