@@ -62,11 +62,88 @@ export function InfoGrid({
     <dl className="grid gap-2 text-sm sm:grid-cols-2">
       {items.map((item) => (
         <div key={`${item.label}-${item.value}`}>
-          <dt className="text-xs font-extrabold text-[#8b909a]">{item.label}</dt>
-          <dd className="font-semibold text-[#1c2744]">{item.value}</dd>
+          <dt className="text-[11px] font-extrabold uppercase tracking-wide text-[#5c6578]">
+            {item.label}
+          </dt>
+          <dd className="mt-0.5 font-extrabold text-[#1c2744]">{item.value}</dd>
         </div>
       ))}
     </dl>
+  );
+}
+
+export function InfoCards({
+  items,
+}: {
+  items: { label: string; value: ReactNode }[];
+}) {
+  if (items.length === 0) {
+    return null;
+  }
+  return (
+    <dl className="grid gap-x-10 gap-y-5 sm:grid-cols-2">
+      {items.map((item) => (
+        <div key={`${item.label}-${String(item.value)}`}>
+          <dt className="text-sm font-semibold text-[#3d4fd4]">{item.label}</dt>
+          <dd className="mt-1 break-words text-sm font-medium leading-relaxed text-[#1c2744]">
+            {item.value}
+          </dd>
+        </div>
+      ))}
+    </dl>
+  );
+}
+
+export function PageSection({
+  title,
+  hint,
+  status,
+  children,
+}: {
+  title?: string;
+  hint?: string;
+  status?: ReactNode;
+  children?: ReactNode;
+}) {
+  return (
+    <section>
+      {title || status ? (
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          {title ? (
+            <p className="text-base font-extrabold text-[#3d4fd4]">{title}</p>
+          ) : (
+            <span />
+          )}
+          {status ? <div className="text-xs font-extrabold">{status}</div> : null}
+        </div>
+      ) : null}
+      {hint ? (
+        <p className={`text-xs text-[#8b909a] ${title || status ? 'mt-1' : ''}`}>
+          {hint}
+        </p>
+      ) : null}
+      {children ? (
+        <div className={title || hint || status ? 'mt-5' : undefined}>{children}</div>
+      ) : null}
+    </section>
+  );
+}
+
+export function PageSplit({
+  left,
+  right,
+}: {
+  left: ReactNode;
+  right?: ReactNode | null;
+}) {
+  if (!right) {
+    return <>{left}</>;
+  }
+  return (
+    <div className="grid gap-8 lg:grid-cols-[minmax(0,1.35fr)_minmax(17rem,0.75fr)] lg:items-start lg:gap-0">
+      <div className="lg:pr-8">{left}</div>
+      <div className="lg:border-l lg:border-[#eef0f4] lg:pl-8">{right}</div>
+    </div>
   );
 }
 

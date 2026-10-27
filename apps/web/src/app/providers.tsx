@@ -1,6 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
-import { Toaster } from 'sonner';
+import { FeedbackProvider } from '@/features/feedback/feedback';
 import { PreferencesProvider } from '@/features/preferences/preferences-context';
 
 const queryClient = new QueryClient({
@@ -15,8 +15,9 @@ export function AppProviders({ children }: { children: ReactNode }) {
   return (
     <QueryClientProvider client={queryClient}>
       <PreferencesProvider>
-        {children}
-        <Toaster position="bottom-right" />
+        <FeedbackProvider>
+          {children}
+        </FeedbackProvider>
       </PreferencesProvider>
     </QueryClientProvider>
   );

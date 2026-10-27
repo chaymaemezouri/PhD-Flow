@@ -1,9 +1,11 @@
-import { ListChecks, X } from 'lucide-react';
+import { ArrowDown, ArrowUp, X } from 'lucide-react';
 import { type ReactNode, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { PaperFilesStrip, type PaperFileInfo } from '@/components/paper-file-preview';
-import { InfoGrid, StagePanel } from '@/components/stage-panel';
+import { isRegistrationComplete } from '@/features/papers/registration';
+import { InfoCards, InfoGrid, StagePanel } from '@/components/stage-panel';
 import { Button } from '@/components/ui/button';
+import { useFeedback } from '@/features/feedback/feedback';
 
 export interface PaperDossier {
   paperKind: 'ABSTRACT' | 'FULL';
@@ -49,9 +51,12 @@ export interface PaperDossier {
   copyrightStageStatus?: 'LOCKED' | 'OPEN' | 'DEPOSITED' | 'VALIDATED';
   sessionComment: string;
   sessionChairs: { userId: string; name: string; mine: boolean }[];
+  presentationReviewers?: { userId: string; name: string; mine: boolean }[];
   slides: boolean;
   paymentProof: boolean;
   paymentsEnabled: boolean;
+  paymentAmount?: number | null;
+  paymentCurrency?: string | null;
   registration: { status: string; paymentStatus: string } | null;
   reviews: {
     id: string;
@@ -83,6 +88,20 @@ export interface PaperDossier {
     status: 'OPEN' | 'ADDRESSED' | 'VALIDATED';
     round: number;
   }[];
+  copyrightRemarks?: {
+    id: string;
+    text: string;
+    status: 'OPEN' | 'ADDRESSED' | 'VALIDATED';
+    round: number;
+  }[];
+}
+
+export interface WorkflowAuthor {
+  firstName: string;
+  lastName: string;
+  email: string;
+  affiliation?: string;
+  corresponding?: boolean;
 }
 
 interface WorkflowPaper {
@@ -94,12 +113,7 @@ interface WorkflowPaper {
   title?: string | null;
   abstract?: string | null;
   keywords?: string[] | null;
-  authors?: {
-    firstName: string;
-    lastName: string;
-    email: string;
-    corresponding?: boolean;
-  }[];
+  authors?: WorkflowAuthor[];
   decision: { outcome: string; status: string; letter?: string } | null;
   dossier?: PaperDossier;
 }
@@ -112,24 +126,108 @@ const tone = {
   later: 'border-[#e4e7ee] bg-white',
 } as const;
 
+const tabTint: Record<string, string> = {
+  decision: 'border-[#d0daf5] bg-[#e8eeff]',
+  registration: 'border-[#cfe6d8] bg-[#e8f6ee]',
+  presentation: 'border-[#ecd9c6] bg-[#f8eee4]',
+  camera: 'border-[#cde4ef] bg-[#e8f4fa]',
+  similarity: 'border-[#ddd0f0] bg-[#f1ebfa]',
+  copyright: 'border-[#ebcfd6] bg-[#f8eef1]',
+  final: 'border-[#e6dcc0] bg-[#f6f1e4]',
+};
+
 type Tone = keyof typeof tone;
 
 function hasFile(dossier: PaperDossier | undefined, kind: string) {
   return dossier?.files.some((file) => file.kind === kind) ?? false;
 }
 
+function latestStepFiles(
+  files: PaperFileInfo[],
+  options: {
+    needsRevision: boolean;
+    slidesStatus?: string | null;
+    cameraReadyStatus?: string | null;
+  },
+): PaperFileInfo[] {
+  const byKind = new Map(files.map((file) => [file.kind, file]));
+  const hide = new Set<string>();
+  if (byKind.has('REVISION') || options.needsRevision) {
+    hide.add('MANUSCRIPT');
+  }
+  if (options.slidesStatus === 'NEEDS_MODS') {
+    hide.add('SLIDES');
+  }
+  if (options.cameraReadyStatus === 'NEEDS_MODS') {
+    hide.add('CAMERA_READY');
+    hide.add('EDITABLE');
+  }
+  return [
+    'REVISION',
+    'ABSTRACT',
+    'MANUSCRIPT',
+    'PAYMENT_PROOF',
+    'SLIDES',
+    'CAMERA_READY',
+    'EDITABLE',
+    'SIMILARITY',
+    'COPYRIGHT',
+  ].flatMap((kind) => {
+    const file = byKind.get(kind);
+    return file && !hide.has(kind) ? [file] : [];
+  });
+}
+
+function withFileState(
+  files: PaperFileInfo[],
+  labels: { abstract: string; regular: string },
+) {
+  return files.map((file) => {
+    if (file.kind === 'ABSTRACT') {
+      return { ...file, stateLabel: labels.abstract };
+    }
+    if (file.kind === 'MANUSCRIPT') {
+      return { ...file, stateLabel: labels.regular };
+    }
+    return file;
+  });
+}
+
+function moveAuthor(authors: WorkflowAuthor[], from: number, to: number) {
+  if (
+    from === to ||
+    from < 0 ||
+    to < 0 ||
+    from >= authors.length ||
+    to >= authors.length
+  ) {
+    return authors;
+  }
+  const next = [...authors];
+  const [item] = next.splice(from, 1);
+  next.splice(to, 0, item);
+  return next;
+}
+
 export function PaperWorkflow({
   paper,
   onScope,
+  onAuthorsChange,
+  authorsBusy = false,
   extras,
   children,
+  authorLayout = false,
 }: {
   paper?: WorkflowPaper;
   onScope?: (accept: boolean, reason?: string) => void;
+  onAuthorsChange?: (authors: WorkflowAuthor[]) => void;
+  authorsBusy?: boolean;
   extras?: Partial<Record<string, ReactNode>>;
   children: ReactNode;
+  authorLayout?: boolean;
 }) {
   const { t, i18n } = useTranslation();
+  const feedback = useFeedback();
   const [scopeReason, setScopeReason] = useState('');
   const [scopeError, setScopeError] = useState<string | null>(null);
   const dossier = paper?.dossier;
@@ -152,6 +250,8 @@ export function PaperWorkflow({
       paper.decision.outcome === 'REVISION_REQUIRED');
   const accepted =
     paper?.decision?.status === 'PUBLISHED' && paper.decision.outcome === 'ACCEPTED';
+  const hadRevisions =
+    (dossier?.remarks?.length ?? 0) > 0 || hasFile(dossier, 'REVISION');
   const decisionLabel = () => {
     if (paper?.decision?.outcome === 'REJECTED') {
       return t('dossier.notAccepted');
@@ -163,28 +263,29 @@ export function PaperWorkflow({
       return t('dossier.majorMods');
     }
     if (accepted) {
-      return t('dossier.withoutMods');
+      return hadRevisions ? t('dossier.afterMods') : t('dossier.withoutMods');
     }
     return null;
   };
-  // Fully registered: admin confirmed, and payment verified when the conference requires it.
-  const registered =
-    dossier?.registration?.status === 'VERIFIED' &&
-    (!dossier?.paymentsEnabled ||
-      dossier.registration.paymentStatus === 'VERIFIED');
+  // Fully registered: admin confirmed, and this paper has a verified receipt
+  // when the conference asks for payment — never from another paper's status alone.
+  const registered = dossier ? isRegistrationComplete(dossier) : false;
   const slidesStatus = dossier?.slidesStatus ?? 'LOCKED';
-  // Presentation stage only after registration — never from leftover / early flags.
+  // Presentation opens only after this paper is accepted and registration/payment
+  // are done — never on a new submission because the author already registered
+  // for the conference on another paper.
+  const presentationUnlocked = accepted && registered;
   const presentationOpen =
-    registered &&
+    presentationUnlocked &&
     (slidesStatus === 'OPEN' ||
       slidesStatus === 'DEPOSITED' ||
       slidesStatus === 'NEEDS_MODS' ||
       slidesStatus === 'WILL_DEPOSIT' ||
       slidesStatus === 'VALIDATED' ||
       slidesStatus === 'LOCKED');
-  const slidesValidated = registered && slidesStatus === 'VALIDATED';
+  const slidesValidated = presentationUnlocked && slidesStatus === 'VALIDATED';
   const scheduled =
-    registered && Boolean(dossier?.scheduled || dossier?.schedule);
+    presentationUnlocked && Boolean(dossier?.scheduled || dossier?.schedule);
   // "Presented" only after a scheduled session was explicitly marked — not leftover presentedAt.
   const deliveryPresented =
     registered &&
@@ -222,7 +323,7 @@ export function PaperWorkflow({
   const copyrightValidated =
     copyrightStage === 'VALIDATED' || dossier?.copyrightStatus === 'VALIDATED';
   const slidesLabel = () => {
-    if (!registered) {
+    if (!presentationUnlocked) {
       return t('dossier.later');
     }
     if (deliveryPresented) {
@@ -325,12 +426,24 @@ export function PaperWorkflow({
       year: 'numeric',
     });
 
-  const kindLabel =
-    dossier?.paperKind === 'ABSTRACT'
-      ? t('dossier.asPoster')
+  const fileStateLabels = {
+    abstract: t('dossier.asAbstract'),
+    regular: t('dossier.asRegular'),
+  };
+  const hasAbstractFile = hasFile(dossier, 'ABSTRACT');
+  const hasRegularFile =
+    hasFile(dossier, 'MANUSCRIPT') || hasFile(dossier, 'REVISION');
+  const kindLabel = [
+    hasAbstractFile ? fileStateLabels.abstract : null,
+    hasRegularFile ? fileStateLabels.regular : null,
+  ]
+    .filter(Boolean)
+    .join(' · ')
+    || (dossier?.paperKind === 'ABSTRACT'
+      ? fileStateLabels.abstract
       : dossier?.paperKind === 'FULL'
-        ? t('dossier.asRegular')
-        : null;
+        ? fileStateLabels.regular
+        : null);
 
   const stages: {
     key: string;
@@ -379,19 +492,6 @@ export function PaperWorkflow({
           : null,
         paper?.keywords && paper.keywords.length > 0
           ? { label: t('papers.keywords'), value: paper.keywords.join(', ') }
-          : null,
-        paper?.authors && paper.authors.length > 0
-          ? {
-              label: t('papers.stepAuthors'),
-              value: paper.authors
-                .map(
-                  (author) =>
-                    `${author.firstName} ${author.lastName}${
-                      author.corresponding ? ` (${t('papers.corresponding')})` : ''
-                    }`,
-                )
-                .join(' · '),
-            }
           : null,
         paper?.submittedAt
           ? {
@@ -486,7 +586,9 @@ export function PaperWorkflow({
                   className="border-[#c5cad6]"
                   onClick={() => {
                     if (scopeReason.trim().length < 3) {
-                      setScopeError(t('dossier.scopeRefuseReasonMissing'));
+                      const text = t('dossier.scopeRefuseReasonMissing');
+                      setScopeError(text);
+                      feedback.error(text);
                       return;
                     }
                     setScopeError(null);
@@ -559,30 +661,11 @@ export function PaperWorkflow({
           : needsRevision
             ? decisionLabel() ?? t('dossier.adviceChanges')
             : accepted
-              ? t('dossier.withoutMods')
+              ? decisionLabel() ?? t('dossier.withoutMods')
               : (dossier?.reviews.length ?? 0) > 0
                 ? t('dossier.underReviewing')
                 : t('dossier.later'),
-      facts: [
-        {
-          label: t('dossier.decision'),
-          value:
-            decisionLabel() ??
-            ((dossier?.reviews.length ?? 0) > 0
-              ? t('dossier.underReviewing')
-              : t('dossier.later')),
-        },
-        needsRevision
-          ? {
-              label: t('dossier.presentationNote'),
-              value: t('dossier.remarksProgress', {
-                done: (dossier?.remarks ?? []).filter((item) => item.status === 'VALIDATED')
-                  .length,
-                total: dossier?.remarks?.length ?? 0,
-              }),
-            }
-          : null,
-      ].filter(Boolean) as { label: string; value: string }[],
+      facts: [],
       note: paper?.decision?.letter || null,
     },
     {
@@ -594,11 +677,15 @@ export function PaperWorkflow({
         ? t('dossier.later')
         : registered
           ? t('dossier.registered')
-          : dossier?.registration?.paymentStatus === 'PENDING'
+          : dossier?.registration?.paymentStatus === 'PENDING' ||
+              (Boolean(dossier?.paymentProof) &&
+                dossier?.registration?.paymentStatus !== 'VERIFIED')
             ? t('dossier.underCheckReceipt')
-            : dossier?.registration?.status === 'REQUESTED'
-              ? t('dossier.registrationSent')
-              : t('dossier.openForRegistration'),
+            : dossier?.paymentsEnabled && !dossier?.paymentProof
+              ? t('dossier.paymentAwaitingUpload')
+              : dossier?.registration?.status === 'REQUESTED'
+                ? t('dossier.registrationSent')
+                : t('dossier.openForRegistration'),
       facts: accepted
         ? [
             {
@@ -613,7 +700,9 @@ export function PaperWorkflow({
               label: t('dossier.paymentStatus'),
               value: registered
                 ? t('dossier.paymentValidated')
-                : dossier?.registration?.paymentStatus === 'PENDING'
+                : dossier?.registration?.paymentStatus === 'PENDING' ||
+                    (Boolean(dossier?.paymentProof) &&
+                      dossier?.registration?.paymentStatus !== 'VERIFIED')
                   ? t('dossier.underCheckReceipt')
                   : t('dossier.paymentAwaitingUpload'),
             },
@@ -632,44 +721,48 @@ export function PaperWorkflow({
             : 'current'
           : 'later',
       status: slidesLabel(),
-      facts: dossier?.schedule
+      facts: presentationUnlocked
         ? [
             {
               label: t('dossier.scheduleSession'),
-              value: dossier.schedule.sessionTitle,
+              value: dossier?.schedule?.sessionTitle ?? t('dossier.waitingSchedule'),
             },
             {
               label: t('dossier.scheduleRoom'),
-              value: dossier.schedule.roomName,
+              value: dossier?.schedule?.roomName ?? t('dossier.waitingSchedule'),
             },
-            {
-              label: t('dossier.scheduleDate'),
-              value: new Date(dossier.schedule.startsAt).toLocaleDateString(
-                i18n.language,
-              ),
-            },
-            {
-              label: t('dossier.scheduleTime'),
-              value: `${new Date(dossier.schedule.startsAt).toLocaleTimeString(
-                i18n.language,
-                { hour: '2-digit', minute: '2-digit' },
-              )} – ${new Date(dossier.schedule.endsAt).toLocaleTimeString(
-                i18n.language,
-                { hour: '2-digit', minute: '2-digit' },
-              )}`,
-            },
-            {
-              label: t('dossier.scheduleModality'),
-              value:
-                dossier.schedule.modality === 'ONLINE'
-                  ? t('dossier.modalityOnline')
-                  : t('dossier.modalityInPerson'),
-            },
+            ...(dossier?.schedule
+              ? [
+                  {
+                    label: t('dossier.scheduleDate'),
+                    value: new Date(dossier.schedule.startsAt).toLocaleDateString(
+                      i18n.language,
+                    ),
+                  },
+                  {
+                    label: t('dossier.scheduleTime'),
+                    value: `${new Date(dossier.schedule.startsAt).toLocaleTimeString(
+                      i18n.language,
+                      { hour: '2-digit', minute: '2-digit' },
+                    )} – ${new Date(dossier.schedule.endsAt).toLocaleTimeString(
+                      i18n.language,
+                      { hour: '2-digit', minute: '2-digit' },
+                    )}`,
+                  },
+                  {
+                    label: t('dossier.scheduleModality'),
+                    value:
+                      dossier.schedule.modality === 'ONLINE'
+                        ? t('dossier.modalityOnline')
+                        : t('dossier.modalityInPerson'),
+                  },
+                ]
+              : []),
             {
               label: t('dossier.sessionChair'),
               value:
-                dossier.sessionChairs.length > 0
-                  ? dossier.sessionChairs.map((item) => item.name).join(', ')
+                (dossier?.sessionChairs ?? []).length > 0
+                  ? dossier!.sessionChairs.map((item) => item.name).join(', ')
                   : t('dossier.noChair'),
             },
           ]
@@ -811,9 +904,9 @@ export function PaperWorkflow({
   ];
 
   // Doctorant: action menu = ses étapes, débloquées seulement si la précédente est terminée.
-  const doctorantView = Boolean(dossier?.isAuthor) && !dossier?.canManage;
+  const doctorantView =
+    authorLayout || (Boolean(dossier?.isAuthor) && !dossier?.canManage);
   const doctorantActionKeys = [
-    'deposit',
     'decision',
     'registration',
     'presentation',
@@ -824,14 +917,12 @@ export function PaperWorkflow({
   ] as const;
   const doctorantUnlocked = (key: (typeof doctorantActionKeys)[number]) => {
     switch (key) {
-      case 'deposit':
-        return true;
       case 'decision':
         return submitted;
       case 'registration':
         return accepted;
       case 'presentation':
-        return registered;
+        return presentationUnlocked;
       case 'camera':
         return slidesValidated;
       case 'similarity':
@@ -844,21 +935,15 @@ export function PaperWorkflow({
         return false;
     }
   };
-  const menuStages = doctorantView
-    ? stages.filter(
-        (item) =>
-          doctorantActionKeys.includes(
-            item.key as (typeof doctorantActionKeys)[number],
-          ) && doctorantUnlocked(item.key as (typeof doctorantActionKeys)[number]),
-      )
-    : stages;
+  const authorStages = doctorantActionKeys
+    .map((key) => stages.find((item) => item.key === key))
+    .filter((item): item is (typeof stages)[number] => Boolean(item));
+  const menuStages = doctorantView ? authorStages : stages;
 
   const openMenuIndex = menuStages.findIndex(
     (item) => item.tone === 'current' || item.tone === 'wait' || item.tone === 'stop',
   );
   const [pickedKey, setPickedKey] = useState<string | null>(null);
-  const [actionsOpen, setActionsOpen] = useState(false);
-  const [celebrateStep, setCelebrateStep] = useState<string | null>(null);
   const prevDoneKeys = useRef<Set<string>>(new Set());
   const fallbackKey =
     menuStages[openMenuIndex >= 0 ? openMenuIndex : 0]?.key ?? stages[0]?.key ?? null;
@@ -884,22 +969,14 @@ export function PaperWorkflow({
     currentStage != null
       ? stages.findIndex((item) => item.key === currentStage.key) + 1
       : 0;
-  const currentBannerTone =
-    currentStage?.tone === 'done'
-      ? 'border-[#2fbf71]/35 bg-[#e8f8ef]'
-      : currentStage?.tone === 'stop'
-        ? 'border-[#e35d5d]/35 bg-[#fdecec]'
-        : currentStage?.tone === 'wait'
-          ? 'border-[#f0a04b]/40 bg-[#fff6ea]'
-          : 'border-[#5d74ff]/30 bg-[#eef2ff]';
   const currentBadgeTone =
     currentStage?.tone === 'done'
-      ? 'bg-[#2fbf71]/18 text-[#1c9a57]'
+      ? 'text-[#148a4c]'
       : currentStage?.tone === 'stop'
-        ? 'bg-[#e35d5d]/15 text-[#c54545]'
+        ? 'text-[#c54545]'
         : currentStage?.tone === 'wait'
-          ? 'bg-[#f0a04b]/20 text-[#9a6410]'
-          : 'bg-[#5d74ff]/18 text-[#3d4fd4]';
+          ? 'text-[#9a6410]'
+          : 'text-[#3d4fd4]';
 
   useEffect(() => {
     const doneNow = new Set(
@@ -910,7 +987,9 @@ export function PaperWorkflow({
         if (!prevDoneKeys.current.has(key)) {
           const completed = stages.find((item) => item.key === key);
           if (completed) {
-            setCelebrateStep(completed.title);
+            feedback.success(
+              t('dossier.stepCompleteBody', { step: completed.title }),
+            );
             const nextOpen = menuStages.find(
               (item) =>
                 item.tone === 'current' || item.tone === 'wait' || item.tone === 'stop',
@@ -924,15 +1003,7 @@ export function PaperWorkflow({
       }
     }
     prevDoneKeys.current = doneNow;
-  }, [stages, menuStages]);
-
-  useEffect(() => {
-    if (!celebrateStep) {
-      return;
-    }
-    const timer = window.setTimeout(() => setCelebrateStep(null), 4500);
-    return () => window.clearTimeout(timer);
-  }, [celebrateStep]);
+  }, [feedback, stages, menuStages, t]);
 
   function renderStageBody(item: (typeof stages)[number], number: number) {
     return (
@@ -948,7 +1019,7 @@ export function PaperWorkflow({
             {item.status}
           </span>
         </div>
-        {item.facts.length > 0 ? (
+        {item.key !== 'deposit' && item.facts.length > 0 ? (
           <div className="mt-4">
             {item.key === 'presentation' ? (
               <StagePanel
@@ -961,45 +1032,20 @@ export function PaperWorkflow({
               <div className="rounded-2xl border border-[#d8dce6] bg-[#f6f7fb] p-3 sm:p-4">
                 <InfoGrid items={item.facts} />
                 {item.note ? (
-                  <div className="mt-3">
-                    {item.key === 'deposit' ? (
-                      <p className="text-xs font-extrabold text-[#8b909a]">
-                        {t('papers.abstract')}
-                      </p>
-                    ) : null}
-                    <p className="mt-0.5 whitespace-pre-wrap text-sm leading-relaxed text-[#5c6578]">
-                      {item.note}
-                    </p>
-                  </div>
+                  <p className="mt-3 whitespace-pre-wrap text-sm leading-relaxed text-[#5c6578]">
+                    {item.note}
+                  </p>
                 ) : null}
               </div>
             )}
           </div>
-        ) : item.note ? (
+        ) : item.key !== 'deposit' && item.note ? (
           <p className="mt-3 whitespace-pre-wrap text-sm leading-relaxed text-[#5c6578]">
             {item.note}
           </p>
         ) : null}
-        {item.key === 'deposit' &&
-        paper?.id &&
-        dossier?.files?.some((file) => file.kind === 'MANUSCRIPT') ? (
-          <div className="mt-4">
-            <PaperFilesStrip
-              paperId={paper.id}
-              files={dossier.files}
-              kinds={['MANUSCRIPT', 'REVISION']}
-            />
-          </div>
-        ) : null}
-        {paper?.id && dossier?.files?.length && item.key === 'decision' ? (
-          <PaperFilesStrip
-            paperId={paper.id}
-            files={dossier.files}
-            kinds={['REVISION']}
-          />
-        ) : null}
         {item.key === 'deposit' && children ? (
-          <div className="mt-5 border-t border-[#e4e7ee] pt-5">{children}</div>
+          <div className="mt-4">{children}</div>
         ) : null}
         {item.extra}
         {extras?.[item.key] ? (
@@ -1011,6 +1057,58 @@ export function PaperWorkflow({
           </div>
         ) : null}
       </section>
+    );
+  }
+
+  function renderAuthorTabContent(item: (typeof stages)[number]) {
+    const unlocked = doctorantUnlocked(
+      item.key as (typeof doctorantActionKeys)[number],
+    );
+    const hasActions = Boolean(item.extra) || Boolean(extras?.[item.key]);
+    return (
+      <div>
+        <div className="flex flex-wrap items-start justify-between gap-3 border-b border-[#d8dce6] pb-3">
+          <div>
+            <p className="text-sm font-extrabold text-[#1c2744]">{item.title}</p>
+            <p className="mt-0.5 text-xs font-semibold text-[#8b909a]">{item.actor}</p>
+          </div>
+          <span className="rounded-full bg-[#eef1f6] px-2.5 py-1 text-[11px] font-extrabold text-[#1c2744]">
+            {item.status}
+          </span>
+        </div>
+        {!unlocked ? (
+          <p className="mt-4 text-sm font-semibold text-[#8b909a]">
+            {t('dossier.authorWorkbenchLater')}
+          </p>
+        ) : (
+          <div className="mt-5 space-y-5">
+            {!hasActions && item.key !== 'deposit' && item.facts.length > 0 ? (
+              item.key === 'presentation' ? (
+                <StagePanel
+                  title={t('dossier.scheduleTitle')}
+                  hint={t('dossier.scheduleHint')}
+                >
+                  <InfoGrid items={item.facts} />
+                </StagePanel>
+              ) : (
+                <InfoCards items={item.facts} />
+              )
+            ) : null}
+            {item.note ? (
+              <div className="border-b border-[#eef0f4] pb-5">
+                <p className="text-sm font-semibold text-[#3d4fd4]">
+                  {item.key === 'decision' ? t('workflow.letter') : item.title}
+                </p>
+                <p className="mt-2 whitespace-pre-wrap text-sm font-medium leading-relaxed text-[#1c2744]">
+                  {item.note}
+                </p>
+              </div>
+            ) : null}
+            {item.extra}
+            {extras?.[item.key] ?? null}
+          </div>
+        )}
+      </div>
     );
   }
 
@@ -1038,7 +1136,6 @@ export function PaperWorkflow({
                 }`}
                 onClick={() => {
                   setPickedKey(item.key);
-                  setActionsOpen(false);
                 }}
               >
                 <span
@@ -1069,73 +1166,278 @@ export function PaperWorkflow({
     </nav>
   );
 
-  const finalFiles =
-    paper?.id && dossier?.files && dossier.files.length > 0 ? (
-      <section className="rounded-2xl border border-[#e4e7ee] bg-white p-4 sm:p-5">
-        <h2 className="text-base font-extrabold text-[#1c2744]">{t('dossier.finalFiles')}</h2>
-        <p className="mt-1 text-xs font-semibold text-[#8b909a]">
-          {t('dossier.finalFilesHint')}
-        </p>
-        <div className="mt-3">
-          <PaperFilesStrip
-            paperId={paper.id}
-            files={dossier.files}
-            kinds={[
-              'MANUSCRIPT',
-              'REVISION',
-              'SLIDES',
-              'CAMERA_READY',
-              'EDITABLE',
-              'SIMILARITY',
-              'COPYRIGHT',
-              'PAYMENT_PROOF',
-            ]}
-          />
+  const allFiles = latestStepFiles(dossier?.files ?? [], {
+    needsRevision,
+    slidesStatus,
+    cameraReadyStatus: cameraStatus,
+  });
+  const depositRecord = stages.find((item) => item.key === 'deposit');
+  const authors = paper?.authors ?? [];
+  const paperStatusLabel =
+    !paper || paper.status === 'DRAFT'
+      ? t('papers.draft')
+      : paper.status === 'WITHDRAWN'
+        ? t('papers.withdrawn')
+        : paper.status === 'CANCELLED'
+          ? t('papers.cancelled')
+          : t('papers.submitted');
+  const currentDecision = decisionLabel();
+  const conferenceName = paper?.conferenceName || dossier?.conferenceName || '';
+  const scopeLabel = submitted
+    ? scope === 'ACCEPTED'
+      ? t('dossier.scopeAcceptedPresented')
+      : scope === 'REFUSED'
+        ? t('dossier.scopeNotAccepted')
+        : t('dossier.waiting')
+    : null;
+  const infoFacts = [
+    paper?.publicId ? { label: t('dossier.paperId'), value: paper.publicId } : null,
+    paper?.title ? { label: t('papers.paperTitle'), value: paper.title } : null,
+    kindLabel ? { label: t('papers.kind'), value: kindLabel } : null,
+    dossier?.trackName ? { label: t('papers.track'), value: dossier.trackName } : null,
+    conferenceName
+      ? { label: t('papers.conference'), value: conferenceName }
+      : null,
+    paper?.submittedAt
+      ? { label: t('dossier.scheduleDate'), value: date(paper.submittedAt) }
+      : null,
+    { label: t('papers.colStatus'), value: paperStatusLabel },
+    scopeLabel ? { label: t('dossier.scope'), value: scopeLabel } : null,
+    currentDecision
+      ? { label: t('dossier.decision'), value: currentDecision }
+      : null,
+    dossier?.doi ? { label: t('dossier.paperDoi'), value: dossier.doi } : null,
+  ].filter(Boolean) as { label: string; value: string }[];
+  const recordSection = (
+    <div className="grid gap-4 lg:grid-cols-[minmax(0,1.35fr)_minmax(17rem,0.75fr)] lg:items-start">
+      <section className="rounded-2xl border border-[#e4e7ee] bg-white p-5 sm:p-6">
+          <p className="text-base font-extrabold text-[#3d4fd4]">{t('dossier.paperInfo')}</p>
+          {infoFacts.length > 0 ? (
+            <div className="mt-5">
+              <InfoCards items={infoFacts} />
+            </div>
+          ) : null}
+          {paper?.keywords && paper.keywords.length > 0 ? (
+            <div className="mt-6">
+              <p className="text-sm font-semibold text-[#3d4fd4]">{t('papers.keywords')}</p>
+              <p className="mt-1 text-sm font-medium text-[#1c2744]">
+                {paper.keywords.join(' · ')}
+              </p>
+            </div>
+          ) : null}
+          {depositRecord?.note ? (
+            <div className="mt-6">
+              <p className="text-sm font-semibold text-[#3d4fd4]">{t('papers.abstract')}</p>
+              <p className="mt-1 whitespace-pre-wrap text-sm font-medium leading-7 text-[#1c2744]">
+                {depositRecord.note}
+              </p>
+            </div>
+          ) : null}
+      </section>
+      <section className="rounded-2xl border border-[#e4e7ee] bg-white p-5 sm:p-6">
+          <p className="text-base font-extrabold text-[#3d4fd4]">{t('papers.stepAuthors')}</p>
+          {authors.length === 0 ? (
+            <p className="mt-3 text-sm font-semibold text-[#5c6578]">{t('dossier.noAuthors')}</p>
+          ) : (
+            <ol className="mt-4 grid gap-4">
+              {authors.map((author, index) => {
+                const canEditAuthors =
+                  Boolean(onAuthorsChange) &&
+                  paper?.status !== 'WITHDRAWN' &&
+                  paper?.status !== 'CANCELLED';
+                const total = authors.length;
+                return (
+                  <li
+                    key={`${author.email}-${index}`}
+                    className="flex items-start justify-between gap-3"
+                  >
+                    <div className="flex min-w-0 items-start gap-3">
+                      <span className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-full bg-[#eef2ff] text-xs font-extrabold text-[#3d4fd4]">
+                        {index + 1}
+                      </span>
+                      <div className="min-w-0">
+                        <p className="font-extrabold text-[#1c2744]">
+                          {author.lastName} {author.firstName}
+                          {author.corresponding ? (
+                            <span className="ml-2 rounded-full bg-[#eef2ff] px-2 py-0.5 text-[11px] font-extrabold text-[#3d4fd4]">
+                              {t('papers.corresponding')}
+                            </span>
+                          ) : null}
+                        </p>
+                        {author.affiliation ? (
+                          <p className="mt-0.5 text-xs font-semibold text-[#3d4660]">
+                            {author.affiliation}
+                          </p>
+                        ) : null}
+                        <p className="mt-0.5 break-all text-xs font-semibold text-[#5c6578]">
+                          {author.email}
+                        </p>
+                      </div>
+                    </div>
+                    {canEditAuthors ? (
+                      <div
+                        className="flex shrink-0 items-center gap-1"
+                        role="group"
+                        aria-label={t('papers.authorOrder')}
+                      >
+                        {total > 1 ? (
+                          <>
+                            <Button
+                              type="button"
+                              size="icon"
+                              variant="outline"
+                              className="border-[#c5cad6] bg-white"
+                              disabled={authorsBusy || index === 0}
+                              aria-label={t('papers.moveUp')}
+                              title={t('papers.moveUp')}
+                              onClick={() =>
+                                onAuthorsChange?.(moveAuthor(authors, index, index - 1))
+                              }
+                            >
+                              <ArrowUp className="size-4" />
+                            </Button>
+                            <Button
+                              type="button"
+                              size="icon"
+                              variant="outline"
+                              className="border-[#c5cad6] bg-white"
+                              disabled={authorsBusy || index === total - 1}
+                              aria-label={t('papers.moveDown')}
+                              title={t('papers.moveDown')}
+                              onClick={() =>
+                                onAuthorsChange?.(moveAuthor(authors, index, index + 1))
+                              }
+                            >
+                              <ArrowDown className="size-4" />
+                            </Button>
+                          </>
+                        ) : null}
+                        <Button
+                          type="button"
+                          size="icon"
+                          variant="outline"
+                          className="border-[#c5cad6] bg-white text-[#c54545]"
+                          disabled={authorsBusy}
+                          aria-label={t('papers.removeAuthor')}
+                          title={t('papers.removeAuthor')}
+                          onClick={() =>
+                            onAuthorsChange?.(
+                              authors.filter((_, itemIndex) => itemIndex !== index),
+                            )
+                          }
+                        >
+                          <X className="size-4" />
+                        </Button>
+                      </div>
+                    ) : null}
+                  </li>
+                );
+              })}
+            </ol>
+          )}
+      </section>
+    </div>
+  );
+  const authorWorkbench =
+    doctorantView &&
+    paper?.status &&
+    paper.status !== 'DRAFT' &&
+    paper.status !== 'CANCELLED' &&
+    authorStages.length > 0 ? (
+      <section
+        className="rounded-2xl border border-[#e4e7ee] bg-white"
+        aria-label={t('dossier.authorWorkbench')}
+      >
+        <div className="rounded-t-2xl bg-[#f3f5fb] px-3 pt-2">
+          <div
+            className="touch-scroll flex overflow-x-auto overflow-y-hidden [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
+            role="tablist"
+            aria-label={t('dossier.authorWorkbench')}
+          >
+            {authorStages.map((item, index) => {
+              const active = item.key === activeKey;
+              const unlocked = doctorantUnlocked(
+                item.key as (typeof doctorantActionKeys)[number],
+              );
+              return (
+                <button
+                  key={item.key}
+                  type="button"
+                  role="tab"
+                  aria-selected={active}
+                  onClick={() => setPickedKey(item.key)}
+                  className={`relative shrink-0 px-5 pb-3 pt-3.5 text-left first:ml-0 ${
+                    index > 0 ? '-ml-2' : ''
+                  } ${active ? 'z-10 -mb-px' : 'z-0'}`}
+                >
+                  <span
+                    aria-hidden
+                    className={`absolute inset-0 origin-bottom-left -skew-x-[16deg] rounded-t-lg border border-b-0 ${
+                      active
+                        ? 'border-[#d8dce6] bg-white'
+                        : tabTint[item.key] ?? 'border-[#d8dce6] bg-[#e8edf8]'
+                    }`}
+                  />
+                  <span
+                    className={`relative block whitespace-nowrap text-sm font-extrabold leading-tight ${
+                      active
+                        ? 'text-[#3d4fd4]'
+                        : unlocked
+                          ? 'text-[#44506a]'
+                          : 'text-[#8b909a]'
+                    }`}
+                  >
+                    {item.title}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+        <div className="relative z-10 rounded-b-2xl border-t border-[#d8dce6] bg-white p-4 sm:p-5">
+          {stage ? renderAuthorTabContent(stage) : null}
         </div>
       </section>
     ) : null;
+  const filesSection = (
+    <section className="rounded-2xl border border-[#e4e7ee] bg-white p-4 sm:p-5">
+      <h2 className="text-base font-extrabold text-[#1c2744]">{t('dossier.finalFiles')}</h2>
+      <p className="mt-1 text-xs font-semibold text-[#8b909a]">
+        {t('dossier.finalFilesHint')}
+      </p>
+      <div className="mt-3">
+        {paper?.id && allFiles.length > 0 ? (
+          <PaperFilesStrip
+            paperId={paper.id}
+            files={withFileState(allFiles, fileStateLabels)}
+          />
+        ) : (
+          <p className="text-sm font-semibold text-[#8b909a]">{t('dossier.emptyFiles')}</p>
+        )}
+      </div>
+    </section>
+  );
 
+  const heading = paper?.title?.trim() || t('papers.new');
   return (
     <div className="space-y-5">
-      {celebrateStep ? (
-        <div
-          role="status"
-          className="rounded-2xl border border-[#2fbf71]/40 bg-[#e8f8ef] px-4 py-4 sm:px-5"
-        >
-          <p className="text-[11px] font-extrabold uppercase tracking-[0.14em] text-[#1c9a57]">
-            {t('dossier.stepCompleteTitle')}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-6">
+        <h1 className="min-w-0 break-words text-xl font-extrabold text-[#1c2744] sm:text-2xl lg:text-3xl">
+          {heading}
+        </h1>
+        {currentStage ? (
+          <p
+            aria-label={t('dossier.currentState')}
+            className="shrink-0 rounded-full border border-[#e4e7ee] bg-white px-3.5 py-1.5 text-sm font-extrabold text-[#1c2744]"
+          >
+            <span className="text-[#3d4fd4]">{t('dossier.currentState')}</span>
+            <span className="mx-1.5 text-[#c5cad6]">·</span>
+            {currentNumber}. {currentStage.title}
+            <span className="mx-1.5 text-[#c5cad6]">·</span>
+            <span className={currentBadgeTone}>{currentStage.status}</span>
           </p>
-          <p className="mt-1 text-sm font-semibold text-[#1c2744]">
-            {t('dossier.stepCompleteBody', { step: celebrateStep })}
-          </p>
-        </div>
-      ) : null}
-
-      {currentStage ? (
-        <section
-          aria-label={t('dossier.currentState')}
-          className={`rounded-2xl border px-4 py-4 sm:px-5 ${currentBannerTone}`}
-        >
-          <p className="text-[11px] font-extrabold uppercase tracking-[0.14em] text-[#8b909a]">
-            {t('dossier.currentState')}
-          </p>
-          <div className="mt-2 flex flex-wrap items-center justify-between gap-3">
-            <div className="min-w-0">
-              <h2 className="text-lg font-extrabold text-[#1c2744] sm:text-xl">
-                {currentNumber}. {currentStage.title}
-              </h2>
-              <p className="mt-1 text-sm font-semibold text-[#5c6578]">
-                {currentStage.actor}
-              </p>
-            </div>
-            <span
-              className={`rounded-full px-3.5 py-1.5 text-sm font-extrabold ${currentBadgeTone}`}
-            >
-              {currentStage.status}
-            </span>
-          </div>
-        </section>
-      ) : null}
+        ) : null}
+      </div>
 
       <section aria-label={t('dossier.evolutionTitle')}>
         <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
@@ -1147,21 +1449,6 @@ export function PaperWorkflow({
               {t('dossier.evolutionHint')}
             </p>
           </div>
-          {doctorantView ? (
-            <Button
-              type="button"
-              variant="outline"
-              size="icon"
-              className="border-[#c5cad6]"
-              aria-expanded={actionsOpen}
-              aria-label={
-                actionsOpen ? t('dossier.actionsMenuClose') : t('dossier.actionsMenuOpen')
-              }
-              onClick={() => setActionsOpen((open) => !open)}
-            >
-              {actionsOpen ? <X className="size-4" /> : <ListChecks className="size-4" />}
-            </Button>
-          ) : null}
         </div>
         <ol className="touch-scroll -mx-1 flex gap-2 overflow-x-auto px-1 pb-2 snap-x snap-mandatory">
           {stages.map((item, index) => (
@@ -1189,21 +1476,24 @@ export function PaperWorkflow({
         </ol>
       </section>
 
-      {doctorantView ? (
-        <div className="space-y-4">
-          {actionsOpen ? actionsNav : null}
-          {stage ? renderStageBody(stage, stageNumber) : null}
-          {finalFiles}
-        </div>
-      ) : (
+      {recordSection}
+
+      {doctorantView && children ? children : null}
+
+      {authorWorkbench}
+
+      {doctorantView ? null : (
         <div className="grid gap-4 lg:grid-cols-[13.5rem_minmax(0,1fr)]">
           {actionsNav}
           <div className="space-y-4">
-            {stage ? renderStageBody(stage, stageNumber) : null}
-            {finalFiles}
+            {stage && (stage.key !== 'deposit' || children || extras?.deposit)
+              ? renderStageBody(stage, stageNumber)
+              : null}
           </div>
         </div>
       )}
+
+      {filesSection}
     </div>
   );
 }

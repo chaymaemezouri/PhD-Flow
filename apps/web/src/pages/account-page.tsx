@@ -4,7 +4,6 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
-import { toast } from 'sonner';
 import type { z } from 'zod';
 import { Button } from '@/components/ui/button';
 import {
@@ -17,6 +16,7 @@ import {
 import { Input } from '@/components/ui/input';
 import type { EducationStep } from '@scholarflow/types';
 import { useCurrentUser } from '@/features/auth/use-account';
+import { useFeedback } from '@/features/feedback/feedback';
 import { apiErrorMessage, apiFetch } from '@/services/api';
 
 type ProfileValues = z.infer<typeof profileSchema>;
@@ -26,6 +26,7 @@ export function AccountPage() {
   const { t } = useTranslation();
   const account = useCurrentUser();
   const queryClient = useQueryClient();
+  const feedback = useFeedback();
   const [profileError, setProfileError] = useState<string | null>(null);
   const [mfaUri, setMfaUri] = useState<string | null>(null);
   const [mfaCode, setMfaCode] = useState('');
@@ -250,11 +251,13 @@ export function AccountPage() {
                 }),
               });
               if (!response.ok) {
-                setProfileError(await apiErrorMessage(response));
+                const text = await apiErrorMessage(response);
+                setProfileError(text);
+                feedback.error(text);
                 return;
               }
               await queryClient.invalidateQueries({ queryKey: ['account'] });
-              toast.success(t('auth.profileSaved'));
+              feedback.success(t('auth.profileSaved'));
             })}
           >
             <Field label={t('auth.firstName')} name="firstName" form={profileForm} />
@@ -362,11 +365,13 @@ export function AccountPage() {
                 body: JSON.stringify(values),
               });
               if (!response.ok) {
-                setPasswordError(await apiErrorMessage(response));
+                const text = await apiErrorMessage(response);
+                setPasswordError(text);
+                feedback.error(text);
                 return;
               }
               passwordForm.reset();
-              toast.success(t('auth.passwordChanged'));
+              feedback.success(t('auth.passwordChanged'));
             })}
           >
             <label className="block text-sm">

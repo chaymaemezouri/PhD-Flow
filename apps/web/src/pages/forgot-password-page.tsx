@@ -7,6 +7,7 @@ import { Link } from 'react-router';
 import type { z } from 'zod';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { useFeedback } from '@/features/feedback/feedback';
 import { AuthLayout } from '@/layouts/auth-layout';
 import { apiFetch } from '@/services/api';
 
@@ -14,6 +15,7 @@ type Values = z.infer<typeof emailOnlySchema>;
 
 export function ForgotPasswordPage() {
   const { t } = useTranslation();
+  const feedback = useFeedback();
   const [sent, setSent] = useState(false);
   const form = useForm<Values>({
     resolver: zodResolver(emailOnlySchema),
@@ -33,6 +35,7 @@ export function ForgotPasswordPage() {
             body: JSON.stringify(values),
           });
           setSent(true);
+          feedback.success(t('auth.forgotSent'));
         })}
       >
         <label className="block text-sm">

@@ -1,11 +1,19 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { type ReactNode, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { PaperFileSlot, PaperFilesStrip } from '@/components/paper-file-preview';
+import {
+  PaperFilePeek,
+  PaperFileSlot,
+  PaperFilesStrip,
+} from '@/components/paper-file-preview';
 import type { PaperDossier } from '@/components/paper-workflow';
+import { AssignmentField } from '@/components/assignment-picker';
+import { FieldSelect } from '@/components/field-select';
 import { RegistrationPaymentPanel } from '@/components/registration-payment-panel';
-import { StagePanel, stageField } from '@/components/stage-panel';
+import { InfoCards, PageSection, PageSplit, StagePanel, stageField } from '@/components/stage-panel';
 import { Button } from '@/components/ui/button';
+import { useFeedback } from '@/features/feedback/feedback';
+import { isRegistrationComplete } from '@/features/papers/registration';
 import { apiErrorMessage, apiFetch } from '@/services/api';
 
 interface StagePaper {
@@ -23,7 +31,13 @@ export function usePaperStageExtras(
   onError: (message: string) => void,
 ): Partial<Record<string, ReactNode>> {
   const { t } = useTranslation();
+  const feedback = useFeedback();
+  const queryClient = useQueryClient();
   const [modelOpen, setModelOpen] = useState(false);
+  const [reviewerId, setReviewerId] = useState('');
+  const [chairId, setChairId] = useState('');
+  const [sessionPick, setSessionPick] = useState('');
+  const [modalityPick, setModalityPick] = useState('IN_PERSON');
   const open =
     paper?.decision?.status === 'PUBLISHED' && paper.decision.outcome === 'ACCEPTED';
   const needsRevision =
@@ -54,8 +68,35 @@ export function usePaperStageExtras(
         throw new Error(await apiErrorMessage(response));
       }
       return response.json() as Promise<
-        { userId: string; firstName: string; lastName: string }[]
+        {
+          userId: string;
+          firstName: string;
+          lastName: string;
+          email?: string;
+          academicTitle?: string;
+        }[]
       >;
+    },
+  });
+  const program = useQuery({
+    queryKey: ['program', paper?.conferenceId],
+    enabled: Boolean(paper?.dossier?.canManage && open),
+    queryFn: async () => {
+      const response = await apiFetch(
+        `/api/v1/conferences/${paper!.conferenceId}/program`,
+      );
+      if (!response.ok) {
+        throw new Error(await apiErrorMessage(response));
+      }
+      return response.json() as Promise<{
+        sessions: {
+          id: string;
+          title: string;
+          startsAt: string;
+          endsAt: string;
+          room: { name: string };
+        }[];
+      }>;
     },
   });
   const reviewers = useQuery({
@@ -81,13 +122,13 @@ export function usePaperStageExtras(
   }
 
   const dossier = paper.dossier;
-  const registeredNow =
-    dossier.registration?.status === 'VERIFIED' &&
-    (!dossier.paymentsEnabled ||
-      dossier.registration.paymentStatus === 'VERIFIED');
+  const registeredNow = isRegistrationComplete(dossier);
   const manager = dossier.canManage;
   const author = Boolean(dossier.isAuthor);
-  const sessionChair = dossier.sessionChairs.some((item) => item.mine);
+  const sessionChairs = dossier.sessionChairs ?? [];
+  const presentationReviewers = dossier.presentationReviewers ?? [];
+  const sessionChair = sessionChairs.some((item) => item.mine);
+  const presentationReviewer = presentationReviewers.some((item) => item.mine);
   const reviewed = dossier.reviews.some((item) => item.recommendation);
   const mine = dossier.reviews.find((item) => item.mine);
 
@@ -98,9 +139,13 @@ export function usePaperStageExtras(
     });
     if (!response.ok) {
       onError(await apiErrorMessage(response));
-      return;
+      return false;
     }
+    feedback.success(t('workflow.saved'));
     await onChanged();
+    await queryClient.invalidateQueries({ queryKey: ['presentations-mine'] });
+    await queryClient.invalidateQueries({ queryKey: ['program'] });
+    return true;
   }
 
   function upload(path: string, file: File) {
@@ -143,33 +188,32 @@ export function usePaperStageExtras(
           }
           statusTone={dossier.reviews.length > 0 ? 'ok' : 'missing'}
         >
-          <form
-            className="flex flex-col gap-2 sm:flex-row sm:items-end"
-            onSubmit={(event) => {
-              event.preventDefault();
-              const reviewerId = String(
-                new FormData(event.currentTarget).get('reviewerId'),
-              );
+          <AssignmentField
+            className="min-w-0 text-xs font-extrabold text-[#5c6578]"
+            label={t('reviews.chooseReviewer')}
+            title={t('reviews.chooseReviewer')}
+            placeholder={t('reviews.chooseReviewer')}
+            value={reviewerId}
+            onChange={(id) => {
+              setReviewerId(id);
+              if (!id) {
+                return;
+              }
               void send(
                 `/api/v1/papers/${paper.id}/assignments`,
-                { reviewerId } as unknown as BodyInit,
+                { reviewerId: id } as unknown as BodyInit,
                 true,
-              );
+              ).then((ok) => {
+                if (ok) {
+                  setReviewerId('');
+                }
+              });
             }}
-          >
-            <label className="min-w-0 flex-1 text-xs font-extrabold text-[#5c6578]">
-              {t('reviews.chooseReviewer')}
-              <select name="reviewerId" required className={stageField} defaultValue="">
-                <option value="">{t('reviews.chooseReviewer')}</option>
-                {reviewers.data?.map((person) => (
-                  <option key={person.userId} value={person.userId}>
-                    {person.firstName} {person.lastName}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <Button type="submit">{t('reviews.assignTitle')}</Button>
-          </form>
+            options={(reviewers.data ?? []).map((person) => ({
+              id: person.userId,
+              title: `${person.firstName} ${person.lastName}`.trim(),
+            }))}
+          />
           {dossier.reviews.length > 0 ? (
             <ul className="mt-3 grid gap-1.5">
               {dossier.reviews.map((item) => (
@@ -224,7 +268,7 @@ export function usePaperStageExtras(
               </div>
             ) : (
               <a
-                href={`/workspace/reviews#${mine!.id}`}
+                href={`/workspace/reviews/${mine!.id}`}
                 className="inline-flex min-h-10 items-center rounded-full bg-[#3d4fd4] px-4 text-sm font-extrabold text-white no-underline"
               >
                 {t('reviews.continueOnReviews')}
@@ -274,7 +318,7 @@ export function usePaperStageExtras(
             </div>
           ) : (
             <a
-              href={`/workspace/reviews#${mine!.id}`}
+              href={`/workspace/reviews/${mine!.id}`}
               className="inline-flex min-h-10 items-center rounded-full bg-[#3d4fd4] px-4 text-sm font-extrabold text-white no-underline"
             >
               {t('reviews.continueOnReviews')}
@@ -285,6 +329,68 @@ export function usePaperStageExtras(
     );
   }
 
+  const remarksList = dossier.remarks ?? [];
+  const reviewsList = dossier.reviews ?? [];
+  const hadRevisions =
+    remarksList.length > 0 || dossier.files.some((item) => item.kind === 'REVISION');
+  const decisionHistory = (
+    <>
+      <ReviewsHistory reviews={reviewsList} />
+      {remarksList.length > 0 ? (
+        <RemarksChecklist
+          paperId={paper.id}
+          remarks={remarksList}
+          path="remarks"
+          manager={manager}
+          readOnly={!needsRevision}
+          onChanged={onChanged}
+          onError={onError}
+        />
+      ) : null}
+    </>
+  );
+  const authorDecisionHistory = (
+    <div
+      className={
+        remarksList.length > 0
+          ? 'grid gap-8 lg:grid-cols-[minmax(0,1.35fr)_minmax(17rem,0.75fr)] lg:items-start lg:gap-0'
+          : 'grid gap-5'
+      }
+    >
+      <div className={remarksList.length > 0 ? 'lg:pr-8' : undefined}>
+        <ReviewsHistory reviews={reviewsList} variant="page" />
+      </div>
+      {remarksList.length > 0 || needsRevision ? (
+        <div className="grid gap-5 lg:border-l lg:border-[#eef0f4] lg:pl-8">
+          {remarksList.length > 0 ? (
+            <RemarksChecklist
+              paperId={paper.id}
+              remarks={remarksList}
+              path="remarks"
+              manager={manager}
+              readOnly={!needsRevision}
+              onChanged={onChanged}
+              onError={onError}
+              variant="page"
+            />
+          ) : null}
+          {needsRevision ? (
+            <PaperFileSlot
+              paperId={paper.id}
+              title={t('workflow.files.REVISION')}
+              hint={t('dossier.revisionHint')}
+              kind="REVISION"
+              file={dossier.files.find((item) => item.kind === 'REVISION') ?? null}
+              uploadLabel={t('dossier.uploadRevision')}
+              onUpload={(file) => upload(`/api/v1/papers/${paper.id}/revision`, file)}
+              done={dossier.files.some((item) => item.kind === 'REVISION')}
+            />
+          ) : null}
+        </div>
+      ) : null}
+    </div>
+  );
+
   if (manager && paper.status === 'SUBMITTED' && reviewed) {
     actions.decision = (
       <div className="mt-4 grid gap-4">
@@ -293,7 +399,9 @@ export function usePaperStageExtras(
           hint={t('dossier.reviewGoesToAuthor')}
           status={
             open
-              ? t('dossier.withoutMods')
+              ? hadRevisions
+                ? t('dossier.afterMods')
+                : t('dossier.withoutMods')
               : needsRevision
                 ? paper.decision?.outcome === 'REVISION_REQUIRED'
                   ? t('dossier.majorMods')
@@ -326,16 +434,22 @@ export function usePaperStageExtras(
           >
             <label className="text-xs font-extrabold text-[#5c6578]">
               {t('workflow.decide')}
-              <select
+              <FieldSelect
                 name="outcome"
                 className={stageField}
                 defaultValue={paper.decision?.outcome ?? 'ACCEPTED'}
-              >
-                <option value="ACCEPTED">{t('dossier.withoutMods')}</option>
-                <option value="CONDITIONALLY_ACCEPTED">{t('dossier.minorMods')}</option>
-                <option value="REVISION_REQUIRED">{t('dossier.majorMods')}</option>
-                <option value="REJECTED">{t('dossier.notAccepted')}</option>
-              </select>
+                options={[
+                  {
+                    value: 'ACCEPTED',
+                    label: hadRevisions
+                      ? t('dossier.afterMods')
+                      : t('dossier.withoutMods'),
+                  },
+                  { value: 'CONDITIONALLY_ACCEPTED', label: t('dossier.minorMods') },
+                  { value: 'REVISION_REQUIRED', label: t('dossier.majorMods') },
+                  { value: 'REJECTED', label: t('dossier.notAccepted') },
+                ]}
+              />
             </label>
             <label className="text-xs font-extrabold text-[#5c6578]">
               {t('workflow.letter')}
@@ -363,45 +477,16 @@ export function usePaperStageExtras(
             </div>
           </form>
         </StagePanel>
-        {needsRevision && (dossier.remarks?.length ?? 0) > 0 ? (
-          <RemarksChecklist
-            paperId={paper.id}
-            remarks={dossier.remarks ?? []}
-            path="remarks"
-            manager
-            onChanged={onChanged}
-            onError={onError}
-          />
-        ) : null}
+        {decisionHistory}
       </div>
     );
-  }
-
-  if (needsRevision && author) {
-    actions.decision = (
-      <div className="mt-4 grid gap-4">
-        {(dossier.remarks?.length ?? 0) > 0 ? (
-          <RemarksChecklist
-            paperId={paper.id}
-            remarks={dossier.remarks ?? []}
-            path="remarks"
-            manager={false}
-            onChanged={onChanged}
-            onError={onError}
-          />
-        ) : null}
-        <PaperFileSlot
-          paperId={paper.id}
-          title={t('workflow.files.REVISION')}
-          hint={t('dossier.revisionHint')}
-          kind="REVISION"
-          file={dossier.files.find((item) => item.kind === 'REVISION') ?? null}
-          uploadLabel={t('dossier.uploadRevision')}
-          onUpload={(file) => upload(`/api/v1/papers/${paper.id}/revision`, file)}
-          done={dossier.files.some((item) => item.kind === 'REVISION')}
-        />
-      </div>
-    );
+  } else if (
+    author &&
+    (needsRevision ||
+      remarksList.length > 0 ||
+      reviewsList.some((item) => item.comments || item.recommendation))
+  ) {
+    actions.decision = authorDecisionHistory;
   }
 
   // Registration is per submission (dossier), not a global sidebar page.
@@ -414,6 +499,8 @@ export function usePaperStageExtras(
         dossier={dossier}
         onChanged={onChanged}
         onError={onError}
+        manager={manager}
+        variant={author && !manager ? 'page' : 'panel'}
       />
     );
   }
@@ -422,6 +509,7 @@ export function usePaperStageExtras(
     const slidesStatus = dossier.slidesStatus ?? 'LOCKED';
     // Actions only when registration unlocked the stage — not from leftover flags.
     const presentationReady =
+      open &&
       registeredNow &&
       (slidesStatus === 'OPEN' ||
         slidesStatus === 'DEPOSITED' ||
@@ -438,21 +526,23 @@ export function usePaperStageExtras(
         slidesStatus === 'WILL_DEPOSIT');
     const slidesPendingReview =
       slidesStatus === 'DEPOSITED' || slidesStatus === 'WILL_DEPOSIT';
-    const canActOnPresentation = author || manager || sessionChair;
+    const canActOnPresentation =
+      author || manager || sessionChair || presentationReviewer;
 
     if (presentationReady && canActOnPresentation) {
+      const peopleLine = (items: { name: string }[], empty: string) =>
+        items.length > 0 ? items.map((item) => item.name).join(', ') : empty;
       const chairRemarksBlock =
         dossier.presented &&
-        dossier.schedule &&
-        (dossier.schedule.chairRemarks || dossier.sessionComment) ? (
+        (dossier.schedule?.chairRemarks || dossier.sessionComment) ? (
           <div className="rounded-xl border border-[#2fbf71]/30 bg-[#e8f8ef] px-3 py-3">
             <p className="text-xs font-extrabold uppercase tracking-wide text-[#1c9a57]">
               {t('dossier.chairRemarks')}
             </p>
             <p className="mt-1 text-sm font-semibold text-[#1c2744]">
-              {dossier.schedule.chairRemarks || dossier.sessionComment}
+              {dossier.schedule?.chairRemarks || dossier.sessionComment}
             </p>
-            {dossier.schedule.score !== null ? (
+            {dossier.schedule?.score !== null && dossier.schedule?.score !== undefined ? (
               <p className="mt-1 text-xs font-extrabold text-[#5c6578]">
                 {t('dossier.chairScore')}: {dossier.schedule.score}/10
               </p>
@@ -461,9 +551,7 @@ export function usePaperStageExtras(
         ) : null;
 
       const chairFollowUp =
-        sessionChair &&
-        dossier.schedule &&
-        !dossier.presented ? (
+        sessionChair && dossier.schedule && !dossier.presented ? (
           <StagePanel
             title={t('dossier.chairFollowUp')}
             hint={t('dossier.chairFollowUpHint')}
@@ -511,27 +599,277 @@ export function usePaperStageExtras(
               </div>
             </form>
           </StagePanel>
+        ) : sessionChair && !dossier.schedule ? (
+          <StagePanel
+            title={t('dossier.chairFollowUp')}
+            hint={t('dossier.waitingScheduleHint')}
+            status={t('dossier.waitingSchedule')}
+            statusTone="wait"
+          />
         ) : null;
 
-      const authorSlidesRemarks =
-        (slidesStatus === 'NEEDS_MODS' || slidesStatus === 'WILL_DEPOSIT') &&
-        (dossier.slidesRemarks?.length ?? 0) > 0;
-      // Chercheur: only deposit + comments. Procedure stays in the workflow grids.
-      const authorPresentationWork =
-        author && (canUploadSlides || authorSlidesRemarks || Boolean(chairRemarksBlock));
+      const authorSlidesRemarks = (dossier.slidesRemarks?.length ?? 0) > 0;
+      const canDecideSlides = (manager || presentationReviewer) && slidesPendingReview;
+      const canSeeSlides =
+        canUploadSlides || manager || presentationReviewer || sessionChair;
+      const dedicatedChairs = (chairs.data ?? []).filter(
+        (item) => item.academicTitle === 'Session chair',
+      );
+      const chairOptions = (dedicatedChairs.length > 0 ? dedicatedChairs : chairs.data ?? []).map(
+        (item) => ({
+          id: item.userId,
+          title: `${item.firstName} ${item.lastName}`.trim(),
+          subtitle:
+            item.academicTitle === 'Session chair' ? item.email : item.academicTitle,
+        }),
+      );
 
-      if (!(manager || chairFollowUp || authorPresentationWork)) {
-        // Reviewer / idle author: workflow info only.
+      if (author && !manager && !sessionChair && !presentationReviewer) {
+        const slidesFile = dossier.files.find((item) => item.kind === 'SLIDES') ?? null;
+        actions.presentation = (
+          <PageSplit
+            left={
+              <div className="grid gap-8">
+                <PageSection
+                  title={t('dossier.scheduleTitle')}
+                  hint={t('dossier.scheduleHint')}
+                >
+                  <InfoCards
+                    items={[
+                      {
+                        label: t('dossier.scheduleSession'),
+                        value: dossier.schedule?.sessionTitle ?? t('dossier.waitingSchedule'),
+                      },
+                      {
+                        label: t('dossier.scheduleRoom'),
+                        value: dossier.schedule?.roomName ?? t('dossier.waitingSchedule'),
+                      },
+                      ...(dossier.schedule
+                        ? [
+                            {
+                              label: t('dossier.scheduleTime'),
+                              value: `${new Date(dossier.schedule.startsAt).toLocaleString()} – ${new Date(
+                                dossier.schedule.endsAt,
+                              ).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`,
+                            },
+                            {
+                              label: t('dossier.scheduleModality'),
+                              value:
+                                dossier.schedule.modality === 'ONLINE'
+                                  ? t('dossier.modalityOnline')
+                                  : t('dossier.modalityInPerson'),
+                            },
+                          ]
+                        : []),
+                      {
+                        label: t('dossier.sessionChair'),
+                        value: peopleLine(sessionChairs, t('dossier.noChair')),
+                      },
+                    ]}
+                  />
+                  {chairRemarksBlock}
+                </PageSection>
+                {canSeeSlides ? (
+                  <PageSection
+                    title={t('dossier.slides')}
+                    hint={
+                      slidesStatus === 'NEEDS_MODS'
+                        ? t('dossier.slidesModsHint')
+                        : t('dossier.slidesHint')
+                    }
+                  >
+                    <PaperFileSlot
+                      paperId={paper.id}
+                      hint={
+                        slidesStatus === 'NEEDS_MODS'
+                          ? t('dossier.slidesModsHint')
+                          : t('dossier.slidesHint')
+                      }
+                      kind="SLIDES"
+                      file={slidesFile}
+                      accept=".ppt,.pptx,application/pdf"
+                      uploadLabel={
+                        dossier.slides ? t('dossier.replaceSlides') : t('dossier.sendSlides')
+                      }
+                      onUpload={
+                        canUploadSlides
+                          ? (file) => upload(`/api/v1/papers/${paper.id}/slides`, file)
+                          : undefined
+                      }
+                      done={dossier.slides}
+                    />
+                  </PageSection>
+                ) : null}
+              </div>
+            }
+            right={
+              authorSlidesRemarks ? (
+                <RemarksChecklist
+                  paperId={paper.id}
+                  remarks={dossier.slidesRemarks ?? []}
+                  path="presentation-remarks"
+                  manager={false}
+                  readOnly={
+                    slidesStatus !== 'NEEDS_MODS' && slidesStatus !== 'WILL_DEPOSIT'
+                  }
+                  onChanged={onChanged}
+                  onError={onError}
+                  variant="page"
+                />
+              ) : slidesFile ? (
+                <PageSection title={t('dossier.slides')}>
+                  <PaperFilePeek paperId={paper.id} file={slidesFile} />
+                </PageSection>
+              ) : null
+            }
+          />
+        );
       } else {
       actions.presentation = (
         <div className="mt-4 grid gap-4">
+          <StagePanel
+            title={t('dossier.scheduleTitle')}
+            hint={t('dossier.scheduleHint')}
+            status={
+              dossier.schedule
+                ? t('dossier.presentationScheduled')
+                : t('dossier.waitingSchedule')
+            }
+            statusTone={dossier.schedule ? 'ok' : 'wait'}
+          >
+            <dl className="grid gap-2 text-sm sm:grid-cols-2">
+              <div>
+                <dt className="text-xs font-extrabold text-[#8b909a]">
+                  {t('dossier.scheduleSession')}
+                </dt>
+                <dd className="font-semibold text-[#1c2744]">
+                  {dossier.schedule?.sessionTitle ?? '—'}
+                </dd>
+              </div>
+              <div>
+                <dt className="text-xs font-extrabold text-[#8b909a]">
+                  {t('dossier.scheduleRoom')}
+                </dt>
+                <dd className="font-semibold text-[#1c2744]">
+                  {dossier.schedule?.roomName ?? '—'}
+                </dd>
+              </div>
+              {dossier.schedule ? (
+                <>
+                  <div>
+                    <dt className="text-xs font-extrabold text-[#8b909a]">
+                      {t('dossier.scheduleTime')}
+                    </dt>
+                    <dd className="font-semibold text-[#1c2744]">
+                      {`${new Date(dossier.schedule.startsAt).toLocaleString()} – ${new Date(
+                        dossier.schedule.endsAt,
+                      ).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-xs font-extrabold text-[#8b909a]">
+                      {t('dossier.scheduleModality')}
+                    </dt>
+                    <dd className="font-semibold text-[#1c2744]">
+                      {dossier.schedule.modality === 'ONLINE'
+                        ? t('dossier.modalityOnline')
+                        : t('dossier.modalityInPerson')}
+                    </dd>
+                  </div>
+                </>
+              ) : null}
+              <div>
+                <dt className="text-xs font-extrabold text-[#8b909a]">
+                  {t('dossier.sessionChair')}
+                </dt>
+                <dd className="font-semibold text-[#1c2744]">
+                  {peopleLine(sessionChairs, t('dossier.noChair'))}
+                </dd>
+              </div>
+            </dl>
+            {manager ? (
+              <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                <FieldSelect
+                  className={stageField}
+                  value={sessionPick}
+                  onChange={setSessionPick}
+                  placeholder={t('dossier.chooseSession')}
+                  options={(program.data?.sessions ?? []).map((session) => ({
+                    value: session.id,
+                    label: `${session.title} · ${session.room.name} · ${new Date(
+                      session.startsAt,
+                    ).toLocaleString()}`,
+                  }))}
+                />
+                <FieldSelect
+                  className={stageField}
+                  value={modalityPick}
+                  onChange={setModalityPick}
+                  options={[
+                    { value: 'IN_PERSON', label: t('dossier.modalityInPerson') },
+                    { value: 'ONLINE', label: t('dossier.modalityOnline') },
+                  ]}
+                />
+                <div className="sm:col-span-2">
+                  <Button
+                    type="button"
+                    disabled={!sessionPick}
+                    onClick={() =>
+                      void send(
+                        `/api/v1/sessions/${sessionPick}/presentations`,
+                        {
+                          paperId: paper.id,
+                          modality: modalityPick,
+                        } as unknown as BodyInit,
+                        true,
+                      )
+                    }
+                  >
+                    {t('dossier.saveSchedule')}
+                  </Button>
+                  {(program.data?.sessions ?? []).length === 0 ? (
+                    <p className="mt-2 text-xs font-semibold text-[#8b909a]">
+                      {t('dossier.noSessionsYet')}
+                    </p>
+                  ) : null}
+                </div>
+                <div className="sm:col-span-2">
+                  <AssignmentField
+                    className="min-w-0 text-xs font-extrabold text-[#5c6578]"
+                    label={t('dossier.sessionChair')}
+                    title={t('dossier.assignChair')}
+                    hint={t('dossier.chooseChair')}
+                    placeholder={t('dossier.chooseChair')}
+                    value={chairId}
+                    onChange={(id) => {
+                      setChairId(id);
+                      if (!id) {
+                        return;
+                      }
+                      void send(
+                        `/api/v1/papers/${paper.id}/session-chair`,
+                        { userId: id } as unknown as BodyInit,
+                        true,
+                      ).then((ok) => {
+                        if (ok) {
+                          setChairId('');
+                        }
+                      });
+                    }}
+                    options={chairOptions}
+                  />
+                </div>
+              </div>
+            ) : null}
+          </StagePanel>
+
           {chairRemarksBlock}
           {chairFollowUp}
 
-          {canUploadSlides || manager ? (
+          {canSeeSlides ? (
             <StagePanel
-              title={t('dossier.presentation')}
-              hint={t('dossier.presentationHint')}
+              title={t('dossier.slides')}
+              hint={t('dossier.slidesHint')}
             >
               <PaperFileSlot
                 paperId={paper.id}
@@ -563,12 +901,15 @@ export function usePaperStageExtras(
               remarks={dossier.slidesRemarks ?? []}
               path="presentation-remarks"
               manager={manager}
+              readOnly={
+                slidesStatus !== 'NEEDS_MODS' && slidesStatus !== 'WILL_DEPOSIT'
+              }
               onChanged={onChanged}
               onError={onError}
             />
           ) : null}
 
-          {manager && slidesPendingReview ? (
+          {canDecideSlides ? (
             <StagePanel
               title={t('dossier.presentationReview')}
               hint={t('dossier.presentationReviewHint')}
@@ -592,10 +933,15 @@ export function usePaperStageExtras(
               >
                 <label className="text-xs font-extrabold text-[#5c6578]">
                   {t('dossier.presentationReview')}
-                  <select name="outcome" className={stageField} defaultValue="VALIDATED">
-                    <option value="VALIDATED">{t('dossier.presentationValidated')}</option>
-                    <option value="NEEDS_MODS">{t('dossier.presentationNotComfort')}</option>
-                  </select>
+                  <FieldSelect
+                    name="outcome"
+                    className={stageField}
+                    defaultValue="VALIDATED"
+                    options={[
+                      { value: 'VALIDATED', label: t('dossier.presentationValidated') },
+                      { value: 'NEEDS_MODS', label: t('dossier.presentationNotComfort') },
+                    ]}
+                  />
                 </label>
                 <label className="text-xs font-extrabold text-[#5c6578]">
                   {t('dossier.presentationNote')}
@@ -612,51 +958,12 @@ export function usePaperStageExtras(
             </StagePanel>
           ) : null}
 
-          {manager && chairs.data && chairs.data.length > 0 ? (
-            <StagePanel
-              title={t('dossier.assignChair')}
-              hint={t('dossier.chooseChair')}
-              status={
-                dossier.sessionChairs.length > 0
-                  ? dossier.sessionChairs.map((item) => item.name).join(', ')
-                  : t('dossier.noChair')
-              }
-              statusTone={dossier.sessionChairs.length > 0 ? 'ok' : 'wait'}
-            >
-              <form
-                className="flex flex-wrap items-end gap-2"
-                onSubmit={(event) => {
-                  event.preventDefault();
-                  const userId = String(
-                    new FormData(event.currentTarget).get('userId') ?? '',
-                  );
-                  void send(
-                    `/api/v1/papers/${paper.id}/session-chair`,
-                    { userId } as unknown as BodyInit,
-                    true,
-                  );
-                }}
-              >
-                <label className="min-w-[12rem] flex-1 text-xs font-extrabold text-[#5c6578]">
-                  {t('dossier.sessionChair')}
-                  <select name="userId" required className={stageField}>
-                    {chairs.data.map((item) => (
-                      <option key={item.userId} value={item.userId}>
-                        {item.firstName} {item.lastName}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <Button type="submit">{t('dossier.assignChair')}</Button>
-              </form>
-            </StagePanel>
-          ) : null}
         </div>
       );
       }
     }
 
-    if (slidesStatus === 'VALIDATED' && (author || manager)) {
+    if (manager || (author && slidesStatus === 'VALIDATED')) {
     const cameraStatus = dossier.cameraReadyStatus ?? 'LOCKED';
     const cameraReadyStage =
       cameraStatus === 'OPEN' ||
@@ -674,12 +981,80 @@ export function usePaperStageExtras(
         cameraStatus === 'LOCKED');
     const cameraPendingReview =
       cameraStatus === 'DEPOSITED' || cameraStatus === 'WILL_DEPOSIT';
-    const authorCameraRemarks =
-      (cameraStatus === 'NEEDS_MODS' || cameraStatus === 'WILL_DEPOSIT') &&
-      (dossier.cameraReadyRemarks?.length ?? 0) > 0;
-    const authorCameraWork = author && (canUploadCamera || authorCameraRemarks);
+    const authorCameraRemarks = (dossier.cameraReadyRemarks?.length ?? 0) > 0;
+    const authorCameraWork = author;
 
     if (cameraReadyStage && (manager || authorCameraWork)) {
+    const cameraPdf = dossier.files.find((item) => item.kind === 'CAMERA_READY') ?? null;
+    const cameraWord = dossier.files.find((item) => item.kind === 'EDITABLE') ?? null;
+    if (author && !manager) {
+      actions.camera = (
+        <PageSplit
+          left={
+            <PageSection
+              hint={
+                cameraStatus === 'NEEDS_MODS'
+                  ? t('dossier.cameraModsHint')
+                  : t('dossier.cameraHint')
+              }
+            >
+              <div className="grid gap-5">
+                <PaperFileSlot
+                  paperId={paper.id}
+                  title={t('dossier.cameraWord')}
+                  hint={t('dossier.cameraWordHint')}
+                  kind="EDITABLE"
+                  file={cameraWord}
+                  accept=".pdf,.doc,.docx,.tex,.zip"
+                  uploadLabel={t('dossier.uploadEditable')}
+                  onUpload={
+                    canUploadCamera
+                      ? (file) => upload(`/api/v1/papers/${paper.id}/editable`, file)
+                      : undefined
+                  }
+                  done={Boolean(cameraWord)}
+                />
+                <PaperFileSlot
+                  paperId={paper.id}
+                  title={t('dossier.cameraPdf')}
+                  hint={t('dossier.cameraPdfHint')}
+                  kind="CAMERA_READY"
+                  file={cameraPdf}
+                  uploadLabel={t('dossier.uploadPdf')}
+                  onUpload={
+                    canUploadCamera
+                      ? (file) =>
+                          upload(`/api/v1/papers/${paper.id}/camera-ready`, file)
+                      : undefined
+                  }
+                  done={Boolean(cameraPdf)}
+                />
+              </div>
+            </PageSection>
+          }
+          right={
+            authorCameraRemarks ? (
+              <RemarksChecklist
+                paperId={paper.id}
+                remarks={dossier.cameraReadyRemarks ?? []}
+                path="camera-ready-remarks"
+                manager={false}
+                readOnly={
+                  cameraStatus !== 'NEEDS_MODS' && cameraStatus !== 'WILL_DEPOSIT'
+                }
+                onChanged={onChanged}
+                onError={onError}
+                variant="page"
+              />
+            ) : cameraPdf ? (
+              <PageSection title={t('dossier.cameraPdf')}>
+                <PaperFilePeek paperId={paper.id} file={cameraPdf} />
+              </PageSection>
+            ) : null
+          }
+        />
+      );
+    } else {
     actions.camera = (
       <div className="mt-4 space-y-3">
         {canUploadCamera || manager ? (
@@ -732,12 +1107,15 @@ export function usePaperStageExtras(
             remarks={dossier.cameraReadyRemarks ?? []}
             path="camera-ready-remarks"
             manager={manager}
+            readOnly={
+              cameraStatus !== 'NEEDS_MODS' && cameraStatus !== 'WILL_DEPOSIT'
+            }
             onChanged={onChanged}
             onError={onError}
           />
         ) : null}
 
-        {manager && cameraPendingReview ? (
+        {manager && cameraStatus !== 'VALIDATED' ? (
           <StagePanel
             title={t('dossier.cameraReview')}
             hint={t('dossier.cameraReviewHint')}
@@ -761,10 +1139,33 @@ export function usePaperStageExtras(
             >
               <label className="text-xs font-extrabold text-[#5c6578]">
                 {t('dossier.cameraReview')}
-                <select name="outcome" className={stageField} defaultValue="VALIDATED">
-                  <option value="VALIDATED">{t('dossier.cameraValidated')}</option>
-                  <option value="NEEDS_MODS">{t('dossier.cameraNotComfort')}</option>
-                </select>
+                <FieldSelect
+                  name="outcome"
+                  className={stageField}
+                  defaultValue={
+                    cameraPendingReview &&
+                    dossier.files.some((item) => item.kind === 'CAMERA_READY') &&
+                    dossier.files.some((item) => item.kind === 'EDITABLE')
+                      ? 'VALIDATED'
+                      : 'NEEDS_MODS'
+                  }
+                  options={[
+                    ...(cameraPendingReview &&
+                    dossier.files.some((item) => item.kind === 'CAMERA_READY') &&
+                    dossier.files.some((item) => item.kind === 'EDITABLE')
+                      ? [
+                          {
+                            value: 'VALIDATED',
+                            label: t('dossier.cameraValidated'),
+                          },
+                        ]
+                      : []),
+                    {
+                      value: 'NEEDS_MODS',
+                      label: t('dossier.cameraNotComfort'),
+                    },
+                  ]}
+                />
               </label>
               <label className="text-xs font-extrabold text-[#5c6578]">
                 {t('dossier.cameraNote')}
@@ -809,6 +1210,7 @@ export function usePaperStageExtras(
       </div>
     );
     }
+    }
 
     const similarityStatus = dossier.similarityStatus ?? 'LOCKED';
     const similarityReady =
@@ -828,14 +1230,89 @@ export function usePaperStageExtras(
         !dossier.similarity?.verified &&
         similarityStatus !== 'VALIDATED');
 
-    const authorSimilarityWork =
-      author &&
-      (canUploadSimilarity ||
-        (similarityStatus === 'OPEN' ||
-          similarityStatus === 'DEPOSITED' ||
-          similarityStatus === 'LOCKED'));
+    const authorSimilarityWork = author;
 
     if (similarityReady && (manager || authorSimilarityWork)) {
+      const similarityFile =
+        dossier.files.find((item) => item.kind === 'SIMILARITY') ?? null;
+      if (author && !manager) {
+        actions.similarity = (
+          <PageSplit
+            left={
+              <PageSection hint={t('dossier.similarityStageHint')}>
+                <InfoCards
+                  items={[
+                    {
+                      label: t('dossier.similarityValue'),
+                      value: dossier.similarity
+                        ? `${dossier.similarity.percentage} %`
+                        : t('dossier.missing'),
+                    },
+                  ]}
+                />
+                <div className="mt-5 grid gap-5">
+                  <PaperFileSlot
+                    paperId={paper.id}
+                    title={t('dossier.similarityReport')}
+                    hint={t('dossier.similarityHint')}
+                    kind="SIMILARITY"
+                    file={similarityFile}
+                    uploadLabel={t('dossier.uploadSimilarity')}
+                    onUpload={
+                      canUploadSimilarity
+                        ? (file) =>
+                            upload(`/api/v1/papers/${paper.id}/similarity-report`, file)
+                        : undefined
+                    }
+                    done={Boolean(similarityFile)}
+                  />
+                  {canUploadSimilarity ||
+                  similarityStatus === 'OPEN' ||
+                  similarityStatus === 'DEPOSITED' ||
+                  similarityStatus === 'LOCKED' ? (
+                    <form
+                      className="flex flex-wrap items-end gap-2"
+                      onSubmit={(event) => {
+                        event.preventDefault();
+                        const percentage = Number(
+                          new FormData(event.currentTarget).get('percentage'),
+                        );
+                        void send(
+                          `/api/v1/papers/${paper.id}/similarity`,
+                          { percentage, note: '' } as unknown as BodyInit,
+                          true,
+                        );
+                      }}
+                    >
+                      <label className="min-w-[8rem] flex-1 text-sm font-semibold text-[#3d4fd4]">
+                        {t('dossier.similarityValue')}
+                        <input
+                          name="percentage"
+                          type="number"
+                          min={0}
+                          max={19.9}
+                          step="0.1"
+                          required
+                          defaultValue={dossier.similarity?.percentage ?? ''}
+                          className={stageField}
+                        />
+                      </label>
+                      <Button type="submit">{t('workflow.save')}</Button>
+                    </form>
+                  ) : null}
+                </div>
+              </PageSection>
+            }
+            right={
+              similarityFile ? (
+                <PageSection title={t('dossier.similarityReport')}>
+                  <PaperFilePeek paperId={paper.id} file={similarityFile} />
+                </PageSection>
+              ) : null
+            }
+          />
+        );
+      } else {
       actions.similarity = (
         <div className="mt-4 space-y-3">
           {canUploadSimilarity ||
@@ -943,6 +1420,7 @@ export function usePaperStageExtras(
           ) : null}
         </div>
       );
+      }
     }
 
     const copyrightStage = dossier.copyrightStageStatus ?? 'LOCKED';
@@ -964,9 +1442,71 @@ export function usePaperStageExtras(
         dossier.files.some((item) => item.kind === 'COPYRIGHT') &&
         copyrightStage !== 'VALIDATED');
 
-    const authorCopyrightWork = author && canUploadCopyright;
-
-    if (copyrightReady && (manager || authorCopyrightWork)) {
+    if (manager || (author && copyrightReady)) {
+    const copyrightFile =
+      dossier.files.find((item) => item.kind === 'COPYRIGHT') ?? null;
+    const copyrightRemarks = dossier.copyrightRemarks ?? [];
+    const hasCopyrightRemarks = copyrightRemarks.length > 0;
+    if (author && !manager) {
+      actions.copyright = (
+        <PageSplit
+          left={
+            <div className="grid gap-8">
+              <PageSection hint={t('dossier.copyrightStageHint')}>
+                <PaperFileSlot
+                  paperId={paper.id}
+                  hint={t('dossier.copyrightHint')}
+                  kind="COPYRIGHT"
+                  file={copyrightFile}
+                  uploadLabel={t('dossier.uploadCopyright')}
+                  onUpload={
+                    canUploadCopyright
+                      ? (file) => upload(`/api/v1/papers/${paper.id}/copyright`, file)
+                      : undefined
+                  }
+                  done={Boolean(copyrightFile)}
+                />
+              </PageSection>
+              <PageSection
+                title={t('workflow.model')}
+                hint={t('dossier.copyrightModelHint')}
+              >
+                {template.data ? (
+                  <div>
+                    <p className="text-sm font-extrabold text-[#1c2744]">
+                      {template.data.subject}
+                    </p>
+                    <p className="mt-2 whitespace-pre-wrap text-sm font-medium leading-relaxed text-[#1c2744]">
+                      {template.data.body}
+                    </p>
+                  </div>
+                ) : (
+                  <p className="text-sm font-medium text-[#8b909a]">
+                    {t('dossier.noModel')}
+                  </p>
+                )}
+              </PageSection>
+            </div>
+          }
+          right={
+            hasCopyrightRemarks ? (
+              <RemarksChecklist
+                paperId={paper.id}
+                remarks={copyrightRemarks}
+                path="copyright-remarks"
+                manager={false}
+                readOnly={copyrightStage === 'VALIDATED'}
+                onChanged={onChanged}
+                onError={onError}
+                variant="page"
+              />
+            ) : copyrightFile ? (
+              <PaperFilePeek paperId={paper.id} file={copyrightFile} />
+            ) : null
+          }
+        />
+      );
+    } else {
     actions.copyright = (
       <div className="mt-4 space-y-3">
         {canUploadCopyright || manager ? (
@@ -1025,45 +1565,81 @@ export function usePaperStageExtras(
           </StagePanel>
         ) : null}
 
-        {manager && copyrightPending ? (
+        {hasCopyrightRemarks ? (
+          <RemarksChecklist
+            paperId={paper.id}
+            remarks={copyrightRemarks}
+            path="copyright-remarks"
+            manager={manager}
+            readOnly={copyrightStage === 'VALIDATED'}
+            onChanged={onChanged}
+            onError={onError}
+          />
+        ) : null}
+
+        {manager && copyrightStage !== 'VALIDATED' ? (
           <StagePanel
             title={t('dossier.copyrightReview')}
             hint={t('dossier.copyrightReviewHint')}
-            status={t('dossier.copyrightUnderCheck')}
+            status={t('dossier.waiting')}
             statusTone="wait"
           >
-            <div className="flex flex-wrap gap-2">
-              <Button
-                type="button"
-                onClick={() =>
-                  void send(
-                    `/api/v1/papers/${paper.id}/copyright/validate`,
-                    { accept: true } as unknown as BodyInit,
-                    true,
-                  )
-                }
-              >
-                {t('dossier.copyrightValidated')}
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                className="border-[#c5cad6]"
-                onClick={() =>
-                  void send(
-                    `/api/v1/papers/${paper.id}/copyright/validate`,
-                    { accept: false } as unknown as BodyInit,
-                    true,
-                  )
-                }
-              >
-                {t('dossier.refuse')}
-              </Button>
-            </div>
+            <form
+              className="grid gap-3"
+              onSubmit={(event) => {
+                event.preventDefault();
+                const form = new FormData(event.currentTarget);
+                void send(
+                  `/api/v1/papers/${paper.id}/copyright/validate`,
+                  {
+                    accept: String(form.get('outcome')) === 'VALIDATED',
+                    note: String(form.get('note') ?? ''),
+                  } as unknown as BodyInit,
+                  true,
+                );
+              }}
+            >
+              <label className="text-xs font-extrabold text-[#5c6578]">
+                {t('dossier.copyrightReview')}
+                <FieldSelect
+                  name="outcome"
+                  className={stageField}
+                  defaultValue={
+                    copyrightPending && copyrightFile ? 'VALIDATED' : 'NEEDS_MODS'
+                  }
+                  options={[
+                    ...(copyrightPending && copyrightFile
+                      ? [
+                          {
+                            value: 'VALIDATED',
+                            label: t('dossier.copyrightValidated'),
+                          },
+                        ]
+                      : []),
+                    {
+                      value: 'NEEDS_MODS',
+                      label: t('dossier.copyrightNotComfort'),
+                    },
+                  ]}
+                />
+              </label>
+              <label className="text-xs font-extrabold text-[#5c6578]">
+                {t('dossier.copyrightNote')}
+                <textarea
+                  name="note"
+                  className={`${stageField} min-h-20`}
+                  placeholder={t('dossier.copyrightNoteHint')}
+                />
+              </label>
+              <div>
+                <Button type="submit">{t('dossier.saveCopyrightDecision')}</Button>
+              </div>
+            </form>
           </StagePanel>
         ) : null}
       </div>
     );
+    }
     }
     }
   }
@@ -1078,27 +1654,53 @@ export function usePaperStageExtras(
       dossier.copyrightStatus === 'VALIDATED');
 
   // Chercheur: attestation download only. Waiting / publish stay in workflow + admin actions.
-  if (author && !manager && dossier.doi) {
+  if (author && !manager && (dossier.doi || readyForPublication)) {
+    const finalPdf =
+      dossier.files.find((item) => item.kind === 'CAMERA_READY') ?? null;
     actions.final = (
-      <div className="mt-4">
-        <StagePanel
-          title={t('dossier.final')}
-          hint={`${t('dossier.finalReady')} ${dossier.doi}`}
-          status={t('dossier.finalReady')}
-          statusTone="ok"
-        >
-          <Button
-            type="button"
-            variant="outline"
-            className="border-[#c5cad6]"
-            onClick={() =>
-              void download(`/api/v1/papers/${paper.id}/attestation`, 'attestation.pdf')
+      <PageSplit
+        left={
+          <PageSection
+            hint={
+              dossier.doi
+                ? t('dossier.finalReady')
+                : t('dossier.finalReadyForPublication')
             }
           >
-            {t('dossier.downloadAttestation')}
-          </Button>
-        </StagePanel>
-      </div>
+            {dossier.doi ? (
+              <InfoCards items={[{ label: t('dossier.paperDoi'), value: dossier.doi }]} />
+            ) : (
+              <p className="text-sm font-medium leading-relaxed text-[#1c2744]">
+                {t('dossier.finalCongratulations')}
+              </p>
+            )}
+            {dossier.doi ? (
+              <div className="mt-5">
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="border-[#c5cad6]"
+                  onClick={() =>
+                    void download(
+                      `/api/v1/papers/${paper.id}/attestation`,
+                      'attestation.pdf',
+                    )
+                  }
+                >
+                  {t('dossier.downloadAttestation')}
+                </Button>
+              </div>
+            ) : null}
+          </PageSection>
+        }
+        right={
+          finalPdf ? (
+            <PageSection title={t('dossier.cameraPdf')}>
+              <PaperFilePeek paperId={paper.id} file={finalPdf} />
+            </PageSection>
+          ) : null
+        }
+      />
     );
   } else if (manager && (dossier.doi || readyForPublication)) {
     actions.final = (
@@ -1182,26 +1784,170 @@ export function usePaperStageExtras(
   return actions;
 }
 
+function commentPoints(text: string): string[] {
+  const lines = text
+    .split(/\n+/)
+    .map((line) => line.replace(/^[-•]\s*/, '').trim())
+    .filter(Boolean);
+  if (lines.length > 1) {
+    return lines;
+  }
+  const sentences = (lines[0] ?? '')
+    .split(/(?<=[.!?])\s+(?=[A-ZÀ-ÖØ-Ý])/)
+    .map((part) => part.trim())
+    .filter(Boolean);
+  return sentences.length > 1 ? sentences : lines;
+}
+
+function ReviewsHistory({
+  reviews,
+  variant = 'panel',
+}: {
+  reviews: NonNullable<PaperDossier['reviews']>;
+  variant?: 'panel' | 'page';
+}) {
+  const { t } = useTranslation();
+  const rows = reviews.filter((item) => item.recommendation || item.comments);
+  if (rows.length === 0) {
+    return null;
+  }
+  const advice = (value: string | null) =>
+    value === 'ACCEPT'
+      ? t('dossier.adviceAccept')
+      : value === 'REJECT' || value === 'WEAK_REJECT'
+        ? t('dossier.adviceReject')
+        : t('dossier.adviceChanges');
+  const list = (
+    <ol className={variant === 'page' ? 'mt-5 grid gap-6' : 'grid gap-2'}>
+      {rows.map((item, index) => {
+        const points = item.comments ? commentPoints(item.comments) : [];
+        return (
+          <li
+            key={item.id}
+            className={
+              variant === 'page'
+                ? 'flex items-start gap-3 border-b border-[#eef0f4] pb-6 last:border-0 last:pb-0'
+                : 'rounded-2xl border border-[#e4e7ee] bg-[#f8f9fc] px-3 py-3'
+            }
+          >
+            {variant === 'page' ? (
+              <span className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-full bg-[#eef2ff] text-xs font-extrabold text-[#3d4fd4]">
+                {index + 1}
+              </span>
+            ) : null}
+            <div className="min-w-0">
+              <p
+                className={
+                  variant === 'page'
+                    ? 'font-extrabold text-[#1c2744]'
+                    : 'text-xs font-extrabold text-[#5c6578]'
+                }
+              >
+                {item.reviewer
+                  ? `${t('dossier.review')} ${index + 1} · ${item.reviewer}`
+                  : `${t('dossier.review')} ${index + 1}`}
+              </p>
+              {item.recommendation ? (
+                <p
+                  className={
+                    variant === 'page'
+                      ? 'mt-1 text-sm font-semibold text-[#3d4fd4]'
+                      : 'mt-1 text-sm font-extrabold text-[#1c2744]'
+                  }
+                >
+                  {advice(item.recommendation)}
+                </p>
+              ) : null}
+              {points.length > 0 ? (
+                points.length === 1 ? (
+                  <p
+                    className={
+                      variant === 'page'
+                        ? 'mt-2 text-sm font-medium leading-relaxed text-[#1c2744]'
+                        : 'mt-1 whitespace-pre-wrap text-sm font-semibold leading-relaxed text-[#5c6578]'
+                    }
+                  >
+                    {points[0]}
+                  </p>
+                ) : (
+                  <ul className="mt-2 grid gap-1.5">
+                    {points.map((point) => (
+                      <li
+                        key={point}
+                        className="text-sm font-medium leading-relaxed text-[#1c2744]"
+                      >
+                        {point}
+                      </li>
+                    ))}
+                  </ul>
+                )
+              ) : null}
+            </div>
+          </li>
+        );
+      })}
+    </ol>
+  );
+  if (variant === 'page') {
+    return (
+      <section>
+        <p className="text-base font-extrabold text-[#3d4fd4]">
+          {t('dossier.reviewsHistory')}
+        </p>
+        <p className="mt-1 text-xs text-[#8b909a]">{t('dossier.reviewsHistoryHint')}</p>
+        {list}
+      </section>
+    );
+  }
+  return (
+    <StagePanel
+      title={t('dossier.reviewsHistory')}
+      hint={t('dossier.reviewsHistoryHint')}
+      status={`${rows.length}`}
+      statusTone="ok"
+    >
+      {list}
+    </StagePanel>
+  );
+}
+
 function RemarksChecklist({
   paperId,
   remarks,
   path = 'remarks',
   manager,
+  readOnly = false,
   onChanged,
   onError,
+  variant = 'panel',
 }: {
   paperId: string;
   remarks: NonNullable<PaperDossier['remarks']>;
-  path?: 'remarks' | 'presentation-remarks' | 'camera-ready-remarks';
+  path?:
+    | 'remarks'
+    | 'presentation-remarks'
+    | 'camera-ready-remarks'
+    | 'copyright-remarks';
   manager: boolean;
+  readOnly?: boolean;
   onChanged: () => Promise<void>;
   onError: (message: string) => void;
+  variant?: 'panel' | 'page';
 }) {
   const { t } = useTranslation();
+  const feedback = useFeedback();
   const done = remarks.filter((item) => item.status === 'VALIDATED').length;
   const total = remarks.length;
-  const hint =
-    path === 'presentation-remarks'
+  const currentRound = remarks.reduce(
+    (max, item) => (item.round > max ? item.round : max),
+    0,
+  );
+  const rounds = [...new Set(remarks.map((item) => item.round))].sort(
+    (left, right) => left - right,
+  );
+  const hint = readOnly
+    ? t('dossier.remarksHistoryHint')
+    : path === 'presentation-remarks'
       ? manager
         ? t('dossier.slidesRemarksHintManager')
         : t('dossier.slidesRemarksHintAuthor')
@@ -1209,9 +1955,13 @@ function RemarksChecklist({
         ? manager
           ? t('dossier.cameraRemarksHintManager')
           : t('dossier.cameraRemarksHintAuthor')
-        : manager
-          ? t('dossier.remarksHintManager')
-          : t('dossier.remarksHintAuthor');
+        : path === 'copyright-remarks'
+          ? manager
+            ? t('dossier.copyrightRemarksHintManager')
+            : t('dossier.copyrightRemarksHintAuthor')
+          : manager
+            ? t('dossier.remarksHintManager')
+            : t('dossier.remarksHintAuthor');
 
   async function setStatus(id: string, status: 'OPEN' | 'ADDRESSED' | 'VALIDATED') {
     const response = await apiFetch(`/api/v1/papers/${paperId}/${path}/${id}`, {
@@ -1222,71 +1972,156 @@ function RemarksChecklist({
       onError(await apiErrorMessage(response));
       return;
     }
+    feedback.success(t('workflow.saved'));
     await onChanged();
+  }
+
+  const body = (
+    <div className={variant === 'page' ? 'mt-5 grid gap-6' : 'grid gap-4'}>
+      {rounds.map((round) => (
+        <div
+          key={round}
+          className={
+            variant === 'page'
+              ? 'grid gap-3 border-b border-[#eef0f4] pb-6 last:border-0 last:pb-0'
+              : 'grid gap-2'
+          }
+        >
+          {rounds.length > 1 ? (
+            <p
+              className={
+                variant === 'page'
+                  ? 'text-sm font-semibold text-[#3d4fd4]'
+                  : 'text-xs font-extrabold uppercase tracking-wide text-[#8b909a]'
+              }
+            >
+              {t('dossier.remarksRound', { round })}
+            </p>
+          ) : null}
+          <ul className={variant === 'page' ? 'grid gap-3' : 'grid gap-2'}>
+            {remarks
+              .filter((item) => item.round === round)
+              .map((item) => {
+                const canAct = !readOnly && round === currentRound;
+                const statusLabel =
+                  item.status === 'VALIDATED'
+                    ? t('dossier.remarkValidated')
+                    : item.status === 'ADDRESSED'
+                      ? t('dossier.remarkAddressed')
+                      : t('dossier.remarkOpen');
+                return (
+                  <li
+                    key={item.id}
+                    className={
+                      variant === 'page'
+                        ? 'flex items-start gap-3'
+                        : 'rounded-2xl border border-[#e4e7ee] bg-[#f8f9fc] px-3 py-3'
+                    }
+                  >
+                    {variant === 'page' ? (
+                      <span
+                        className={`mt-1.5 size-2 shrink-0 rounded-full ${
+                          item.status === 'VALIDATED'
+                            ? 'bg-[#148a4c]'
+                            : item.status === 'ADDRESSED'
+                              ? 'bg-[#e0a020]'
+                              : 'bg-[#c5cad6]'
+                        }`}
+                        aria-hidden
+                      />
+                    ) : null}
+                    <div className="min-w-0 flex-1">
+                    <div className="flex items-start justify-between gap-3">
+                      <p className="text-sm font-medium leading-relaxed text-[#1c2744]">
+                        {item.text}
+                      </p>
+                      <span
+                        className={`shrink-0 text-xs font-extrabold ${
+                          item.status === 'VALIDATED'
+                            ? 'text-[#148a4c]'
+                            : item.status === 'ADDRESSED'
+                              ? 'text-[#9a6410]'
+                              : 'text-[#5c6578]'
+                        }`}
+                      >
+                        {statusLabel}
+                      </span>
+                    </div>
+                    {canAct ? (
+                      <div className="mt-2 flex flex-wrap items-center gap-2">
+                        {!manager && item.status !== 'VALIDATED' ? (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            className="h-8 border-[#c5cad6] px-3 text-xs"
+                            onClick={() =>
+                              void setStatus(
+                                item.id,
+                                item.status === 'ADDRESSED' ? 'OPEN' : 'ADDRESSED',
+                              )
+                            }
+                          >
+                            {item.status === 'ADDRESSED'
+                              ? t('dossier.remarkUndo')
+                              : t('dossier.remarkMarkDone')}
+                          </Button>
+                        ) : null}
+                        {manager && item.status !== 'VALIDATED' ? (
+                          <Button
+                            type="button"
+                            className="h-8 px-3 text-xs"
+                            onClick={() => void setStatus(item.id, 'VALIDATED')}
+                          >
+                            {t('dossier.remarkValidate')}
+                          </Button>
+                        ) : null}
+                        {manager && item.status === 'VALIDATED' ? (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            className="h-8 border-[#c5cad6] px-3 text-xs"
+                            onClick={() => void setStatus(item.id, 'OPEN')}
+                          >
+                            {t('dossier.remarkReopen')}
+                          </Button>
+                        ) : null}
+                      </div>
+                    ) : null}
+                    </div>
+                  </li>
+                );
+              })}
+          </ul>
+        </div>
+      ))}
+    </div>
+  );
+
+  if (variant === 'page') {
+    return (
+      <section>
+        <div className="flex items-start justify-between gap-3">
+          <p className="text-base font-extrabold text-[#3d4fd4]">
+            {t('dossier.remarksTitle')}
+          </p>
+          <span className="text-xs font-extrabold text-[#148a4c]">
+            {t('dossier.remarksProgress', { done, total })}
+          </span>
+        </div>
+        <p className="mt-1 text-xs text-[#8b909a]">{hint}</p>
+        {body}
+      </section>
+    );
   }
 
   return (
     <StagePanel
-      title={t('dossier.remarksTitle')}
+      title={readOnly ? t('dossier.remarksHistory') : t('dossier.remarksTitle')}
       hint={hint}
       status={t('dossier.remarksProgress', { done, total })}
       statusTone={done === total && total > 0 ? 'ok' : 'wait'}
     >
-      <ul className="grid gap-2">
-        {remarks.map((item) => (
-          <li
-            key={item.id}
-            className="rounded-2xl border border-[#e4e7ee] bg-[#f8f9fc] px-3 py-3"
-          >
-            <p className="text-sm font-semibold text-[#1c2744]">{item.text}</p>
-            <div className="mt-2 flex flex-wrap items-center gap-2">
-              <span className="text-xs font-extrabold text-[#5c6578]">
-                {item.status === 'VALIDATED'
-                  ? t('dossier.remarkValidated')
-                  : item.status === 'ADDRESSED'
-                    ? t('dossier.remarkAddressed')
-                    : t('dossier.remarkOpen')}
-              </span>
-              {!manager && item.status !== 'VALIDATED' ? (
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="h-8 border-[#c5cad6] px-3 text-xs"
-                  onClick={() =>
-                    void setStatus(
-                      item.id,
-                      item.status === 'ADDRESSED' ? 'OPEN' : 'ADDRESSED',
-                    )
-                  }
-                >
-                  {item.status === 'ADDRESSED'
-                    ? t('dossier.remarkUndo')
-                    : t('dossier.remarkMarkDone')}
-                </Button>
-              ) : null}
-              {manager && item.status !== 'VALIDATED' ? (
-                <Button
-                  type="button"
-                  className="h-8 px-3 text-xs"
-                  onClick={() => void setStatus(item.id, 'VALIDATED')}
-                >
-                  {t('dossier.remarkValidate')}
-                </Button>
-              ) : null}
-              {manager && item.status === 'VALIDATED' ? (
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="h-8 border-[#c5cad6] px-3 text-xs"
-                  onClick={() => void setStatus(item.id, 'OPEN')}
-                >
-                  {t('dossier.remarkReopen')}
-                </Button>
-              ) : null}
-            </div>
-          </li>
-        ))}
-      </ul>
+      {body}
     </StagePanel>
   );
 }

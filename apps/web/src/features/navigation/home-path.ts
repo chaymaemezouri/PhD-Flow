@@ -1,6 +1,23 @@
 const roleRank = ['CHAIR', 'ADMINISTRATOR', 'COMMITTEE', 'REVIEWER', 'AUTHOR'] as const;
 
-export function homePathFor(roles: string[]): string {
+export function isCreatedAdmin(academicTitle: string | null | undefined): boolean {
+  return academicTitle === 'Admin';
+}
+
+export function isSessionChair(academicTitle: string | null | undefined): boolean {
+  return academicTitle === 'Session chair';
+}
+
+export function homePathFor(
+  roles: string[],
+  options?: { createdAdmin?: boolean; sessionChair?: boolean },
+): string {
+  if (options?.sessionChair) {
+    return '/workspace/session-chair';
+  }
+  if (options?.createdAdmin) {
+    return '/workspace/administrator';
+  }
   const active = roleRank.find((role) => roles.includes(role));
   if (active === 'CHAIR' || active === 'ADMINISTRATOR') {
     return '/workspace/administrator';

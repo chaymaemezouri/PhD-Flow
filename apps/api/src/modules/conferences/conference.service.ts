@@ -1,13 +1,16 @@
 import {
+  BadRequestException,
   ConflictException,
   ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { randomUUID } from 'node:crypto';
 import { ConfigService } from '@nestjs/config';
 import type {
   createAdminSchema,
   createConferenceSchema,
+  createTeamMemberSchema,
   deadlineSchema,
   inviteMemberSchema,
   templateSchema,
@@ -26,6 +29,38 @@ import { hashSecret, newSecret } from '../auth/auth.constants.js';
 import type { AuthenticatedUser } from '../auth/auth.types.js';
 import { EmailService } from '../auth/email.service.js';
 import { PasswordService } from '../auth/password.service.js';
+import { ObjectStorage } from '../papers/object-storage.js';
+import {
+  readConferenceFee,
+  writeConferenceFee,
+  type ConferenceFee,
+} from './conference-fee.js';
+
+const TEMPLATE_FILE_PREFIX = 'SF_FILE:';
+const TEMPLATE_TYPES = new Set([
+  'application/pdf',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+]);
+
+function parseTemplateFile(body: string) {
+  if (!body.startsWith(TEMPLATE_FILE_PREFIX)) {
+    return null;
+  }
+  try {
+    const parsed = JSON.parse(body.slice(TEMPLATE_FILE_PREFIX.length)) as {
+      key?: string;
+      name?: string;
+      type?: string;
+    };
+    if (!parsed.key || !parsed.name || !parsed.type) {
+      return null;
+    }
+    return parsed as { key: string; name: string; type: string };
+  } catch {
+    return null;
+  }
+}
 
 const INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const MANAGERS = new Set<ConferenceRole>([
@@ -68,6 +103,7 @@ export class ConferenceService {
     private readonly email: EmailService,
     private readonly config: ConfigService,
     private readonly passwords: PasswordService,
+    private readonly storage: ObjectStorage,
   ) {}
 
   async listPublic() {
@@ -118,7 +154,17 @@ export class ConferenceService {
       include: { conference: true },
       orderBy: { createdAt: 'desc' },
     });
+    // Created / assigned admins never see the public catalog — only conferences
+    // the superadmin attached to their account.
+    if (this.isCreatedAdmin(actor) || rows.some((row) => MANAGERS.has(row.role))) {
+      return rows
+        .filter((row) => MANAGERS.has(row.role))
+        .map((row) => this.listed(row.conference, row.role, row.status));
+    }
     const mine = rows.map((row) => this.listed(row.conference, row.role, row.status));
+    if (this.isSessionChairAccount(actor)) {
+      return mine;
+    }
     const memberIds = mine.map((item) => item.id);
     const published = await this.prisma.conference.findMany({
       where: {
@@ -143,9 +189,6 @@ export class ConferenceService {
       ? await this.chairAccount(input.chairUserId)
       : actor.id;
     const slug = await this.uniqueSlug(input.shortName);
-    const accessPasswordHash = input.accessPassword
-      ? await this.passwords.hash(input.accessPassword)
-      : null;
     const created = await this.prisma.$transaction(async (tx) => {
       const conference = await tx.conference.create({
         data: {
@@ -161,9 +204,9 @@ export class ConferenceService {
           visibility: input.visibility,
           reviewMode: input.reviewMode,
           paymentsEnabled: input.paymentsEnabled,
-          accessPasswordHash,
-          accessPasswordNote: input.accessPassword ?? null,
-          status: accessPasswordHash ? 'PUBLISHED' : 'DRAFT',
+          accessPasswordHash: null,
+          accessPasswordNote: null,
+          status: 'DRAFT',
           slug,
           createdById: actor.id,
           memberships: {
@@ -186,6 +229,7 @@ export class ConferenceService {
       });
       return conference;
     });
+    await this.saveFee(created.id, input);
     return this.getOne(actor, created.id);
   }
 
@@ -195,7 +239,6 @@ export class ConferenceService {
         userId: actor.id,
         status: MembershipStatus.ACTIVE,
         role: { in: [ConferenceRole.CHAIR, ConferenceRole.ADMINISTRATOR] },
-        conference: { status: 'PUBLISHED' },
       },
       include: { conference: true },
       orderBy: { createdAt: 'desc' },
@@ -213,7 +256,7 @@ export class ConferenceService {
     }));
   }
 
-  async openAccess(actor: AuthenticatedUser, id: string, password?: string) {
+  async openAccess(actor: AuthenticatedUser, id: string, _password?: string) {
     const row = await this.load(id);
     if (row.status !== 'PUBLISHED') {
       throw new NotFoundException('Conference not found');
@@ -226,17 +269,7 @@ export class ConferenceService {
     ) {
       throw new NotFoundException('Conference not found');
     }
-    if (!row.accessPasswordHash) {
-      throw new ForbiddenException('This conference has no access password');
-    }
     if (!membership.accessGrantedAt) {
-      if (!password) {
-        throw new ForbiddenException('Enter the conference password');
-      }
-      const matches = await this.passwords.verify(row.accessPasswordHash, password);
-      if (!matches) {
-        throw new ForbiddenException('The conference password is incorrect');
-      }
       await this.prisma.membership.update({
         where: { id: membership.id },
         data: { accessGrantedAt: new Date() },
@@ -267,15 +300,71 @@ export class ConferenceService {
     conferenceId: string,
     input: z.infer<typeof createAdminSchema>,
   ) {
+    return this.createTeamMember(actor, conferenceId, {
+      ...input,
+      role: 'ADMINISTRATOR',
+    });
+  }
+
+  async createTeamMember(
+    actor: AuthenticatedUser,
+    conferenceId: string,
+    input: z.infer<typeof createTeamMemberSchema>,
+  ) {
     const row = await this.load(conferenceId);
     this.assertManager(actor, row);
     const membership = this.membershipOf(actor, row);
     if (
+      input.role === 'ADMINISTRATOR' &&
       actor.platformRole !== PlatformRole.SYSTEM_ADMIN &&
       membership?.role !== ConferenceRole.CHAIR
     ) {
       throw new ForbiddenException('Only the conference admin can create a sub-admin');
     }
+    const email = input.email.trim().toLowerCase();
+    const existing = await this.prisma.user.findUnique({ where: { email } });
+    if (existing) {
+      throw new ConflictException('An account with this email already exists');
+    }
+    const passwordHash = await this.passwords.hash(input.password);
+    const titles: Record<typeof input.role, string> = {
+      ADMINISTRATOR: 'Sous-admin',
+      COMMITTEE: 'Committee',
+      REVIEWER: 'Reviewer',
+    };
+    const user = await this.prisma.user.create({
+      data: {
+        email,
+        passwordHash,
+        issuedPassword: input.password,
+        emailVerifiedAt: new Date(),
+        profile: {
+          create: {
+            firstName: input.firstName.trim(),
+            lastName: input.lastName.trim(),
+            academicTitle: titles[input.role],
+            language: 'fr',
+          },
+        },
+        memberships: {
+          create: {
+            conferenceId,
+            role: input.role,
+            status: MembershipStatus.ACTIVE,
+          },
+        },
+      },
+    });
+    return { id: user.id, email: user.email, loginPassword: input.password };
+  }
+
+  async createSessionChair(
+    actor: AuthenticatedUser,
+    conferenceId: string,
+    input: z.infer<typeof createAdminSchema>,
+  ) {
+    const row = await this.load(conferenceId);
+    this.assertManager(actor, row);
     const email = input.email.trim().toLowerCase();
     const existing = await this.prisma.user.findUnique({ where: { email } });
     if (existing) {
@@ -292,26 +381,27 @@ export class ConferenceService {
           create: {
             firstName: input.firstName.trim(),
             lastName: input.lastName.trim(),
-            academicTitle: 'Sous-admin',
+            academicTitle: 'Session chair',
             language: 'fr',
           },
         },
         memberships: {
           create: {
             conferenceId,
-            role: ConferenceRole.ADMINISTRATOR,
+            role: ConferenceRole.COMMITTEE,
             status: MembershipStatus.ACTIVE,
           },
         },
       },
     });
-    return { id: user.id, email: user.email };
+    return { id: user.id, email: user.email, loginPassword: input.password };
   }
 
   async getOne(actor: AuthenticatedUser, id: string) {
     const row = await this.load(id);
     this.assertReadable(actor, row);
-    return this.toDetail(actor, row);
+    const fee = await readConferenceFee(this.prisma, row.id);
+    return this.toDetail(actor, row, fee);
   }
 
   async update(actor: AuthenticatedUser, id: string, input: UpdateInput) {
@@ -332,6 +422,7 @@ export class ConferenceService {
         },
       });
     });
+    await this.saveFee(id, input);
     return this.getOne(actor, id);
   }
 
@@ -441,12 +532,106 @@ export class ConferenceService {
       },
       update: { subject: input.subject, body: input.body },
     });
+    return this.publicTemplate(template);
+  }
+
+  async saveTemplateFile(
+    actor: AuthenticatedUser,
+    conferenceId: string,
+    input: { kind: TemplateInput['kind']; language: TemplateInput['language']; subject: string },
+    file: Express.Multer.File,
+  ) {
+    const row = await this.load(conferenceId);
+    this.assertManager(actor, row);
+    if (
+      !['INVITATION', 'DECISION_LETTER', 'COPYRIGHT', 'NOTIFICATION'].includes(input.kind) ||
+      !['en', 'fr'].includes(input.language)
+    ) {
+      throw new BadRequestException('Upload a PDF or Word file (max 10 MB)');
+    }
+    const filename = file.originalname.toLowerCase();
+    const byName =
+      filename.endsWith('.pdf') || filename.endsWith('.doc') || filename.endsWith('.docx');
+    const contentType = TEMPLATE_TYPES.has(file.mimetype)
+      ? file.mimetype
+      : filename.endsWith('.pdf')
+        ? 'application/pdf'
+        : filename.endsWith('.doc')
+          ? 'application/msword'
+          : filename.endsWith('.docx')
+            ? 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+            : '';
+    if ((!TEMPLATE_TYPES.has(file.mimetype) && !byName) || !contentType || file.size < 32 || file.size > 10 * 1024 * 1024) {
+      throw new BadRequestException('Upload a PDF or Word file (max 10 MB)');
+    }
+    const existing = await this.prisma.conferenceTemplate.findUnique({
+      where: {
+        conferenceId_kind_language: {
+          conferenceId,
+          kind: input.kind,
+          language: input.language,
+        },
+      },
+    });
+    const previous = existing ? parseTemplateFile(existing.body) : null;
+    const key = `conferences/${conferenceId}/templates/${input.kind}-${input.language}-${randomUUID()}`;
+    await this.storage.put(key, file.buffer, contentType);
+    const body = `${TEMPLATE_FILE_PREFIX}${JSON.stringify({
+      key,
+      name: file.originalname,
+      type: contentType,
+    })}`;
+    const subject = input.subject.trim() || file.originalname;
+    const template = await this.prisma.conferenceTemplate.upsert({
+      where: {
+        conferenceId_kind_language: {
+          conferenceId,
+          kind: input.kind,
+          language: input.language,
+        },
+      },
+      create: {
+        conferenceId,
+        kind: input.kind,
+        language: input.language,
+        subject,
+        body,
+      },
+      update: { subject, body },
+    });
+    if (previous?.key) {
+      await this.storage.remove(previous.key).catch(() => undefined);
+    }
+    return this.publicTemplate(template);
+  }
+
+  async downloadTemplateFile(actor: AuthenticatedUser, conferenceId: string, templateId: string) {
+    const row = await this.load(conferenceId);
+    this.assertManager(actor, row);
+    const template = row.templates.find((item) => item.id === templateId);
+    const meta = template ? parseTemplateFile(template.body) : null;
+    if (!meta) {
+      throw new NotFoundException('Template file not found');
+    }
+    const bytes = await this.storage.get(meta.key);
+    return { bytes, contentType: meta.type, name: meta.name };
+  }
+
+  private publicTemplate(template: {
+    id: string;
+    kind: string;
+    language: string;
+    subject: string;
+    body: string;
+  }) {
+    const file = parseTemplateFile(template.body);
     return {
       id: template.id,
       kind: template.kind,
       language: template.language,
       subject: template.subject,
-      body: template.body,
+      body: file ? '' : template.body,
+      file: file ? { name: file.name, contentType: file.type } : null,
     };
   }
 
@@ -457,6 +642,9 @@ export class ConferenceService {
     });
     if (!row || row.status !== 'PUBLISHED' || row.visibility !== 'PUBLIC') {
       throw new NotFoundException('Conference not found');
+    }
+    if (this.isCreatedAdmin(actor) || this.isSessionChairAccount(actor)) {
+      throw new ForbiddenException('Admin accounts cannot join public conferences');
     }
     const existing = row.memberships.find((item) => item.userId === actor.id);
     if (existing?.status === MembershipStatus.ACTIVE) {
@@ -681,6 +869,14 @@ export class ConferenceService {
     return row.memberships.find((item) => item.userId === actor.id) ?? null;
   }
 
+  private isCreatedAdmin(actor: AuthenticatedUser) {
+    return actor.profile.academicTitle === 'Admin';
+  }
+
+  private isSessionChairAccount(actor: AuthenticatedUser) {
+    return actor.profile.academicTitle === 'Session chair';
+  }
+
   private listed(
     conference: {
       id: string;
@@ -718,6 +914,18 @@ export class ConferenceService {
       return;
     }
     if (row.status === 'PUBLISHED' && row.visibility === 'PUBLIC') {
+      if (this.isCreatedAdmin(actor) || this.isSessionChairAccount(actor)) {
+        const assigned = this.membershipOf(actor, row);
+        if (
+          assigned &&
+          MANAGERS.has(assigned.role) &&
+          (assigned.status === MembershipStatus.ACTIVE ||
+            assigned.status === MembershipStatus.INVITED)
+        ) {
+          return;
+        }
+        throw new NotFoundException('Conference not found');
+      }
       return;
     }
     const membership = this.membershipOf(actor, row);
@@ -742,9 +950,6 @@ export class ConferenceService {
       !MANAGERS.has(membership.role)
     ) {
       throw new ForbiddenException('You cannot change this conference');
-    }
-    if (row.accessPasswordHash && actor.unlockedConferenceId !== row.id) {
-      throw new ForbiddenException('Enter the conference password');
     }
   }
 
@@ -778,7 +983,11 @@ export class ConferenceService {
     };
   }
 
-  private toDetail(actor: AuthenticatedUser, row: ConferenceRecord) {
+  private toDetail(
+    actor: AuthenticatedUser,
+    row: ConferenceRecord,
+    fee: ConferenceFee | null,
+  ) {
     const membership = this.membershipOf(actor, row);
     const isAdmin = actor.platformRole === PlatformRole.SYSTEM_ADMIN;
     const canManage =
@@ -793,7 +1002,9 @@ export class ConferenceService {
       status: row.status,
       visibility: row.visibility,
       paymentsEnabled: row.paymentsEnabled,
-      accessLocked: Boolean(row.accessPasswordHash),
+      registrationFee: fee?.amount ?? null,
+      registrationCurrency: fee?.currency ?? 'EUR',
+      accessLocked: false,
       canManage,
       canViewMembers,
       myMembership: membership
@@ -816,13 +1027,7 @@ export class ConferenceService {
           }))
         : [],
       templates: canManage
-        ? row.templates.map((template) => ({
-            id: template.id,
-            kind: template.kind,
-            language: template.language,
-            subject: template.subject,
-            body: template.body,
-          }))
+        ? row.templates.map((template) => this.publicTemplate(template))
         : [],
       members: canViewMembers
         ? row.memberships
@@ -834,6 +1039,7 @@ export class ConferenceService {
               status: item.status,
               firstName: item.user.profile?.firstName ?? '',
               lastName: item.user.profile?.lastName ?? '',
+              academicTitle: item.user.profile?.academicTitle ?? null,
             }))
         : [],
       invitations: canManage
@@ -847,6 +1053,25 @@ export class ConferenceService {
             }))
         : [],
     };
+  }
+
+  private async saveFee(
+    conferenceId: string,
+    input: { registrationFee?: number | null; registrationCurrency?: string },
+  ) {
+    if (input.registrationFee === undefined) {
+      return;
+    }
+    await writeConferenceFee(
+      this.prisma,
+      conferenceId,
+      input.registrationFee == null
+        ? null
+        : {
+            amount: input.registrationFee,
+            currency: input.registrationCurrency ?? 'EUR',
+          },
+    );
   }
 
   private writable(input: UpdateInput) {

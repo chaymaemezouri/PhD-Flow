@@ -1,20 +1,46 @@
 import { useQuery } from '@tanstack/react-query';
 import { Search } from 'lucide-react';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, Navigate, useSearchParams } from 'react-router';
-import { ChairAssignmentPanel } from '@/components/chair-assignment-panel';
-import { PaperWorkCard, type WorkPaper } from '@/components/paper-work-card';
+import { ConferenceWorkNav } from '@/components/conference-work-nav';
+import { PaperWorkQueueList, type WorkPaper } from '@/components/paper-work-card';
+import { PapersLayoutToggle } from '@/components/papers-layout-toggle';
+import { PapersLayoutView } from '@/components/papers-layout-view';
+import { ReviewQueueList, ReviewQueueToolbar } from '@/components/review-queue-list';
 import { focusStep, type PaperStep } from '@/components/step-bar';
 import { useCurrentUser } from '@/features/auth/use-account';
 import { canSubmitToConference } from '@/features/navigation/can-submit';
-import { homePathFor } from '@/features/navigation/home-path';
+import { homePathFor, isCreatedAdmin, isSessionChair } from '@/features/navigation/home-path';
 import { pickConference } from '@/features/navigation/pick-conference';
 import type { WorkspaceRole } from '@/features/navigation/modules';
+import {
+  adminBoardCounts,
+  matchesAdminBoard,
+  parseAdminBoard,
+  type AdminBoard,
+} from '@/features/papers/admin-board';
+import {
+  readPapersLayout,
+  writePapersLayout,
+  type PapersLayout,
+} from '@/features/papers/papers-layout';
+import {
+  loadMyReviews,
+  parseReviewBoard,
+  reviewQueueCounts,
+  reviewTodoCount,
+  visibleReviews,
+  type ReviewBoard,
+} from '@/features/reviews/review-queue';
 import { apiErrorMessage, apiFetch } from '@/services/api';
 
 interface PaperSummary extends WorkPaper {
   steps?: PaperStep[];
+  scopeStatus?: string;
+  doi?: string | null;
+  assignmentCount?: number;
+  decision?: { outcome: string; status: string } | null;
 }
 
 function rank(paper: PaperSummary): number {
@@ -67,11 +93,15 @@ export function WorkspaceHome() {
     memberships.data
       ?.filter((item) => item.membershipStatus === 'ACTIVE')
       .map((item) => item.role) ?? [];
-  const manager = roles.some((role) => role === 'CHAIR' || role === 'ADMINISTRATOR');
-  if (manager && !account.data?.unlockedConferenceId) {
-    return <Navigate to="/workspace/conference-access" replace />;
-  }
-  return <Navigate to={homePathFor(roles)} replace />;
+  return (
+    <Navigate
+      to={homePathFor(roles, {
+        createdAdmin: isCreatedAdmin(account.data?.profile?.academicTitle),
+        sessionChair: isSessionChair(account.data?.profile?.academicTitle),
+      })}
+      replace
+    />
+  );
 }
 
 export function RoleDashboardPage({ role }: { role: WorkspaceRole }) {
@@ -107,9 +137,15 @@ function AuthorDashboard() {
       ).length ?? 0,
   };
   const visiblePapers =
-    papers.data?.filter((paper) =>
-      needle.length === 0 ? true : paper.title.toLowerCase().includes(needle),
-    ) ?? [];
+    papers.data?.filter((paper) => {
+      if (needle.length === 0) {
+        return true;
+      }
+      return [paper.title, paper.publicId ?? '', paper.conferenceName ?? '']
+        .join(' ')
+        .toLowerCase()
+        .includes(needle);
+    }) ?? [];
   const ordered = [...visiblePapers].sort((left, right) => rank(left) - rank(right));
   const boardPapers = ordered.filter((paper) => {
     const focus = focusStep(paper.steps ?? []);
@@ -269,30 +305,37 @@ function AuthorDashboard() {
             </p>
           </div>
         ) : null}
-        <ul className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-          {boardPapers.map((paper) => (
-            <li key={paper.id}>
-              <PaperWorkCard paper={paper} />
-            </li>
-          ))}
-        </ul>
+        {boardPapers.length > 0 ? (
+          <div className="mt-4">
+            <PaperWorkQueueList papers={boardPapers} />
+          </div>
+        ) : null}
       </section>
     </div>
   );
 }
 
+const CHAIR_FILTERS: { id: AdminBoard; label: string }[] = [
+  { id: 'all', label: 'home.boardAll' },
+  { id: 'todo', label: 'home.boardTodo' },
+  { id: 'scope', label: 'home.boardScope' },
+  { id: 'reviews', label: 'home.boardReviews' },
+  { id: 'decisions', label: 'home.boardDecisions' },
+  { id: 'registration', label: 'home.boardRegistration' },
+  { id: 'presentation', label: 'home.boardPresentation' },
+  { id: 'camera', label: 'home.boardCamera' },
+  { id: 'copyright', label: 'home.boardCopyright' },
+  { id: 'clear', label: 'home.boardClear' },
+  { id: 'published', label: 'home.boardPublished' },
+  { id: 'blocked', label: 'home.boardBlocked' },
+];
+
 function ChairDashboard({ variant = 'admin' }: { variant?: 'admin' | 'committee' }) {
   const { t } = useTranslation();
   const [params, setParams] = useSearchParams();
   const [query, setQuery] = useState('');
-  const boardParam = params.get('board');
-  const board =
-    boardParam === 'waiting' ||
-    boardParam === 'blocked' ||
-    boardParam === 'decisions' ||
-    boardParam === 'clear'
-      ? boardParam
-      : 'all';
+  const [layout, setLayout] = useState<PapersLayout>(() => readPapersLayout());
+  const board = parseAdminBoard(params.get('board'));
   const needle = query.trim().toLowerCase();
   const memberships = useQuery({ queryKey: ['conferences'], queryFn: loadMemberships });
   const managedList =
@@ -331,50 +374,18 @@ function ChairDashboard({ variant = 'admin' }: { variant?: 'admin' | 'committee'
     },
     enabled: Boolean(managed),
   });
-  const byStatus = stats.data?.papersByStatus ?? {};
   const rows = papers.data ?? [];
-  const decisionCount = rows.filter(
-    (paper) => focusStep(paper.steps ?? [])?.key === 'notification',
-  ).length;
-  const waitingCount = rows.filter(
-    (paper) => focusStep(paper.steps ?? [])?.state === 'pending',
-  ).length;
-  const blockedCount = rows.filter(
-    (paper) => focusStep(paper.steps ?? [])?.state === 'failed',
-  ).length;
-  const clearCount = rows.filter(
-    (paper) => focusStep(paper.steps ?? []) === null && paper.status !== 'DRAFT',
-  ).length;
+  const counts = adminBoardCounts(rows);
   const boardPapers = [...rows]
     .filter((paper) =>
-      needle.length === 0 ? true : paper.title.toLowerCase().includes(needle),
+      needle.length === 0
+        ? true
+        : [paper.title, paper.publicId ?? ''].join(' ').toLowerCase().includes(needle),
     )
     .sort((left, right) => rank(left) - rank(right))
-    .filter((paper) => {
-      const focus = focusStep(paper.steps ?? []);
-      if (board === 'waiting') {
-        return focus?.state === 'pending';
-      }
-      if (board === 'blocked') {
-        return focus?.state === 'failed';
-      }
-      if (board === 'decisions') {
-        return focus?.key === 'notification';
-      }
-      if (board === 'clear') {
-        return focus === null && paper.status !== 'DRAFT';
-      }
-      return true;
-    });
-  const filters = [
-    ['all', 'home.boardAll', rows.length],
-    ['waiting', 'home.boardWaiting', waitingCount],
-    ['decisions', 'home.boardDecisions', decisionCount],
-    ['blocked', 'home.boardBlocked', blockedCount],
-    ['clear', 'home.boardClear', clearCount],
-  ] as const;
+    .filter((paper) => matchesAdminBoard(paper, board));
 
-  function setBoard(next: string) {
+  function setBoard(next: AdminBoard) {
     const nextParams = new URLSearchParams(params);
     if (next === 'all') {
       nextParams.delete('board');
@@ -387,39 +398,37 @@ function ChairDashboard({ variant = 'admin' }: { variant?: 'admin' | 'committee'
     setParams(nextParams);
   }
 
-  return (
-    <div className="space-y-5 lg:space-y-3">
-      <div className="flex flex-wrap items-center gap-2">
-        {managed ? (
-          <Link
-            to={`/workspace/conferences/${managed.id}`}
-            className="rounded-full bg-[#f4f7ff] px-3 py-2 text-sm font-bold text-[#3d4fd4] no-underline lg:px-2.5 lg:py-1.5 lg:text-xs"
-          >
-            {t('home.manage')}
-          </Link>
-        ) : null}
+  function chooseLayout(next: PapersLayout) {
+    setLayout(next);
+    writePapersLayout(next);
+  }
+
+  if (!memberships.isPending && managedList.length === 0) {
+    return (
+      <div className="rounded-2xl border border-[#e4e7ee] bg-white p-5">
+        <h1 className="text-xl font-extrabold text-[#1c2744]">{t('home.overview')}</h1>
+        <p className="mt-2 text-sm text-[#5c6578]">{t('home.noManagedConference')}</p>
         <Link
-          to="/workspace/reviews"
-          className="rounded-full bg-[#f4f7ff] px-3 py-2 text-sm font-bold text-[#3d4fd4] no-underline lg:px-2.5 lg:py-1.5 lg:text-xs"
+          to="/workspace/conferences"
+          className="mt-4 inline-flex text-sm font-extrabold text-[#3d4fd4] no-underline"
         >
-          {t('nav.reviews')}
+          {t('nav.conferences')}
         </Link>
-        <Link
-          to="/workspace/session-chair"
-          className="rounded-full bg-[#f4f7ff] px-3 py-2 text-sm font-bold text-[#3d4fd4] no-underline lg:px-2.5 lg:py-1.5 lg:text-xs"
-        >
-          {t('nav.sessionChair')}
-        </Link>
-        <button
-          type="button"
-          onClick={() => setBoard('decisions')}
-          className="rounded-full bg-[#5d74ff] px-3 py-2 text-sm font-bold text-white lg:px-2.5 lg:py-1.5 lg:text-xs"
-        >
-          {t('home.decisions')}
-          {decisionCount > 0 ? ` · ${decisionCount}` : ''}
-        </button>
       </div>
-      <p className="text-sm text-[#5c6578]">
+    );
+  }
+
+  return (
+    <div className="space-y-5 lg:space-y-4">
+      {managed ? (
+        <ConferenceWorkNav
+          conferenceId={managed.id}
+          conferenceName={managed.name}
+          role={managed.role}
+          current="papers"
+        />
+      ) : null}
+      <p className="max-w-2xl text-sm text-[#5c6578]">
         {t(variant === 'committee' ? 'home.committeeIntro' : 'home.chairIntro')}
       </p>
       {managedList.length > 1 ? (
@@ -443,30 +452,28 @@ function ChairDashboard({ variant = 'admin' }: { variant?: 'admin' | 'committee'
       ) : null}
       <section className="grid grid-cols-2 gap-2 sm:gap-3 xl:grid-cols-4">
         <Metric
+          tone="amber"
+          label={t('home.boardTodo')}
+          value={papers.data ? counts.todo : '—'}
+          hint={t('home.chairTodoHint')}
+          active={board === 'todo'}
+          onClick={() => setBoard('todo')}
+        />
+        <Metric
           tone="blue"
-          label={t('home.submitted')}
-          value={
-            stats.data
-              ? (byStatus.SUBMITTED ?? 0)
-              : rows.filter((paper) => paper.status === 'SUBMITTED').length || '—'
-          }
-          hint={t('home.chairPapers')}
+          label={t('home.boardDecisions')}
+          value={papers.data ? counts.decisions : '—'}
+          hint={t('home.boardReviews')}
+          active={board === 'decisions'}
+          onClick={() => setBoard('decisions')}
         />
         <Metric
           tone="green"
-          label={t('home.drafts')}
-          value={
-            stats.data
-              ? (byStatus.DRAFT ?? 0)
-              : rows.filter((paper) => paper.status === 'DRAFT').length || '—'
-          }
-          hint={managed?.name ?? '—'}
-        />
-        <Metric
-          tone="amber"
-          label={t('workflow.openReviews')}
-          value={stats.data ? stats.data.openReviews : '—'}
-          hint={t('home.openReviewsHint')}
+          label={t('home.boardClear')}
+          value={papers.data ? counts.clear : '—'}
+          hint={t('home.chairReadyHint')}
+          active={board === 'clear'}
+          onClick={() => setBoard('clear')}
         />
         <Metric
           tone="red"
@@ -475,10 +482,17 @@ function ChairDashboard({ variant = 'admin' }: { variant?: 'admin' | 'committee'
           hint={t('home.overdueHint')}
         />
       </section>
-      {managed ? (
-        <section className="rounded-2xl border border-[#e4e7ee] bg-white p-3 sm:p-5">
-          <ChairAssignmentPanel conferenceId={managed.id} />
-        </section>
+      {managed && canStats && (stats.data?.openReviews ?? 0) > 0 ? (
+        <p className="text-xs font-semibold text-[#5c6578] sm:text-sm">
+          {t('workflow.openReviews')}: {stats.data?.openReviews ?? 0}
+          {' · '}
+          <Link
+            to={`/workspace/reviews?conference=${managed.id}`}
+            className="font-extrabold text-[#3d4fd4] no-underline"
+          >
+            {t('home.openReviewsPage')}
+          </Link>
+        </p>
       ) : null}
       <section className="space-y-3 rounded-2xl border border-[#e4e7ee] bg-white p-3 sm:space-y-4 sm:p-5">
         <div className="flex flex-col gap-2.5 sm:flex-row sm:items-end sm:justify-between sm:gap-3">
@@ -488,28 +502,31 @@ function ChairDashboard({ variant = 'admin' }: { variant?: 'admin' | 'committee'
               {t('home.chairBoardHint')}
             </p>
           </div>
-          <label className="relative block w-full sm:max-w-xs">
-            <Search className="pointer-events-none absolute top-1/2 left-3 size-3.5 -translate-y-1/2 text-[#8b909a] sm:size-4" />
-            <input
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder={t('home.searchPapers')}
-              className="w-full rounded-xl border border-[#d8dce6] bg-[#f6f7fb] py-2 pr-3 pl-8 text-xs font-semibold text-[#1c2744] outline-none focus:border-[#3d4fd4] sm:py-2.5 sm:pl-9 sm:text-sm"
-            />
-          </label>
+          <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
+            <PapersLayoutToggle layout={layout} onChange={chooseLayout} />
+            <label className="relative block w-full sm:max-w-xs">
+              <Search className="pointer-events-none absolute top-1/2 left-3 size-3.5 -translate-y-1/2 text-[#8b909a] sm:size-4" />
+              <input
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder={t('home.searchPapers')}
+                className="w-full rounded-xl border border-[#d8dce6] bg-[#f6f7fb] py-2 pr-3 pl-8 text-xs font-semibold text-[#1c2744] outline-none focus:border-[#3d4fd4] sm:py-2.5 sm:pl-9 sm:text-sm"
+              />
+            </label>
+          </div>
         </div>
         <div className="touch-scroll flex gap-1.5 overflow-x-auto pb-1 sm:gap-2">
-          {filters.map(([id, label, count]) => (
+          {CHAIR_FILTERS.map((item) => (
             <button
-              key={id}
+              key={item.id}
               type="button"
-              aria-pressed={board === id}
-              onClick={() => setBoard(id)}
+              aria-pressed={board === item.id}
+              onClick={() => setBoard(item.id)}
               className={`shrink-0 rounded-full px-2.5 py-1.5 text-[11px] font-extrabold sm:px-3 sm:py-2 sm:text-sm ${
-                board === id ? 'bg-[#3d4fd4] text-white' : 'bg-[#f6f7fb] text-[#5c6578]'
+                board === item.id ? 'bg-[#3d4fd4] text-white' : 'bg-[#f6f7fb] text-[#5c6578]'
               }`}
             >
-              {t(label)} · {count}
+              {t(item.label)} · {counts[item.id]}
             </button>
           ))}
         </div>
@@ -519,13 +536,13 @@ function ChairDashboard({ variant = 'admin' }: { variant?: 'admin' | 'committee'
         {!papers.isPending && boardPapers.length === 0 ? (
           <p className="text-xs text-[#5c6370] sm:text-sm">{t('home.chairEmpty')}</p>
         ) : null}
-        <ul className="grid gap-2 sm:grid-cols-2 sm:gap-3 xl:grid-cols-3">
-          {boardPapers.map((paper) => (
-            <li key={paper.id}>
-              <PaperWorkCard paper={paper} />
-            </li>
-          ))}
-        </ul>
+        {!papers.isPending && boardPapers.length > 0 ? (
+          layout === 'list' ? (
+            <PaperWorkQueueList papers={boardPapers} />
+          ) : (
+            <PapersLayoutView layout={layout} papers={boardPapers} />
+          )
+        ) : null}
       </section>
     </div>
   );
@@ -533,106 +550,146 @@ function ChairDashboard({ variant = 'admin' }: { variant?: 'admin' | 'committee'
 
 function ReviewerDashboard() {
   const { t } = useTranslation();
-  const [board, setBoard] = useState<'all' | 'invited' | 'active' | 'done'>('all');
+  const [params, setParams] = useSearchParams();
+  const [query, setQuery] = useState('');
+  const board = parseReviewBoard(params.get('board'));
   const memberships = useQuery({ queryKey: ['conferences'], queryFn: loadMemberships });
-  const reviews = useQuery({
-    queryKey: ['reviews'],
+  const reviews = useQuery({ queryKey: ['reviews'], queryFn: loadMyReviews });
+  const presentations = useQuery({
+    queryKey: ['presentations-mine'],
     queryFn: async () => {
-      const response = await apiFetch('/api/v1/reviews/mine');
+      const response = await apiFetch('/api/v1/presentations/mine');
       if (!response.ok) {
         throw new Error(await apiErrorMessage(response));
       }
       return response.json() as Promise<
         {
-          id: string;
           paperId: string;
-          paperTitle: string;
+          conferenceId?: string;
+          title: string;
           publicId: string | null;
-          status: string;
-          score: number | null;
-          expiresAt: string;
+          conferenceName: string;
+          role: 'CHAIR' | 'REVIEWER';
+          slidesStatus: string;
+          presented: boolean;
+          schedule: {
+            sessionTitle: string;
+            roomName: string;
+            startsAt: string;
+            endsAt: string;
+            modality: 'IN_PERSON' | 'ONLINE';
+          } | null;
         }[]
       >;
     },
   });
-  const conference = memberships.data?.find((item) => item.membershipStatus === 'ACTIVE');
-  const items = reviews.data ?? [];
-  const invited = items.filter((item) => item.status === 'INVITED');
-  const active = items.filter(
-    (item) =>
-      item.status === 'ACCEPTED' ||
-      item.status === 'IN_PROGRESS' ||
-      item.status === 'OVERDUE',
+  const reviewerConferences =
+    memberships.data?.filter(
+      (item) => item.membershipStatus === 'ACTIVE' && item.role === 'REVIEWER',
+    ) ?? [];
+  const conference = pickConference(
+    reviewerConferences.length > 0 ? reviewerConferences : memberships.data,
+    params.get('conference'),
   );
-  const done = items.filter((item) => item.status === 'COMPLETED');
-  const visible =
-    board === 'invited'
-      ? invited
-      : board === 'active'
-        ? active
-        : board === 'done'
-          ? done
-          : items;
-  const filters = [
-    ['all', 'home.boardAll', items.length],
-    ['invited', 'home.toAccept', invited.length],
-    ['active', 'home.inProgress', active.length],
-    ['done', 'home.returned', done.length],
-  ] as const;
+  const conferenceId = conference?.id;
+  const scoped = useMemo(
+    () =>
+      (reviews.data ?? []).filter((item) =>
+        conferenceId ? item.conferenceId === conferenceId : true,
+      ),
+    [conferenceId, reviews.data],
+  );
+  const counts = useMemo(() => reviewQueueCounts(scoped), [scoped]);
+  const visible = useMemo(
+    () => visibleReviews(scoped, board, query),
+    [board, query, scoped],
+  );
+  const myTalks = (presentations.data ?? []).filter(
+    (item) =>
+      item.role === 'REVIEWER' &&
+      (!conferenceId || item.conferenceId === conferenceId || !item.conferenceId),
+  );
+  const overdueCount = scoped.filter((item) => item.status === 'OVERDUE').length;
 
-  function hrefFor(item: (typeof items)[number]) {
-    if (
-      item.status === 'ACCEPTED' ||
-      item.status === 'IN_PROGRESS' ||
-      item.status === 'OVERDUE' ||
-      item.status === 'COMPLETED'
-    ) {
-      return `/workspace/submissions/${item.paperId}`;
+  function setBoard(next: ReviewBoard) {
+    const nextParams = new URLSearchParams(params);
+    if (next === 'all') {
+      nextParams.delete('board');
+    } else {
+      nextParams.set('board', next);
     }
-    return `/workspace/reviews#${item.id}`;
+    if (conferenceId) {
+      nextParams.set('conference', conferenceId);
+    }
+    setParams(nextParams);
   }
 
   return (
-    <div className="space-y-5 lg:space-y-3">
-      <div className="flex flex-wrap items-center gap-2">
-        <Link
-          to="/workspace/reviews"
-          className="rounded-full bg-[#5d74ff] px-3 py-2 text-sm font-bold text-white no-underline lg:px-2.5 lg:py-1.5 lg:text-xs"
-        >
-          {t('home.reviewQueue')}
-        </Link>
-        <Link
-          to="/workspace/session-chair"
-          className="rounded-full bg-[#f4f7ff] px-3 py-2 text-sm font-bold text-[#3d4fd4] no-underline lg:px-2.5 lg:py-1.5 lg:text-xs"
-        >
-          {t('nav.sessionChair')}
-        </Link>
+    <div className="space-y-5 lg:space-y-4">
+      <div>
+        <h1 className="text-xl font-extrabold text-[#1c2744] sm:text-2xl">
+          {conference?.name ?? t('home.reviewQueue')}
+        </h1>
+        <p className="mt-1 max-w-2xl text-sm text-[#5c6578]">{t('home.reviewerIntro')}</p>
       </div>
-      <p className="text-sm text-[#5c6578]">{t('home.reviewerIntro')}</p>
+      {reviewerConferences.length > 1 ? (
+        <div className="flex flex-wrap gap-1.5 sm:gap-2">
+          {reviewerConferences.map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              aria-pressed={item.id === conferenceId}
+              className={`rounded-full px-2.5 py-1.5 text-xs font-bold sm:px-3 sm:py-2 sm:text-sm ${
+                item.id === conferenceId
+                  ? 'bg-[#5d74ff]/15 text-[#3d4fd4]'
+                  : 'bg-white text-[#5c6578]'
+              }`}
+              onClick={() => setParams({ conference: item.id })}
+            >
+              {item.name}
+            </button>
+          ))}
+        </div>
+      ) : null}
       <section className="grid grid-cols-2 gap-2 sm:gap-3 xl:grid-cols-4">
         <Metric
-          tone="blue"
-          label={t('home.invitations')}
-          value={reviews.data ? items.length : '—'}
-          hint={conference?.name ?? '—'}
+          tone="amber"
+          label={t('home.boardTodo')}
+          value={reviews.data ? reviewTodoCount(counts) : '—'}
+          hint={t('home.reviewTodoHint')}
+          onClick={() =>
+            setBoard(
+              counts.invited > 0 ? 'invited' : counts.active > 0 ? 'active' : 'all',
+            )
+          }
         />
         <Metric
-          tone="amber"
+          tone="blue"
           label={t('home.toAccept')}
-          value={reviews.data ? invited.length : '—'}
+          value={reviews.data ? counts.invited : '—'}
           hint={t('reviews.statuses.INVITED')}
+          active={board === 'invited'}
+          onClick={() => setBoard('invited')}
         />
         <Metric
           tone="green"
           label={t('home.inProgress')}
-          value={reviews.data ? active.length : '—'}
-          hint={t('home.openReviewsHint')}
+          value={reviews.data ? counts.active : '—'}
+          hint={
+            overdueCount > 0
+              ? t('home.overdueHint')
+              : t('home.openReviewsHint')
+          }
+          active={board === 'active'}
+          onClick={() => setBoard('active')}
         />
         <Metric
           tone="red"
           label={t('home.returned')}
-          value={reviews.data ? done.length : '—'}
+          value={reviews.data ? counts.done : '—'}
           hint={t('reviews.statuses.COMPLETED')}
+          active={board === 'done'}
+          onClick={() => setBoard('done')}
         />
       </section>
       <section className="space-y-3 rounded-2xl border border-[#e4e7ee] bg-white p-3 sm:space-y-4 sm:p-5">
@@ -642,70 +699,61 @@ function ReviewerDashboard() {
             {t('home.reviewBoardHint')}
           </p>
         </div>
-        <div className="touch-scroll flex gap-1.5 overflow-x-auto pb-1 sm:gap-2">
-          {filters.map(([id, label, count]) => (
-            <button
-              key={id}
-              type="button"
-              aria-pressed={board === id}
-              onClick={() => setBoard(id)}
-              className={`shrink-0 rounded-full px-2.5 py-1.5 text-[11px] font-extrabold sm:px-3 sm:py-2 sm:text-sm ${
-                board === id ? 'bg-[#3d4fd4] text-white' : 'bg-[#f6f7fb] text-[#5c6578]'
-              }`}
-            >
-              {t(label)} · {count}
-            </button>
-          ))}
-        </div>
+        <ReviewQueueToolbar
+          board={board}
+          onBoard={setBoard}
+          counts={counts}
+          query={query}
+          onQuery={setQuery}
+        />
         {reviews.isPending ? (
           <p className="text-sm text-[#8b909a]">{t('common.loading')}</p>
-        ) : null}
-        {!reviews.isPending && visible.length === 0 ? (
-          <p className="text-sm text-[#5c6370]">{t('home.reviewEmpty')}</p>
-        ) : null}
-        <ul className="grid gap-3 md:grid-cols-2">
-          {visible.map((item) => (
-            <li key={item.id}>
-              <Link
-                to={hrefFor(item)}
-                className="flex h-full flex-col rounded-xl border border-[#e4e7ee] bg-[#f6f7fb] p-3 text-[#1c2744] no-underline sm:p-4"
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <p className="text-xs font-bold tracking-wide text-[#6d7585]">
-                    {item.publicId ?? t('reviews.title')}
+        ) : (
+          <ReviewQueueList
+            items={visible}
+            empty={
+              scoped.length === 0 ? t('home.reviewEmpty') : t('reviews.noneMatch')
+            }
+          />
+        )}
+      </section>
+      <section className="space-y-3 rounded-2xl border border-[#e4e7ee] bg-white p-3 sm:space-y-4 sm:p-5">
+        <div>
+          <h2 className="text-base font-extrabold sm:text-lg">
+            {t('dossier.myPresentations')}
+          </h2>
+          <p className="mt-0.5 text-xs text-[#5c6578] sm:mt-1 sm:text-sm">
+            {t('dossier.myPresentationsHint')}
+          </p>
+        </div>
+        {presentations.isPending ? (
+          <p className="text-sm text-[#8b909a]">{t('common.loading')}</p>
+        ) : myTalks.length === 0 ? (
+          <p className="text-sm text-[#5c6578]">{t('home.reviewPresentationsEmpty')}</p>
+        ) : (
+          <ul className="grid gap-2">
+            {myTalks.map((item) => (
+              <li key={item.paperId}>
+                <Link
+                  to={`/workspace/submissions/${item.paperId}`}
+                  className="block rounded-2xl border border-[#e4e7ee] bg-[#f6f7fb] px-4 py-3 no-underline"
+                >
+                  <p className="text-xs font-bold text-[#8b909a]">
+                    {item.publicId ?? '—'} · {t('dossier.presentationRoleReviewer')}
                   </p>
-                  <span
-                    className={`shrink-0 rounded-md px-2 py-0.5 text-xs font-bold ${
-                      item.status === 'COMPLETED'
-                        ? 'bg-[#2fbf71]/12 text-[#1c9a57]'
-                        : item.status === 'OVERDUE' || item.status === 'DECLINED'
-                          ? 'bg-[#e35d5d]/10 text-[#c54545]'
-                          : item.status === 'INVITED'
-                            ? 'bg-[#f0a04b]/14 text-[#9a6410]'
-                            : 'bg-[#5d74ff]/12 text-[#3d4fd4]'
-                    }`}
-                  >
-                    {t(`reviews.statuses.${item.status}`, { defaultValue: item.status })}
-                  </span>
-                </div>
-                <h3 className="mt-2 truncate text-base font-extrabold">
-                  {item.paperTitle}
-                </h3>
-                <p className="mt-1 text-xs font-semibold text-[#8b909a]">
-                  {new Date(item.expiresAt).toLocaleDateString()}
-                  {item.score !== null ? ` · ${item.score}/10` : ''}
-                </p>
-                <span className="mt-4 inline-flex min-h-9 items-center justify-center rounded-full bg-white px-3 text-xs font-extrabold text-[#3d4fd4]">
-                  {item.status === 'INVITED'
-                    ? t('reviews.accept')
-                    : item.status === 'COMPLETED'
-                      ? t('reviews.openPaper')
-                      : t('home.open')}
-                </span>
-              </Link>
-            </li>
-          ))}
-        </ul>
+                  <p className="mt-1 text-sm font-extrabold text-[#1c2744]">{item.title}</p>
+                  <p className="mt-1 text-xs font-semibold text-[#5c6578]">
+                    {item.schedule
+                      ? `${item.schedule.sessionTitle} · ${item.schedule.roomName} · ${new Date(
+                          item.schedule.startsAt,
+                        ).toLocaleString()}`
+                      : t('dossier.waitingSchedule')}
+                  </p>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        )}
       </section>
     </div>
   );
@@ -716,11 +764,15 @@ function Metric({
   value,
   hint,
   tone,
+  active,
+  onClick,
 }: {
   label: string;
   value: number | string;
   hint: string;
   tone: 'blue' | 'green' | 'amber' | 'red';
+  active?: boolean;
+  onClick?: () => void;
 }) {
   const color = {
     blue: 'bg-[#5d74ff]/12 text-[#3d4fd4]',
@@ -728,15 +780,24 @@ function Metric({
     amber: 'bg-[#f0a04b]/16 text-[#9a6410]',
     red: 'bg-[#e35d5d]/12 text-[#c54545]',
   }[tone];
-  return (
-    <div
-      className={`metric-card rounded-[24px] px-5 py-4 lg:rounded-lg lg:px-2.5 lg:py-2 ${color}`}
-    >
+  const className = `metric-card w-full rounded-[24px] px-5 py-4 text-left lg:rounded-lg lg:px-2.5 lg:py-2 ${color} ${
+    active ? 'ring-2 ring-[#3d4fd4]/40' : ''
+  }`;
+  const body = (
+    <>
       <dt className="text-sm font-extrabold opacity-90 lg:text-[10px]">{label}</dt>
       <dd className="mt-1 text-4xl font-extrabold tracking-tight lg:mt-0 lg:text-xl">
         {value}
       </dd>
       <p className="mt-2 text-xs font-bold opacity-90 lg:mt-0.5 lg:text-[9px]">{hint}</p>
-    </div>
+    </>
   );
+  if (onClick) {
+    return (
+      <button type="button" onClick={onClick} className={className}>
+        {body}
+      </button>
+    );
+  }
+  return <div className={className}>{body}</div>;
 }

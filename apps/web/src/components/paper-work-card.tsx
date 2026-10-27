@@ -86,6 +86,70 @@ const toneStyles = {
   },
 } as const;
 
+const actionStyles = {
+  alert: 'bg-[#e35d5d] text-white',
+  wait: 'bg-[#f0a04b] text-white',
+  done: 'bg-[#eef2ff] text-[#3d4fd4]',
+} as const;
+
+export function PaperWorkQueueList({ papers }: { papers: WorkPaper[] }) {
+  const { t } = useTranslation();
+
+  return (
+    <ul className="divide-y divide-[#eef1f6] overflow-hidden rounded-2xl border border-[#e4e7ee] bg-[#fafbfe]">
+      {papers.map((paper) => {
+        const meta = paperWorkMeta(paper, t);
+        const styles = toneStyles[meta.tone];
+        return (
+          <li key={paper.id}>
+            <Link
+              to={meta.href}
+              className="relative flex items-center gap-3 py-3.5 pl-5 pr-3 text-[#1c2744] no-underline hover:bg-white sm:gap-4 sm:px-5 sm:pl-6"
+            >
+              <span
+                className={`absolute inset-y-3 left-0 w-1 rounded-r-full ${styles.bar}`}
+                aria-hidden
+              />
+              <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <p className="text-[11px] font-extrabold tracking-wide text-[#8b909a]">
+                    {paper.publicId ?? t('papers.draft')}
+                  </p>
+                  <span
+                    className={`rounded-md px-2 py-0.5 text-[11px] font-extrabold ${styles.badge}`}
+                  >
+                    {meta.statusLabel}
+                  </span>
+                </div>
+                {paper.conferenceName ? (
+                  <p className="mt-1 truncate text-[11px] font-bold text-[#8b909a]">
+                    {paper.conferenceName}
+                  </p>
+                ) : null}
+                <h3 className="mt-1 truncate text-sm font-extrabold sm:text-base">
+                  {paper.title}
+                </h3>
+                <p className={`mt-1 text-xs font-semibold sm:text-sm ${styles.text}`}>
+                  {meta.label}
+                </p>
+                <p className="mt-1 text-xs font-semibold text-[#8b909a]">
+                  {meta.stepName} · {meta.done}/{meta.total}
+                </p>
+              </div>
+              <span
+                className={`inline-flex min-h-9 shrink-0 items-center justify-center gap-1 whitespace-nowrap rounded-full px-3 text-[11px] font-extrabold sm:min-h-10 sm:px-4 sm:text-xs ${actionStyles[meta.tone]}`}
+              >
+                {t('papers.open')}
+                <ArrowUpRight className="size-3.5" />
+              </span>
+            </Link>
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
 export function PaperWorkCard({ paper }: { paper: WorkPaper }) {
   const { t } = useTranslation();
   const meta = paperWorkMeta(paper, t);

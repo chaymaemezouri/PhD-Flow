@@ -8,6 +8,7 @@ import {
   Patch,
   Post,
   Put,
+  Query,
   Req,
   Res,
   StreamableFile,
@@ -92,16 +93,23 @@ export class PaperController {
     @Req() request: AuthenticatedRequest,
     @Param('id', ParseUUIDPipe) id: string,
     @UploadedFile() file: Express.Multer.File | undefined,
+    @Query('as') asQuery?: string,
   ) {
+    const as = asQuery === 'ABSTRACT' ? 'ABSTRACT' : 'FULL';
     if (!file) {
-      return this.papers.storeManuscript(request.user!, id, {
-        originalname: '',
-        mimetype: '',
-        size: 0,
-        buffer: Buffer.alloc(0),
-      });
+      return this.papers.storeManuscript(
+        request.user!,
+        id,
+        {
+          originalname: '',
+          mimetype: '',
+          size: 0,
+          buffer: Buffer.alloc(0),
+        },
+        as,
+      );
     }
-    return this.papers.storeManuscript(request.user!, id, file);
+    return this.papers.storeManuscript(request.user!, id, file, as);
   }
 
   @Get('papers/:id/manuscript')

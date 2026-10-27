@@ -15,6 +15,7 @@ export interface PaperFileInfo {
   originalName: string;
   contentType?: string | null;
   sizeBytes?: number | null;
+  stateLabel?: string | null;
 }
 
 function filePath(paperId: string, kind: string) {
@@ -32,7 +33,9 @@ function isPdf(file: PaperFileInfo) {
     file.kind === 'CAMERA_READY' ||
     file.kind === 'SIMILARITY' ||
     file.kind === 'MANUSCRIPT' ||
-    file.kind === 'COPYRIGHT'
+    file.kind === 'ABSTRACT' ||
+    file.kind === 'COPYRIGHT' ||
+    file.kind === 'PAYMENT_PROOF'
   );
 }
 
@@ -51,9 +54,15 @@ function isSlides(file: PaperFileInfo) {
   );
 }
 
+function pdfCanPreview(buffer: ArrayBuffer) {
+  const text = new TextDecoder('latin1').decode(buffer);
+  return text.startsWith('%PDF') && /\/Type\s*\/Page(?!s)/.test(text);
+}
+
 function usePaperFileUrl(paperId: string, kind: string, asPdf: boolean, enabled: boolean) {
   const [url, setUrl] = useState<string | null>(null);
   const [failed, setFailed] = useState(false);
+  const [previewable, setPreviewable] = useState(false);
   const [tick, setTick] = useState(0);
 
   useEffect(() => {
@@ -64,6 +73,7 @@ function usePaperFileUrl(paperId: string, kind: string, asPdf: boolean, enabled:
     let objectUrl: string | null = null;
     setFailed(false);
     setUrl(null);
+    setPreviewable(false);
     void apiFetch(filePath(paperId, kind))
       .then(async (response) => {
         if (!response.ok) {
@@ -78,8 +88,11 @@ function usePaperFileUrl(paperId: string, kind: string, asPdf: boolean, enabled:
           asPdf || headerType.includes('pdf')
             ? 'application/pdf'
             : headerType || 'application/octet-stream';
+        const canShow =
+          type.startsWith('image/') || (type.includes('pdf') && pdfCanPreview(buffer));
         objectUrl = URL.createObjectURL(new Blob([buffer], { type }));
         if (active) {
+          setPreviewable(canShow);
           setUrl(objectUrl);
         } else {
           URL.revokeObjectURL(objectUrl);
@@ -89,6 +102,7 @@ function usePaperFileUrl(paperId: string, kind: string, asPdf: boolean, enabled:
         if (active) {
           setFailed(true);
           setUrl(null);
+          setPreviewable(false);
         }
       });
     return () => {
@@ -102,6 +116,7 @@ function usePaperFileUrl(paperId: string, kind: string, asPdf: boolean, enabled:
   return {
     url,
     failed,
+    previewable,
     retry: () => setTick((value) => value + 1),
   };
 }
@@ -139,7 +154,7 @@ export function PaperFileThumb({
   const pdf = isPdf(file);
   const image = isImage(file);
   const slides = isSlides(file);
-  const { url, failed, retry } = usePaperFileUrl(
+  const { url, failed, previewable, retry } = usePaperFileUrl(
     paperId,
     file.kind,
     pdf && !image,
@@ -178,13 +193,18 @@ export function PaperFileThumb({
           <FileGlyph image={image} slides={slides} />
         </span>
         <span className="min-w-0 flex-1">
-          <span className="flex items-center gap-2">
+          <span className="flex flex-wrap items-center gap-2">
             <span className="truncate text-xs font-extrabold uppercase tracking-wide text-[#3d4fd4]">
               {label}
             </span>
             <span className="shrink-0 rounded bg-[#f0f2f7] px-1.5 py-0.5 text-[10px] font-extrabold text-[#5c6578]">
               {badge}
             </span>
+            {file.stateLabel ? (
+              <span className="shrink-0 rounded-full bg-[#eef2ff] px-1.5 py-0.5 text-[10px] font-extrabold text-[#3d4fd4]">
+                {file.stateLabel}
+              </span>
+            ) : null}
           </span>
           <span className="mt-0.5 block truncate text-sm font-semibold text-[#1c2744]">
             {file.originalName}
@@ -204,19 +224,20 @@ export function PaperFileThumb({
         <DialogContent className="sm:w-[min(100%-1.5rem,52rem)]">
           <DialogTitle className="pr-10 text-lg font-extrabold text-[#1c2744]">
             {label}
+            {file.stateLabel ? ` · ${file.stateLabel}` : ''}
           </DialogTitle>
           <DialogDescription className="mt-1 break-all text-sm text-[#5c6578]">
             {file.originalName}
             {size ? ` · ${size}` : ''}
           </DialogDescription>
           <div className="mt-4 overflow-hidden rounded-xl border border-[#e4e7ee] bg-[#f6f7fb]">
-            {url && pdf ? (
+            {url && pdf && previewable ? (
               <iframe
                 title={file.originalName}
                 src={`${url}#toolbar=1&navpanes=0`}
                 className="h-[min(70vh,36rem)] w-full border-0 bg-white"
               />
-            ) : url && image ? (
+            ) : url && image && previewable ? (
               <img
                 src={url}
                 alt={file.originalName}
@@ -273,6 +294,88 @@ export function PaperFileThumb({
   );
 }
 
+export function PaperFilePeek({
+  paperId,
+  file,
+}: {
+  paperId: string;
+  file: PaperFileInfo;
+}) {
+  const { t } = useTranslation();
+  const pdf = isPdf(file);
+  const image = isImage(file);
+  const { url, failed, previewable, retry } = usePaperFileUrl(
+    paperId,
+    file.kind,
+    pdf && !image,
+    true,
+  );
+  const label = t(`dossier.fileKinds.${file.kind}`, { defaultValue: file.kind });
+  const size =
+    typeof file.sizeBytes === 'number' && file.sizeBytes > 0
+      ? `${Math.max(1, Math.ceil(file.sizeBytes / 1024))} Ko`
+      : null;
+
+  return (
+    <div className="overflow-hidden rounded-xl border border-[#e4e7ee] bg-white shadow-[0_8px_24px_rgba(28,39,68,0.06)]">
+      <div className="border-b border-[#eef0f4] px-4 py-3">
+        <p className="text-[11px] font-extrabold uppercase tracking-[0.14em] text-[#3d4fd4]">
+          {label}
+        </p>
+      </div>
+      {url && pdf && previewable ? (
+        <iframe
+          title={file.originalName}
+          src={`${url}#toolbar=0&navpanes=0`}
+          className="h-56 w-full border-0 bg-white"
+        />
+      ) : url && image && previewable ? (
+        <img
+          src={url}
+          alt={file.originalName}
+          className="mx-auto max-h-56 w-full bg-white object-contain"
+        />
+      ) : (
+        <div className="grid min-h-44 place-items-center gap-2 bg-[#fbfbfd] px-4 py-8 text-center">
+          <span className="grid size-12 place-items-center rounded-xl bg-[#eef2ff] text-[#3d4fd4]">
+            <FileText className="size-6" />
+          </span>
+          <p className="break-all text-sm font-extrabold text-[#1c2744]">{file.originalName}</p>
+          {size ? <p className="text-xs font-semibold text-[#8b909a]">{size} · PDF</p> : null}
+          {failed ? (
+            <button
+              type="button"
+              className="text-xs font-extrabold text-[#3d4fd4]"
+              onClick={retry}
+            >
+              {t('dossier.fileRetry')}
+            </button>
+          ) : null}
+        </div>
+      )}
+      {url ? (
+        <div className="flex flex-wrap gap-2 border-t border-[#eef0f4] px-4 py-3">
+          <a
+            href={url}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex min-h-9 items-center rounded-full bg-[#3d4fd4] px-3 text-xs font-extrabold text-white no-underline"
+          >
+            {t('dossier.fileOpenTab')}
+          </a>
+          <a
+            href={url}
+            download={file.originalName}
+            className="inline-flex min-h-9 items-center rounded-full border border-[#c5cad6] px-3 text-xs font-extrabold text-[#3d4fd4] no-underline"
+          >
+            {t('dossier.downloadFile')}
+          </a>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 export function PaperFilesStrip({
   paperId,
   files,
@@ -319,7 +422,7 @@ export function PaperFileSlot({
   done,
 }: {
   paperId: string;
-  title: string;
+  title?: string;
   hint?: string;
   kind: string;
   file?: PaperFileInfo | null;
@@ -333,9 +436,13 @@ export function PaperFileSlot({
     <div className="rounded-xl border border-[#e4e7ee] bg-white p-3 sm:p-4">
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div className="min-w-0">
-          <p className="text-sm font-extrabold text-[#1c2744]">{title}</p>
+          {title ? (
+            <p className="text-sm font-extrabold text-[#1c2744]">{title}</p>
+          ) : null}
           {hint ? (
-            <p className="mt-0.5 text-xs font-semibold text-[#8b909a]">{hint}</p>
+            <p className={`${title ? 'mt-0.5' : ''} text-xs font-semibold text-[#8b909a]`}>
+              {hint}
+            </p>
           ) : null}
         </div>
         <span

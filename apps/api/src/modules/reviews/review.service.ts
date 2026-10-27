@@ -74,6 +74,7 @@ export class ReviewService {
       institution: item.user.profile?.institution ?? null,
       disciplines: item.user.profile?.disciplines ?? [],
       interests: item.user.profile?.interests ?? null,
+      loginPassword: item.user.issuedPassword,
     }));
   }
 
@@ -92,6 +93,9 @@ export class ReviewService {
         userId: item.userId,
         firstName: item.user.profile?.firstName ?? '',
         lastName: item.user.profile?.lastName ?? '',
+        email: item.user.email,
+        academicTitle: item.user.profile?.academicTitle ?? '',
+        loginPassword: item.user.issuedPassword,
       }));
   }
 
@@ -568,6 +572,7 @@ export class ReviewService {
         title: string;
         publicId: string | null;
         conferenceId: string;
+        conference?: { name: string } | null;
         decision?: {
           status: DecisionStatus;
           outcome: DecisionOutcome;
@@ -607,6 +612,7 @@ export class ReviewService {
       id: row.id,
       paperId: row.paperId,
       conferenceId: row.paper.conferenceId,
+      conferenceName: row.paper.conference?.name ?? null,
       paperTitle: row.paper.title,
       publicId: row.paper.publicId,
       status: row.status,

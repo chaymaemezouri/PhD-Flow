@@ -1,11 +1,12 @@
 import type { ConferenceRole, MembershipStatus } from '@scholarflow/types';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router';
 import { Button } from '@/components/ui/button';
 import { useCurrentUser } from '@/features/auth/use-account';
+import { useFeedback } from '@/features/feedback/feedback';
 import { canSubmitToConference } from '@/features/navigation/can-submit';
+import { isCreatedAdmin, isSessionChair } from '@/features/navigation/home-path';
 import { apiErrorMessage, apiFetch } from '@/services/api';
 import { cn } from '@/lib/utils';
 
@@ -77,21 +78,23 @@ export function ConferencesPage() {
   const { t, i18n } = useTranslation();
   const account = useCurrentUser();
   const superadmin = account.data?.platformRole === 'SYSTEM_ADMIN';
+  const createdAdmin = isCreatedAdmin(account.data?.profile?.academicTitle);
+  const sessionChair = isSessionChair(account.data?.profile?.academicTitle);
   const queryClient = useQueryClient();
-  const [error, setError] = useState<string | null>(null);
+  const feedback = useFeedback();
   const mine = useQuery({ queryKey: ['conferences'], queryFn: loadMine });
 
   async function respondInvite(id: string, accept: boolean) {
-    setError(null);
     const response = await apiFetch(`/api/v1/conferences/${id}/invitation/respond`, {
       method: 'POST',
       body: JSON.stringify({ accept }),
     });
     if (!response.ok) {
-      setError(await apiErrorMessage(response));
+      feedback.error(await apiErrorMessage(response));
       return;
     }
     await queryClient.invalidateQueries({ queryKey: ['conferences'] });
+    feedback.success(t('conferences.invitationDone'));
   }
 
   return (
@@ -101,7 +104,9 @@ export function ConferencesPage() {
           <h1 className="text-xl font-extrabold tracking-tight text-[#1c2744] sm:text-2xl">
             {t('conferences.title')}
           </h1>
-          <p className="mt-1 max-w-xl text-sm text-[#5c6578]">{t('conferences.intro')}</p>
+          <p className="mt-1 max-w-xl text-sm text-[#5c6578]">
+            {t(createdAdmin ? 'conferences.introAdmin' : 'conferences.intro')}
+          </p>
         </div>
         {superadmin ? (
           <Button asChild size="sm">
@@ -116,10 +121,9 @@ export function ConferencesPage() {
       {mine.isError ? (
         <p className="text-sm text-[#c54545]">{mine.error.message}</p>
       ) : null}
-      {error ? <p className="text-sm text-[#c54545]">{error}</p> : null}
       {mine.data?.length === 0 ? (
         <p className="rounded-xl border border-dashed border-[#d8dce6] bg-white px-4 py-8 text-center text-sm text-[#5c6578]">
-          {t('conferences.empty')}
+          {t(createdAdmin ? 'conferences.emptyAdmin' : 'conferences.empty')}
         </p>
       ) : null}
 
@@ -129,7 +133,12 @@ export function ConferencesPage() {
           const when = formatRange(item.startsOn, item.endsOn, i18n.language);
           const invited = item.membershipStatus === 'INVITED';
           const open = item.membershipStatus === 'OPEN';
-          const canSubmit = canSubmitToConference(superadmin, mine.data ?? [], item);
+          const canSubmit = canSubmitToConference(
+            superadmin,
+            mine.data ?? [],
+            item,
+            account.data?.profile?.academicTitle,
+          );
 
           return (
             <li
@@ -203,21 +212,33 @@ export function ConferencesPage() {
                     </Link>
                   </Button>
                 ) : null}
+                {!open && sessionChair ? (
+                  <Button asChild size="sm">
+                    <Link to={`/workspace/session-chair?conference=${item.id}`}>
+                      {t('sessionChair.openQueue')}
+                    </Link>
+                  </Button>
+                ) : null}
+                {!open &&
+                !sessionChair &&
+                (item.role === 'CHAIR' ||
+                  item.role === 'ADMINISTRATOR' ||
+                  item.role === 'COMMITTEE') ? (
+                  <Button asChild size="sm">
+                    <Link
+                      to={`${
+                        item.role === 'COMMITTEE'
+                          ? '/workspace/committee'
+                          : '/workspace/administrator'
+                      }?conference=${item.id}`}
+                    >
+                      {t('conferences.openPapers')}
+                    </Link>
+                  </Button>
+                ) : null}
                 <Button asChild size="sm" variant="outline">
                   <Link to={`/workspace/conferences/${item.id}`}>{t('home.manage')}</Link>
                 </Button>
-                {!open ? (
-                  <>
-                    <Button asChild size="sm" variant="ghost">
-                      <Link to={`/workspace/program?conference=${item.id}`}>
-                        {t('home.program')}
-                      </Link>
-                    </Button>
-                    <Button asChild size="sm" variant="ghost">
-                      <Link to="/workspace/follow-up">{t('home.publication')}</Link>
-                    </Button>
-                  </>
-                ) : null}
               </div>
             </li>
           );

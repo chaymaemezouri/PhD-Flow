@@ -69,6 +69,11 @@ describe('papers', () => {
       .send({ name: 'Paper Colloquium', shortName: `papers-${stamp}` });
     expect(created.status).toBe(201);
     const conferenceId = created.body.id as string;
+    const track = await author.agent
+      .post(`/api/v1/conferences/${conferenceId}/tracks`)
+      .set('x-csrf-token', author.csrf)
+      .send({ name: 'Systems', code: 'SYS' });
+    expect(track.status).toBe(201);
 
     const reviewer = await account(reviewerAddress, 'Niels');
     await author.agent
@@ -127,6 +132,15 @@ describe('papers', () => {
       });
     expect(rejected.status).toBe(400);
 
+    const abstractUpload = await author.agent
+      .post(`/api/v1/papers/${paperId}/manuscript?as=ABSTRACT`)
+      .set('x-csrf-token', author.csrf)
+      .attach('manuscript', pdf, {
+        filename: 'abstract.pdf',
+        contentType: 'application/pdf',
+      });
+    expect(abstractUpload.status).toBe(201);
+
     const uploaded = await author.agent
       .post(`/api/v1/papers/${paperId}/manuscript`)
       .set('x-csrf-token', author.csrf)
@@ -137,6 +151,12 @@ describe('papers', () => {
     expect(uploaded.status).toBe(201);
     expect(uploaded.body.manuscript.originalName).toBe('tides.pdf');
     expect(uploaded.body.manuscript.storageKey).toBeUndefined();
+
+    const withTrack = await author.agent
+      .patch(`/api/v1/papers/${paperId}`)
+      .set('x-csrf-token', author.csrf)
+      .send({ trackId: track.body.id });
+    expect(withTrack.status).toBe(200);
 
     const submitted = await author.agent
       .post(`/api/v1/papers/${paperId}/submit`)
@@ -215,9 +235,25 @@ describe('papers', () => {
       .send({
         title: 'Too late',
         abstract: 'This abstract is long enough to submit.',
+        authors: [
+          {
+            firstName: 'Late',
+            lastName: 'Tester',
+            email: lateAddress,
+            affiliation: 'Lab',
+            corresponding: true,
+          },
+        ],
       });
     expect(draft.status).toBe(201);
     const paperId = draft.body.id as string;
+    await author.agent
+      .post(`/api/v1/papers/${paperId}/manuscript?as=ABSTRACT`)
+      .set('x-csrf-token', author.csrf)
+      .attach('manuscript', pdf, {
+        filename: 'late-abstract.pdf',
+        contentType: 'application/pdf',
+      });
     await author.agent
       .post(`/api/v1/papers/${paperId}/manuscript`)
       .set('x-csrf-token', author.csrf)

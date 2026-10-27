@@ -18,6 +18,7 @@ import {
   ConferenceStatus,
   MembershipStatus,
   PaperFileKind,
+  PaperKind,
   AssignmentStatus,
   PaperStatus,
   PlatformRole,
@@ -26,8 +27,11 @@ import {
 } from '../../generated/prisma/client.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import type { AuthenticatedUser } from '../auth/auth.types.js';
+import { readConferenceFee } from '../conferences/conference-fee.js';
+import { readCopyrightRemarks } from './copyright-remarks.js';
 import { ObjectStorage } from './object-storage.js';
 import { paperSteps } from './pipeline.js';
+import { splitPresentationStaff, staffSummary } from './presentation-staff.js';
 
 const MAX_PDF_BYTES = 20 * 1024 * 1024;
 const SUBMITTERS = new Set<ConferenceRole>([ConferenceRole.AUTHOR]);
@@ -148,6 +152,7 @@ export class PaperService {
                     },
                   },
                 },
+                { sessionChairIds: { has: actor.id } },
               ],
             },
       include: paperInclude,
@@ -226,7 +231,7 @@ export class PaperService {
 
   async replaceAuthors(actor: AuthenticatedUser, id: string, input: AuthorsInput) {
     const row = await this.load(id);
-    await this.assertEditable(actor, row);
+    await this.assertAuthorsEditable(actor, row);
     if (!input.authors.some((author) => author.corresponding)) {
       throw new BadRequestException('Mark one author as the corresponding author');
     }
@@ -251,6 +256,7 @@ export class PaperService {
     actor: AuthenticatedUser,
     id: string,
     file: { originalname: string; mimetype: string; size: number; buffer: Buffer },
+    as: 'ABSTRACT' | 'FULL' = 'FULL',
   ) {
     const row = await this.load(id);
     await this.assertEditable(actor, row);
@@ -266,9 +272,10 @@ export class PaperService {
     ) {
       throw new BadRequestException('The manuscript must be a PDF');
     }
-    const key = `conferences/${row.conferenceId}/papers/${row.id}/${randomUUID()}.pdf`;
+    const prefix = as === 'ABSTRACT' ? 'abstract' : 'full';
+    const key = `conferences/${row.conferenceId}/papers/${row.id}/${prefix}-${randomUUID()}.pdf`;
     await this.storage.put(key, file.buffer, 'application/pdf');
-    const previous = row.files[0];
+    const previous = row.files.find((item) => manuscriptRole(item.storageKey) === as);
     await this.prisma.paperFile.create({
       data: {
         paperId: id,
@@ -285,6 +292,17 @@ export class PaperService {
       await this.prisma.paperFile.delete({ where: { id: previous.id } });
       await this.storage.remove(previous.storageKey).catch(() => undefined);
     }
+    const kept = row.files.filter((item) => item.id !== previous?.id);
+    const paperKind =
+      as === 'FULL' || kept.some((item) => manuscriptRole(item.storageKey) === 'FULL')
+        ? PaperKind.FULL
+        : PaperKind.ABSTRACT;
+    if (row.paperKind !== paperKind) {
+      await this.prisma.paper.update({
+        where: { id },
+        data: { paperKind },
+      });
+    }
     return this.getOne(actor, id);
   }
 
@@ -292,16 +310,22 @@ export class PaperService {
     return this.downloadByKind(actor, id, PaperFileKind.MANUSCRIPT);
   }
 
-  async downloadByKind(actor: AuthenticatedUser, id: string, kind: PaperFileKind) {
+  async downloadByKind(
+    actor: AuthenticatedUser,
+    id: string,
+    kind: PaperFileKind | 'ABSTRACT',
+  ) {
     const row = await this.load(id);
     await this.assertReadable(actor, row);
     const file =
-      kind === PaperFileKind.MANUSCRIPT
-        ? row.files[0]
-        : await this.prisma.paperFile.findFirst({
-            where: { paperId: id, kind },
-            orderBy: { createdAt: 'desc' },
-          });
+      kind === 'ABSTRACT'
+        ? pickManuscript(row.files, 'ABSTRACT')
+        : kind === PaperFileKind.MANUSCRIPT
+          ? pickManuscript(row.files, 'FULL') ?? row.files[0]
+          : await this.prisma.paperFile.findFirst({
+              where: { paperId: id, kind },
+              orderBy: { createdAt: 'desc' },
+            });
     if (!file) {
       throw new NotFoundException('File not found');
     }
@@ -311,7 +335,7 @@ export class PaperService {
       !this.isManager(actor, row) &&
       row.createdById !== actor.id;
     const fallback =
-      kind === PaperFileKind.MANUSCRIPT
+      kind === PaperFileKind.MANUSCRIPT || kind === 'ABSTRACT'
         ? 'manuscript.pdf'
         : `${kind.toLowerCase().replace(/_/g, '-')}.bin`;
     return {
@@ -362,8 +386,18 @@ export class PaperService {
     if (row.authors.length === 0 || !row.authors.some((author) => author.corresponding)) {
       throw new BadRequestException('Add a corresponding author before submitting');
     }
-    if (row.files.length === 0) {
-      throw new BadRequestException('Upload the PDF manuscript before submitting');
+    const hasAbstract = Boolean(pickManuscript(row.files, 'ABSTRACT'));
+    const hasFull = Boolean(pickManuscript(row.files, 'FULL'));
+    if (!hasAbstract || !hasFull) {
+      throw new BadRequestException(
+        'Upload both the abstract and the regular paper before submitting',
+      );
+    }
+    const trackCount = await this.prisma.track.count({
+      where: { conferenceId: row.conferenceId },
+    });
+    if (trackCount > 0 && !row.trackId) {
+      throw new BadRequestException('Choose a track before submitting');
     }
     this.assertDeadlineOpen(row);
     await this.prisma.$transaction(async (tx) => {
@@ -598,6 +632,19 @@ export class PaperService {
     }
   }
 
+  private async assertAuthorsEditable(actor: AuthenticatedUser, row: PaperRecord) {
+    await this.assertReadable(actor, row);
+    if (
+      row.status === PaperStatus.WITHDRAWN ||
+      row.status === PaperStatus.CANCELLED
+    ) {
+      throw new ForbiddenException('This paper can no longer be edited');
+    }
+    if (row.createdById !== actor.id && !this.isManager(actor, row)) {
+      throw new ForbiddenException('You cannot edit this paper');
+    }
+  }
+
   private isManager(actor: AuthenticatedUser, row: PaperRecord): boolean {
     if (actor.platformRole === PlatformRole.SYSTEM_ADMIN) {
       return true;
@@ -646,6 +693,10 @@ export class PaperService {
         trackId: true,
         createdById: true,
         conferenceId: true,
+        scopeStatus: true,
+        doi: true,
+        presentedAt: true,
+        cameraReadyStatus: true,
         templateValidatedAt: true,
         decision: { select: { status: true, outcome: true, letter: true } },
         similarity: { select: { percentage: true, verifiedAt: true } },
@@ -676,7 +727,7 @@ export class PaperService {
   }
 
   private async toView(row: PaperRecord, actor: AuthenticatedUser) {
-    const file = row.files[0];
+    const file = pickManuscript(row.files, 'FULL') ?? row.files[0];
     const hideAuthors =
       row.conference.reviewMode === ReviewMode.DOUBLE_BLIND &&
       !this.isManager(actor, row) &&
@@ -735,6 +786,22 @@ export class PaperService {
             sha256: file.sha256,
           }
         : null,
+      ...(await this.presentationStaff(row.sessionChairIds ?? [], actor.id)),
+    };
+  }
+
+  private async presentationStaff(ids: string[], actorId: string) {
+    if (ids.length === 0) {
+      return { sessionChairs: [], presentationReviewers: [] };
+    }
+    const users = await this.prisma.user.findMany({
+      where: { id: { in: ids } },
+      include: { profile: true },
+    });
+    const { chairs, reviewers } = splitPresentationStaff(ids, users);
+    return {
+      sessionChairs: staffSummary(chairs, actorId),
+      presentationReviewers: staffSummary(reviewers, actorId),
     };
   }
 
@@ -752,11 +819,14 @@ export class PaperService {
       remarks,
       slidesRemarks,
       cameraReadyRemarks,
+      fee,
+      copyrightRemarks,
     ] = await Promise.all([
       this.prisma.paperFile.findMany({
         where: { paperId: row.id },
         select: {
           kind: true,
+          storageKey: true,
           originalName: true,
           contentType: true,
           sizeBytes: true,
@@ -810,22 +880,18 @@ export class PaperService {
         where: { paperId: row.id },
         orderBy: [{ round: 'desc' }, { sortOrder: 'asc' }],
       }),
+      readConferenceFee(this.prisma, row.conferenceId),
+      readCopyrightRemarks(this.prisma, row.id),
     ]);
     const currentRound = remarks[0]?.round ?? 0;
     const activeRemarks = remarks.filter((item) => item.round === currentRound);
-    const slidesRound = slidesRemarks[0]?.round ?? 0;
-    const activeSlidesRemarks = slidesRemarks.filter(
-      (item) => item.round === slidesRound,
-    );
-    const cameraRound = cameraReadyRemarks[0]?.round ?? 0;
-    const activeCameraRemarks = cameraReadyRemarks.filter(
-      (item) => item.round === cameraRound,
-    );
-    // Fully registered only when status is verified, and payment too if required.
+    // Fully registered only when admin verified, and this paper has a receipt
+    // if the conference asks for payment.
     const registeredNow =
       registration?.status === 'VERIFIED' &&
       (!row.conference.paymentsEnabled ||
-        registration.paymentStatus === 'VERIFIED');
+        (registration.paymentStatus === 'VERIFIED' &&
+          files.some((file) => file.kind === 'PAYMENT_PROOF')));
     const scheduledNow = registeredNow && presentation !== null;
     const presentedNow =
       scheduledNow &&
@@ -840,12 +906,14 @@ export class PaperService {
       isAuthor: row.createdById === actor.id,
       templateValidated: row.templateValidatedAt !== null,
       doi: row.doi,
-      files: dedupeFiles(files).map((file) => ({
-        kind: file.kind,
-        originalName: file.originalName,
-        contentType: file.contentType,
-        sizeBytes: file.sizeBytes,
-      })),
+      files: dedupeFiles(
+        files.map((file) => ({
+          kind: publicFileKind(file),
+          originalName: file.originalName,
+          contentType: file.contentType,
+          sizeBytes: file.sizeBytes,
+        })),
+      ),
       similarity: similarity
         ? { percentage: similarity.percentage, verified: similarity.verifiedAt !== null }
         : null,
@@ -872,14 +940,21 @@ export class PaperService {
       similarityStatus: row.similarityStatus,
       copyrightStageStatus: row.copyrightStageStatus,
       sessionComment: row.sessionComment,
-      sessionChairs: chairUsers.map((user) => ({
-        userId: user.id,
-        name: `${user.profile?.firstName ?? ''} ${user.profile?.lastName ?? ''}`.trim(),
-        mine: user.id === actor.id,
-      })),
+      ...(() => {
+        const { chairs, reviewers } = splitPresentationStaff(
+          row.sessionChairIds ?? [],
+          chairUsers,
+        );
+        return {
+          sessionChairs: staffSummary(chairs, actor.id),
+          presentationReviewers: staffSummary(reviewers, actor.id),
+        };
+      })(),
       slides: files.some((file) => file.kind === 'SLIDES'),
       paymentProof: files.some((file) => file.kind === 'PAYMENT_PROOF'),
       paymentsEnabled: row.conference.paymentsEnabled,
+      paymentAmount: fee?.amount ?? null,
+      paymentCurrency: fee?.currency ?? 'EUR',
       registration: registration
         ? { status: registration.status, paymentStatus: registration.paymentStatus }
         : null,
@@ -896,28 +971,46 @@ export class PaperService {
         comments: item.form?.commentsToAuthor ?? '',
         mine: item.reviewerId === actor.id,
       })),
-      remarks: activeRemarks.map((item) => ({
-        id: item.id,
-        text: item.text,
-        status: item.status,
-        round: item.round,
-      })),
+      remarks: remarks
+        .slice()
+        .sort((left, right) => left.round - right.round || left.sortOrder - right.sortOrder)
+        .map((item) => ({
+          id: item.id,
+          text: item.text,
+          status: item.status,
+          round: item.round,
+        })),
       remarksRound: currentRound || null,
       remarksDone:
         activeRemarks.length > 0 &&
         activeRemarks.every((item) => item.status === 'VALIDATED'),
-      slidesRemarks: activeSlidesRemarks.map((item) => ({
-        id: item.id,
-        text: item.text,
-        status: item.status,
-        round: item.round,
-      })),
-      cameraReadyRemarks: activeCameraRemarks.map((item) => ({
-        id: item.id,
-        text: item.text,
-        status: item.status,
-        round: item.round,
-      })),
+      slidesRemarks: slidesRemarks
+        .slice()
+        .sort((left, right) => left.round - right.round || left.sortOrder - right.sortOrder)
+        .map((item) => ({
+          id: item.id,
+          text: item.text,
+          status: item.status,
+          round: item.round,
+        })),
+      cameraReadyRemarks: cameraReadyRemarks
+        .slice()
+        .sort((left, right) => left.round - right.round || left.sortOrder - right.sortOrder)
+        .map((item) => ({
+          id: item.id,
+          text: item.text,
+          status: item.status,
+          round: item.round,
+        })),
+      copyrightRemarks: copyrightRemarks
+        .slice()
+        .sort((left, right) => left.round - right.round || left.sortOrder - right.sortOrder)
+        .map((item) => ({
+          id: item.id,
+          text: item.text,
+          status: item.status,
+          round: item.round,
+        })),
     };
   }
 }
@@ -933,6 +1026,24 @@ function safeName(value: string): string {
   const base = value.split(/[/\\]/).pop() ?? 'manuscript.pdf';
   const cleaned = base.replace(/[^A-Za-z0-9._-]/g, '_').slice(0, 180);
   return cleaned.length > 0 ? cleaned : 'manuscript.pdf';
+}
+
+function manuscriptRole(storageKey: string): 'ABSTRACT' | 'FULL' {
+  return /(?:^|\/)abstract-[^/]+$/.test(storageKey) ? 'ABSTRACT' : 'FULL';
+}
+
+function publicFileKind(file: { kind: string; storageKey: string }): string {
+  if (file.kind === PaperFileKind.MANUSCRIPT && manuscriptRole(file.storageKey) === 'ABSTRACT') {
+    return 'ABSTRACT';
+  }
+  return file.kind;
+}
+
+function pickManuscript<T extends { storageKey: string }>(
+  files: T[],
+  role: 'ABSTRACT' | 'FULL',
+): T | undefined {
+  return files.find((file) => manuscriptRole(file.storageKey) === role);
 }
 
 function dedupeFiles<T extends { kind: string }>(files: T[]): T[] {

@@ -108,6 +108,13 @@ describe('review assignments', () => {
         filename: 'mary-tides.pdf',
         contentType: 'application/pdf',
       });
+    await author.agent
+      .post(`/api/v1/papers/${paperId}/manuscript?as=ABSTRACT`)
+      .set('x-csrf-token', author.csrf)
+      .attach('manuscript', pdf, {
+        filename: 'mary-tides-abstract.pdf',
+        contentType: 'application/pdf',
+      });
     const submitted = await author.agent
       .post(`/api/v1/papers/${paperId}/submit`)
       .set('x-csrf-token', author.csrf)

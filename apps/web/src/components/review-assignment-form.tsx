@@ -1,4 +1,5 @@
 import { useTranslation } from 'react-i18next';
+import { FieldSelect } from '@/components/field-select';
 import { StagePanel, stageField } from '@/components/stage-panel';
 import { Button } from '@/components/ui/button';
 
@@ -39,7 +40,11 @@ export function ReviewAssignmentForm({
   return (
     <StagePanel
       title={t('dossier.myReview')}
-      hint={t('dossier.myReviewHint')}
+      hint={
+        invited
+          ? t('home.reviewNext.INVITED')
+          : t('home.reviewNext.IN_PROGRESS')
+      }
       status={
         invited
           ? t('home.toAccept')
@@ -95,13 +100,15 @@ export function ReviewAssignmentForm({
             className={`text-xs font-extrabold text-[#5c6578] ${compact ? '' : 'sm:col-span-2'}`}
           >
             {t('reviews.recommendation')}
-            <select name="recommendation" className={stageField} defaultValue="ACCEPT">
-              {RECOMMENDATIONS.map((value) => (
-                <option key={value} value={value}>
-                  {t(`reviews.recommendations.${value}`)}
-                </option>
-              ))}
-            </select>
+            <FieldSelect
+              name="recommendation"
+              className={stageField}
+              defaultValue="ACCEPT"
+              options={RECOMMENDATIONS.map((value) => ({
+                value,
+                label: t(`reviews.recommendations.${value}`),
+              }))}
+            />
           </label>
           <label className="text-xs font-extrabold text-[#5c6578]">
             {t('reviews.score')}

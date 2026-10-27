@@ -86,6 +86,7 @@ export const cameraReadyDecisionSchema = z.object({
 
 export const copyrightDecisionSchema = z.object({
   accept: z.boolean(),
+  note: z.string().trim().max(4000).default(''),
 });
 
 export const similaritySchema = z.object({
@@ -219,6 +220,13 @@ const conferenceFieldsSchema = z.object({
   visibility: z.enum(['PUBLIC', 'UNLISTED']).default('PUBLIC'),
   reviewMode: z.enum(['SINGLE_BLIND', 'DOUBLE_BLIND', 'OPEN']).default('DOUBLE_BLIND'),
   paymentsEnabled: z.boolean().default(false),
+  registrationFee: z.number().min(0).max(1_000_000).nullable().optional(),
+  registrationCurrency: z
+    .string()
+    .trim()
+    .toUpperCase()
+    .regex(/^[A-Z]{3}$/)
+    .optional(),
   chairUserId: z.uuid().optional(),
   accessPassword: passwordSchema.optional(),
 });
@@ -243,6 +251,10 @@ export const createAdminSchema = z.object({
   password: passwordSchema,
   firstName: z.string().trim().min(1).max(80),
   lastName: z.string().trim().min(1).max(80),
+});
+
+export const createTeamMemberSchema = createAdminSchema.extend({
+  role: z.enum(['ADMINISTRATOR', 'COMMITTEE', 'REVIEWER']),
 });
 
 export const resetAdminPasswordSchema = z.object({
@@ -276,6 +288,13 @@ export const updateConferenceSchema = z
     visibility: z.enum(['PUBLIC', 'UNLISTED']).optional(),
     reviewMode: z.enum(['SINGLE_BLIND', 'DOUBLE_BLIND', 'OPEN']).optional(),
     paymentsEnabled: z.boolean().optional(),
+    registrationFee: z.number().min(0).max(1_000_000).nullable().optional(),
+    registrationCurrency: z
+      .string()
+      .trim()
+      .toUpperCase()
+      .regex(/^[A-Z]{3}$/)
+      .optional(),
     status: z.enum(['DRAFT', 'PUBLISHED', 'ARCHIVED']).optional(),
   })
   .refine(datesInOrder, {
@@ -310,7 +329,7 @@ export const templateSchema = z.object({
 
 export const inviteMemberSchema = z.object({
   email: z.email(),
-  role: z.enum(['ADMINISTRATOR', 'COMMITTEE', 'REVIEWER', 'AUTHOR']),
+  role: z.enum(['CHAIR', 'ADMINISTRATOR', 'COMMITTEE', 'REVIEWER', 'AUTHOR']),
 });
 
 export const invitationResponseSchema = z.object({

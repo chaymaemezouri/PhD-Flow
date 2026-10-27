@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Delete,
@@ -9,14 +10,21 @@ import {
   Patch,
   Post,
   Req,
+  Res,
+  StreamableFile,
+  UploadedFile,
   UseGuards,
+  UseInterceptors,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import type { Response } from 'express';
 import { ApiTags } from '@nestjs/swagger';
 import {
   conferenceAccessSchema,
   conferencePasswordSchema,
   createAdminSchema,
   createConferenceSchema,
+  createTeamMemberSchema,
   deadlineSchema,
   invitationResponseSchema,
   inviteMemberSchema,
@@ -110,6 +118,17 @@ export class ConferenceController {
     return this.conferences.createSubAdmin(request.user!, id, body);
   }
 
+  @Post('conferences/:id/session-chairs')
+  @UseGuards(AuthGuard)
+  createSessionChair(
+    @Req() request: AuthenticatedRequest,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body(new ZodValidationPipe(createAdminSchema))
+    body: z.infer<typeof createAdminSchema>,
+  ) {
+    return this.conferences.createSessionChair(request.user!, id, body);
+  }
+
   @Get('conferences/:id')
   @UseGuards(AuthGuard)
   one(@Req() request: AuthenticatedRequest, @Param('id', ParseUUIDPipe) id: string) {
@@ -190,6 +209,53 @@ export class ConferenceController {
   ) {
     return this.conferences.invite(request.user!, id, body);
   }
+  @Post('conferences/:id/templates/file')
+  @UseGuards(AuthGuard)
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 10 * 1024 * 1024 } }))
+  saveTemplateFile(
+    @Req() request: AuthenticatedRequest,
+    @Param('id', ParseUUIDPipe) id: string,
+    @UploadedFile() file: Express.Multer.File | undefined,
+  ) {
+    if (!file) {
+      throw new BadRequestException('Upload a PDF or Word file (max 10 MB)');
+    }
+    const kind = String(request.body?.kind ?? 'NOTIFICATION');
+    const language = String(request.body?.language ?? 'en');
+    const subject = String(request.body?.subject ?? '');
+    return this.conferences.saveTemplateFile(
+      request.user!,
+      id,
+      {
+        kind: kind as z.infer<typeof templateSchema>['kind'],
+        language: language as z.infer<typeof templateSchema>['language'],
+        subject,
+      },
+      file,
+    );
+  }
+
+  @Get('conferences/:id/templates/:templateId/file')
+  @UseGuards(AuthGuard)
+  async downloadTemplateFile(
+    @Req() request: AuthenticatedRequest,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('templateId', ParseUUIDPipe) templateId: string,
+    @Res({ passthrough: true }) response: Response,
+  ) {
+    const file = await this.conferences.downloadTemplateFile(
+      request.user!,
+      id,
+      templateId,
+    );
+    response.setHeader('Content-Type', file.contentType);
+    response.setHeader(
+      'Content-Disposition',
+      `attachment; filename="${file.name.replace(/"/g, '')}"`,
+    );
+    return new StreamableFile(file.bytes);
+  }
+
 
   @Post('conferences/:id/invitation/respond')
   @HttpCode(204)

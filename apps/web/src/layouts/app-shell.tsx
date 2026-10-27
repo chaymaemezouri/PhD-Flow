@@ -18,13 +18,13 @@ import {
 } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
-import { Link, NavLink, Navigate, Outlet, useLocation, useNavigate } from 'react-router';
+import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { DeadlineBell } from '@/components/deadline-bell';
 import { Button } from '@/components/ui/button';
 import { useCurrentUser, useLogout } from '@/features/auth/use-account';
 import { canStartSubmission } from '@/features/navigation/can-submit';
-import { homePathFor } from '@/features/navigation/home-path';
+import { homePathFor, isCreatedAdmin, isSessionChair } from '@/features/navigation/home-path';
 import { apiErrorMessage, apiFetch } from '@/services/api';
 import { cn } from '@/lib/utils';
 
@@ -53,15 +53,25 @@ const shared = {
   },
 } as const;
 
-function tabsFor(home: string): NavTab[] {
-  const audience = home.endsWith('/system')
-    ? 'system'
-    : home.endsWith('/reviewer')
-      ? 'reviewer'
-      : home.endsWith('/author')
-        ? 'author'
-        : 'chair';
+type NavAudience = 'system' | 'sessionChair' | 'reviewer' | 'author' | 'chair';
 
+function audienceFor(home: string): NavAudience {
+  if (home.endsWith('/system')) {
+    return 'system';
+  }
+  if (home.endsWith('/session-chair')) {
+    return 'sessionChair';
+  }
+  if (home.endsWith('/reviewer')) {
+    return 'reviewer';
+  }
+  if (home.endsWith('/author')) {
+    return 'author';
+  }
+  return 'chair';
+}
+
+function tabsFor(home: string, audience: NavAudience): NavTab[] {
   if (audience === 'system') {
     return [
       { id: 'home', to: home, label: 'superadmin.tabOverview', icon: Home, end: true },
@@ -77,6 +87,20 @@ function tabsFor(home: string): NavTab[] {
         to: '/workspace/system/conferences',
         label: 'superadmin.tabConferences',
         icon: Library,
+        end: false,
+      },
+      {
+        id: 'sysSessionChairs',
+        to: '/workspace/session-chair',
+        label: 'nav.sessionChair',
+        icon: Mic2,
+        end: false,
+      },
+      {
+        id: 'sysReviewers',
+        to: '/workspace/reviewers',
+        label: 'nav.reviewers',
+        icon: Users,
         end: false,
       },
       {
@@ -112,6 +136,100 @@ function tabsFor(home: string): NavTab[] {
         to: '/workspace/follow-up',
         label: 'nav.followUp',
         icon: ListChecks,
+        end: false,
+      },
+      shared.account,
+      shared.preferences,
+    ];
+  }
+
+  if (audience === 'sessionChair') {
+    return [
+      { id: 'home', to: home, label: 'nav.home', icon: Home, end: true },
+      {
+        id: 'conferences',
+        to: '/workspace/conferences',
+        label: 'nav.conferences',
+        icon: Library,
+        end: false,
+      },
+      {
+        id: 'program',
+        to: '/workspace/program',
+        label: 'nav.program',
+        icon: CalendarRange,
+        end: false,
+      },
+      shared.account,
+      shared.preferences,
+    ];
+  }
+
+  if (audience === 'reviewer') {
+    return [
+      { id: 'home', to: home, label: 'nav.home', icon: Home, end: true },
+      {
+        id: 'conferences',
+        to: '/workspace/conferences',
+        label: 'nav.conferences',
+        icon: Library,
+        end: false,
+      },
+      {
+        id: 'program',
+        to: '/workspace/program',
+        label: 'nav.program',
+        icon: CalendarRange,
+        end: false,
+      },
+      shared.account,
+      shared.preferences,
+    ];
+  }
+
+  if (audience === 'chair') {
+    return [
+      { id: 'home', to: home, label: 'nav.home', icon: Home, end: true },
+      {
+        id: 'conferences',
+        to: '/workspace/conferences',
+        label: 'nav.conferences',
+        icon: Library,
+        end: false,
+      },
+      {
+        id: 'reviews',
+        to: '/workspace/reviews',
+        label: 'nav.reviews',
+        icon: ClipboardList,
+        end: false,
+      },
+      {
+        id: 'program',
+        to: '/workspace/program',
+        label: 'nav.program',
+        icon: CalendarRange,
+        end: false,
+      },
+      {
+        id: 'followUp',
+        to: '/workspace/follow-up',
+        label: 'nav.followUp',
+        icon: ListChecks,
+        end: false,
+      },
+      {
+        id: 'reviewers',
+        to: '/workspace/reviewers',
+        label: 'nav.reviewers',
+        icon: Users,
+        end: false,
+      },
+      {
+        id: 'sessionChair',
+        to: '/workspace/session-chair',
+        label: 'nav.sessionChair',
+        icon: Mic2,
         end: false,
       },
       shared.account,
@@ -156,44 +274,55 @@ function tabsFor(home: string): NavTab[] {
       icon: CalendarRange,
       end: false,
     },
-    {
-      id: 'sessionChair',
-      to: '/workspace/session-chair',
-      label: 'nav.sessionChair',
-      icon: Mic2,
-      end: false,
-    },
     shared.account,
     shared.preferences,
   ];
 
-  const hidden = new Set(
-    audience === 'reviewer'
-      ? ['followUp', 'program']
-      : audience === 'author'
-        ? ['reviews', 'sessionChair']
-        : [],
-  );
+  const hidden = new Set(['reviews']);
   return catalog.filter((tab) => !hidden.has(tab.id));
 }
 
 const mainIds = new Set(['home', 'conferences']);
+const workIds = new Set(['submissions', 'reviews', 'followUp', 'program']);
+const teamIds = new Set(['reviewers', 'sessionChair']);
 const accountIds = new Set(['account', 'preferences']);
 
 function groupTabs(tabs: NavTab[]) {
   const main: NavTab[] = [];
   const work: NavTab[] = [];
+  const team: NavTab[] = [];
   const account: NavTab[] = [];
   for (const tab of tabs) {
     if (mainIds.has(tab.id)) {
       main.push(tab);
+    } else if (workIds.has(tab.id)) {
+      work.push(tab);
+    } else if (teamIds.has(tab.id)) {
+      team.push(tab);
     } else if (accountIds.has(tab.id)) {
       account.push(tab);
     } else {
       work.push(tab);
     }
   }
-  return { main, work, account };
+  return { main, work, team, account };
+}
+
+function mobilePrimary(tabs: NavTab[], audience: NavAudience): NavTab[] {
+  const ids =
+    audience === 'chair'
+      ? ['home', 'reviews', 'program', 'followUp']
+      : audience === 'reviewer'
+        ? ['home', 'conferences', 'program', 'account']
+        : audience === 'sessionChair'
+          ? ['home', 'conferences', 'program', 'account']
+          : audience === 'system'
+            ? ['home', 'sysConferences', 'sysUsers', 'submissions']
+            : ['home', 'conferences', 'submissions', 'followUp'];
+  return ids
+    .map((id) => tabs.find((tab) => tab.id === id))
+    .filter((tab): tab is NavTab => Boolean(tab))
+    .slice(0, 4);
 }
 
 function navClass(isActive: boolean, compact = false) {
@@ -291,30 +420,28 @@ export function AppShell() {
     (item) => item.membershipStatus === 'ACTIVE',
   );
   const platformAdmin = account.data?.platformRole === 'SYSTEM_ADMIN';
-  const manager = roles.some((role) => role === 'CHAIR' || role === 'ADMINISTRATOR');
-  const unlocked = account.data?.unlockedConferenceId ?? null;
+  const createdAdmin = isCreatedAdmin(account.data?.profile?.academicTitle);
+  const sessionChair = isSessionChair(account.data?.profile?.academicTitle);
   const home = platformAdmin
     ? '/workspace/system'
-    : manager && !unlocked
-      ? '/workspace/conference-access'
-      : memberships.isSuccess
-        ? homePathFor(roles)
-        : '/workspace/author';
-  const tabs = tabsFor(home).map((tab) =>
-    tab.id === 'conferences' && unlocked && !platformAdmin
-      ? { ...tab, to: `/workspace/conferences/${unlocked}` }
-      : tab,
-  );
+    : memberships.isSuccess
+      ? homePathFor(roles, { createdAdmin, sessionChair })
+      : createdAdmin
+        ? '/workspace/administrator'
+        : sessionChair
+          ? '/workspace/session-chair'
+          : location.pathname.startsWith('/workspace/administrator')
+            ? '/workspace/administrator'
+            : location.pathname.startsWith('/workspace/committee')
+              ? '/workspace/committee'
+              : location.pathname.startsWith('/workspace/reviewer')
+                ? '/workspace/reviewer'
+                : '/workspace/author';
+  const audience = audienceFor(home);
+  const tabs = tabsFor(home, audience);
   const sections = groupTabs(tabs);
-  const gate =
-    account.isSuccess &&
-    manager &&
-    !platformAdmin &&
-    !unlocked &&
-    memberships.isSuccess &&
-    location.pathname !== '/workspace/conference-access';
-  const mobileBar = tabs.slice(0, 4);
-  const mobileMore = tabs.slice(4);
+  const mobileBar = mobilePrimary(tabs, audience);
+  const mobileMore = tabs.filter((tab) => !mobileBar.some((item) => item.id === tab.id));
   const profile = account.data?.profile;
   const displayName = account.data
     ? `${profile?.firstName ?? ''} ${profile?.lastName ?? ''}`.trim()
@@ -324,13 +451,23 @@ export function AppShell() {
   );
   const roleLabel = platformAdmin
     ? t('superadmin.sidebarLabel')
-    : activeConference
-      ? t(`conferences.roles.${activeConference.role}`, {
-          defaultValue: activeConference.role,
-        })
-      : null;
+    : sessionChair
+      ? t('sessionChair.role')
+      : createdAdmin
+        ? t('conferences.roles.CHAIR')
+        : activeConference
+          ? t(`conferences.roles.${activeConference.role}`, {
+              defaultValue: activeConference.role,
+            })
+          : null;
   const roleLine = roleLabel ?? t('home.noConference');
-  const showNewSubmission = canStartSubmission(Boolean(platformAdmin), memberships.data);
+  const showNewSubmission = canStartSubmission(
+    Boolean(platformAdmin),
+    memberships.data,
+    account.data?.profile?.academicTitle,
+  );
+  const showTopName =
+    location.pathname === home || location.pathname.startsWith('/workspace/account');
 
   useEffect(() => {
     setMenuOpen(false);
@@ -351,10 +488,6 @@ export function AppShell() {
     void logout.mutateAsync().then(() => navigate('/login'));
   }
 
-  if (gate) {
-    return <Navigate to="/workspace/conference-access" replace />;
-  }
-
   return (
     <div className="workspace-shell min-h-screen bg-[#f3f6fb] text-[#1c2744]">
       <a
@@ -364,7 +497,7 @@ export function AppShell() {
         {t('nav.skip')}
       </a>
       <div className="grid min-h-screen w-full grid-cols-1 lg:grid-cols-[176px_minmax(0,1fr)]">
-        <aside className="hidden h-screen flex-col border-r border-[#e6e8ec] bg-white px-2 py-3 lg:sticky lg:top-0 lg:flex">
+        <aside className="hidden h-screen flex-col border-r border-[#e6e8ec] px-2 py-3 lg:sticky lg:top-0 lg:flex">
           <div className="px-2 pb-4 pt-2">
             <p className="truncate text-[12px] font-extrabold tracking-tight text-[#3d4fd4]">
               {t('brand.name')}
@@ -387,6 +520,7 @@ export function AppShell() {
                       'home',
                       'sysAdmins',
                       'sysConferences',
+                      'sysSessionChairs',
                       'sysUsers',
                       'sysSessions',
                       'sysAudit',
@@ -414,6 +548,7 @@ export function AppShell() {
                   ))}
                 </div>
                 <NavSection label={t('nav.sectionWork')} tabs={sections.work} />
+                <NavSection label={t('nav.sectionTeam')} tabs={sections.team} />
                 <NavSection label={t('nav.sectionAccount')} tabs={sections.account} />
               </>
             )}
@@ -435,10 +570,10 @@ export function AppShell() {
         </aside>
 
         <div className="min-w-0 w-full px-3 pb-[calc(5.5rem+env(safe-area-inset-bottom))] pt-3 sm:px-4 sm:pt-4 lg:px-3 lg:pb-3 lg:pt-3">
-          <header className="mb-3 flex flex-wrap items-center gap-3 rounded-2xl border border-[#e4e7ee] bg-white px-3 py-2.5 sm:px-4 lg:mb-3 lg:gap-4 lg:px-4 lg:py-2.5">
+          <header className="mb-3 flex flex-wrap items-center gap-3 px-1 py-1 sm:px-0 lg:mb-3 lg:gap-4">
             <button
               type="button"
-              className="grid size-10 shrink-0 place-items-center rounded-xl border border-[#e4e7ee] bg-[#f6f7fb] text-[#1c2744] lg:hidden"
+              className="grid size-10 shrink-0 place-items-center rounded-xl text-[#1c2744] lg:hidden"
               aria-expanded={menuOpen}
               aria-label={menuOpen ? t('nav.close') : t('nav.menu')}
               onClick={() => setMenuOpen((open) => !open)}
@@ -446,11 +581,15 @@ export function AppShell() {
               {menuOpen ? <X className="size-5" /> : <Menu className="size-5" />}
             </button>
 
-            <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-extrabold text-[#1c2744] sm:text-[15px]">
-                {displayName}
-              </p>
-            </div>
+            {showTopName ? (
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-extrabold text-[#1c2744] sm:text-[15px]">
+                  {displayName}
+                </p>
+              </div>
+            ) : (
+              <div className="min-w-0 flex-1" />
+            )}
 
             <div className="flex w-full shrink-0 flex-wrap items-center justify-end gap-2 sm:ml-auto sm:w-auto">
               <DeadlineBell />
@@ -568,6 +707,11 @@ export function AppShell() {
                       onNavigate={() => setMenuOpen(false)}
                     />
                     <NavSection
+                      label={t('nav.sectionTeam')}
+                      tabs={sections.team}
+                      onNavigate={() => setMenuOpen(false)}
+                    />
+                    <NavSection
                       label={t('nav.sectionAccount')}
                       tabs={sections.account}
                       onNavigate={() => setMenuOpen(false)}
@@ -589,7 +733,7 @@ export function AppShell() {
       ) : null}
 
       <nav
-        className="fixed inset-x-0 bottom-0 z-50 border-t border-[#e6e8ec] bg-white/95 px-1 pt-1 backdrop-blur lg:hidden"
+        className="fixed inset-x-0 bottom-0 z-50 px-1 pt-1 lg:hidden"
         style={{ paddingBottom: 'max(0.35rem, env(safe-area-inset-bottom))' }}
         aria-label={t('nav.workspace')}
       >

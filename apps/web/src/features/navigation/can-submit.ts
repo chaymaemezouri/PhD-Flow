@@ -1,3 +1,5 @@
+import { isCreatedAdmin, isSessionChair } from '@/features/navigation/home-path';
+
 const organizingRoles = new Set(['CHAIR', 'ADMINISTRATOR', 'COMMITTEE', 'REVIEWER']);
 
 interface MembershipLike {
@@ -9,8 +11,9 @@ export function canSubmitToConference(
   superadmin: boolean,
   memberships: MembershipLike[],
   item: MembershipLike,
+  academicTitle?: string | null,
 ): boolean {
-  if (superadmin) {
+  if (superadmin || isCreatedAdmin(academicTitle) || isSessionChair(academicTitle)) {
     return false;
   }
   if (item.membershipStatus === 'ACTIVE' && item.role === 'AUTHOR') {
@@ -28,9 +31,17 @@ export function canSubmitToConference(
 export function canStartSubmission(
   superadmin: boolean,
   memberships: MembershipLike[] | undefined,
+  academicTitle?: string | null,
 ): boolean {
-  if (!memberships || superadmin) {
+  if (
+    !memberships ||
+    superadmin ||
+    isCreatedAdmin(academicTitle) ||
+    isSessionChair(academicTitle)
+  ) {
     return false;
   }
-  return memberships.some((item) => canSubmitToConference(false, memberships, item));
+  return memberships.some((item) =>
+    canSubmitToConference(false, memberships, item, academicTitle),
+  );
 }

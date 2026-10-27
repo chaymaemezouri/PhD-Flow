@@ -208,6 +208,11 @@ export class WorkflowController {
     return this.workflow.statistics(request.user!, id);
   }
 
+  @Get('presentations/mine')
+  myAssignedPresentations(@Req() request: AuthenticatedRequest) {
+    return this.workflow.myPresentations(request.user!);
+  }
+
   @Post('presentations/:id/assessment')
   assess(
     @Req() request: AuthenticatedRequest,
@@ -233,7 +238,23 @@ export class WorkflowController {
     @Body(new ZodValidationPipe(copyrightDecisionSchema))
     body: z.infer<typeof copyrightDecisionSchema>,
   ) {
-    return this.workflow.validateCopyright(request.user!, id, body.accept);
+    return this.workflow.validateCopyright(request.user!, id, body);
+  }
+
+  @Patch('papers/:id/copyright-remarks/:remarkId')
+  copyrightRemark(
+    @Req() request: AuthenticatedRequest,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('remarkId', ParseUUIDPipe) remarkId: string,
+    @Body(new ZodValidationPipe(revisionRemarkSchema))
+    body: z.infer<typeof revisionRemarkSchema>,
+  ) {
+    return this.workflow.updateCopyrightRemark(
+      request.user!,
+      id,
+      remarkId,
+      body.status,
+    );
   }
 
   @Post('conferences/:id/register')

@@ -102,8 +102,11 @@ export function LoginPage() {
             <p>{t('auth.demoPassword')}</p>
             <ul className="mt-2 space-y-1 text-[#5c6578]">
               <li>{t('auth.demoAdmin')}</li>
+              <li>{t('auth.demoCommittee')}</li>
               <li>{t('auth.demoReviewer')}</li>
+              <li>{t('auth.demoSessionChair')}</li>
               <li>{t('auth.demoChercheur')}</li>
+              <li>{t('auth.demoAuteur2')}</li>
               <li>{t('auth.demoSuperadmin')}</li>
             </ul>
           </div>

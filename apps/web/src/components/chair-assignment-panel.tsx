@@ -1,8 +1,10 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useMemo, useState, type FormEvent } from 'react';
 import { useTranslation } from 'react-i18next';
-import { StagePanel, stageField } from '@/components/stage-panel';
+import { AssignmentField } from '@/components/assignment-picker';
+import { StagePanel } from '@/components/stage-panel';
 import { Button } from '@/components/ui/button';
+import { useFeedback } from '@/features/feedback/feedback';
 import { apiErrorMessage, apiFetch } from '@/services/api';
 
 type AssignMode = 'paper' | 'author' | 'reviewer';
@@ -31,7 +33,7 @@ export function ChairAssignmentPanel({ conferenceId }: { conferenceId: string })
   const [paperId, setPaperId] = useState('');
   const [reviewerId, setReviewerId] = useState('');
   const [authorKey, setAuthorKey] = useState('');
-  const [message, setMessage] = useState<string | null>(null);
+  const feedback = useFeedback();
   const [pending, setPending] = useState(false);
 
   const papers = useQuery({
@@ -101,17 +103,16 @@ export function ChairAssignmentPanel({ conferenceId }: { conferenceId: string })
       return;
     }
     setPending(true);
-    setMessage(null);
     try {
       const response = await apiFetch(`/api/v1/papers/${paperId}/assignments`, {
         method: 'POST',
         body: JSON.stringify({ reviewerId }),
       });
       if (!response.ok) {
-        setMessage(await apiErrorMessage(response));
+        feedback.error(await apiErrorMessage(response));
         return;
       }
-      setMessage(t('reviews.assigned'));
+      feedback.success(t('reviews.assigned'));
       setPaperId('');
       setReviewerId('');
       await queryClient.invalidateQueries({ queryKey: ['conference-papers', conferenceId] });
@@ -155,7 +156,6 @@ export function ChairAssignmentPanel({ conferenceId }: { conferenceId: string })
               setPaperId('');
               setAuthorKey('');
               setReviewerId('');
-              setMessage(null);
             }}
           >
             {item.label}
@@ -165,85 +165,81 @@ export function ChairAssignmentPanel({ conferenceId }: { conferenceId: string })
 
       <form className="grid gap-3 sm:grid-cols-2" onSubmit={(event) => void submit(event)}>
         {mode === 'author' ? (
-          <label className="text-xs font-extrabold text-[#5c6578] sm:col-span-2">
-            {t('reviews.chooseAuthor')}
-            <select
-              className={stageField}
-              value={authorKey}
-              onChange={(event) => {
-                setAuthorKey(event.target.value);
-                setPaperId('');
-              }}
-            >
-              <option value="">{t('reviews.chooseAuthor')}</option>
-              {authors.map((item) => (
-                <option key={item.email} value={item.email}>
-                  {item.label}
-                </option>
-              ))}
-            </select>
-          </label>
+          <AssignmentField
+            className="text-xs font-extrabold text-[#5c6578] sm:col-span-2"
+            label={t('reviews.chooseAuthor')}
+            title={t('reviews.chooseAuthor')}
+            placeholder={t('reviews.chooseAuthor')}
+            value={authorKey}
+            onChange={(id) => {
+              setAuthorKey(id);
+              setPaperId('');
+            }}
+            options={authors.map((item) => ({
+              id: item.email,
+              title: item.label.split(' · ')[0] ?? item.label,
+              subtitle: item.email,
+            }))}
+          />
         ) : null}
 
         {mode === 'reviewer' ? (
-          <label className="text-xs font-extrabold text-[#5c6578]">
-            {t('reviews.chooseReviewer')}
-            <select
-              className={stageField}
-              value={reviewerId}
-              onChange={(event) => setReviewerId(event.target.value)}
-            >
-              <option value="">{t('reviews.chooseReviewer')}</option>
-              {reviewers.data?.map((item) => (
-                <option key={item.userId} value={item.userId}>
-                  {item.firstName} {item.lastName} · {item.email}
-                </option>
-              ))}
-            </select>
-          </label>
+          <AssignmentField
+            className="text-xs font-extrabold text-[#5c6578]"
+            label={t('reviews.chooseReviewer')}
+            title={t('reviews.chooseReviewer')}
+            placeholder={t('reviews.chooseReviewer')}
+            value={reviewerId}
+            onChange={setReviewerId}
+            options={(reviewers.data ?? []).map((item) => ({
+              id: item.userId,
+              title: `${item.firstName} ${item.lastName}`.trim(),
+              subtitle: item.email,
+            }))}
+            filters={[
+              { id: 'all', label: t('picker.all') },
+            ]}
+          />
         ) : null}
 
-        <label
+        <AssignmentField
           className={`text-xs font-extrabold text-[#5c6578] ${
             mode === 'author' ? 'sm:col-span-2' : ''
           }`}
-        >
-          {t('reviews.choosePaper')}
-          <select
-            className={stageField}
-            value={paperId}
-            onChange={(event) => setPaperId(event.target.value)}
-            disabled={mode === 'author' && !authorKey}
-          >
-            <option value="">{t('reviews.choosePaper')}</option>
-            {papersForMode.map((item) => (
-              <option key={item.id} value={item.id}>
-                {(item.assignmentCount ?? 0) > 0
-                  ? `✓ ${item.publicId ?? item.title}`
-                  : item.publicId
-                    ? `${item.publicId} · ${item.title}`
-                    : item.title}
-              </option>
-            ))}
-          </select>
-        </label>
+          label={t('reviews.choosePaper')}
+          title={t('reviews.choosePaper')}
+          placeholder={t('reviews.choosePaper')}
+          value={paperId}
+          onChange={setPaperId}
+          disabled={mode === 'author' && !authorKey}
+          options={papersForMode.map((item) => ({
+            id: item.id,
+            title: item.title,
+            subtitle: item.publicId ?? undefined,
+            code: item.publicId?.replace(/\D/g, '').slice(-4),
+            group: (item.assignmentCount ?? 0) > 0 ? 'busy' : 'waiting',
+          }))}
+          filters={[
+            { id: 'all', label: t('picker.all') },
+            { id: 'waiting', label: t('picker.waiting') },
+            { id: 'busy', label: t('picker.busy') },
+          ]}
+        />
 
         {mode !== 'reviewer' ? (
-          <label className="text-xs font-extrabold text-[#5c6578]">
-            {t('reviews.chooseReviewer')}
-            <select
-              className={stageField}
-              value={reviewerId}
-              onChange={(event) => setReviewerId(event.target.value)}
-            >
-              <option value="">{t('reviews.chooseReviewer')}</option>
-              {reviewers.data?.map((item) => (
-                <option key={item.userId} value={item.userId}>
-                  {item.firstName} {item.lastName} · {item.email}
-                </option>
-              ))}
-            </select>
-          </label>
+          <AssignmentField
+            className="text-xs font-extrabold text-[#5c6578]"
+            label={t('reviews.chooseReviewer')}
+            title={t('reviews.chooseReviewer')}
+            placeholder={t('reviews.chooseReviewer')}
+            value={reviewerId}
+            onChange={setReviewerId}
+            options={(reviewers.data ?? []).map((item) => ({
+              id: item.userId,
+              title: `${item.firstName} ${item.lastName}`.trim(),
+              subtitle: item.email,
+            }))}
+          />
         ) : null}
 
         <div className="sm:col-span-2">
@@ -252,11 +248,6 @@ export function ChairAssignmentPanel({ conferenceId }: { conferenceId: string })
           </Button>
         </div>
       </form>
-      {message ? (
-        <p className="mt-3 text-sm font-bold text-[#3d4fd4]" role="status">
-          {message}
-        </p>
-      ) : null}
     </StagePanel>
   );
 }

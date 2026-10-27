@@ -1,13 +1,17 @@
 import type { ConferenceRole, MembershipStatus } from '@scholarflow/types';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { ArrowDown, ArrowUp, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router';
 import { usePaperStageExtras } from '@/components/paper-stage-actions';
 import { PaperFileSlot } from '@/components/paper-file-preview';
 import { useCurrentUser } from '@/features/auth/use-account';
+import { useFeedback } from '@/features/feedback/feedback';
 import { canSubmitToConference } from '@/features/navigation/can-submit';
+import { isCreatedAdmin, isSessionChair } from '@/features/navigation/home-path';
 import { PaperWorkflow, type PaperDossier } from '@/components/paper-workflow';
+import { FieldSelect } from '@/components/field-select';
 import { StagePanel, stageField } from '@/components/stage-panel';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -31,13 +35,7 @@ interface PaperDetail {
   conferenceId: string;
   conferenceName?: string | null;
   trackId: string | null;
-  authors: {
-    firstName: string;
-    lastName: string;
-    email: string;
-    affiliation: string;
-    corresponding: boolean;
-  }[];
+  authors: PaperAuthor[];
   manuscript: {
     originalName: string;
     sizeBytes: number;
@@ -45,6 +43,50 @@ interface PaperDetail {
   } | null;
   decision: { outcome: string; status: string; letter?: string } | null;
   dossier?: PaperDossier;
+}
+
+interface PaperAuthor {
+  firstName: string;
+  lastName: string;
+  email: string;
+  affiliation: string;
+  corresponding: boolean;
+}
+
+function authorInput(authors: PaperAuthor[]) {
+  return authors.map((author) => ({
+    firstName: author.firstName,
+    lastName: author.lastName,
+    email: author.email,
+    affiliation: author.affiliation,
+    corresponding: author.corresponding,
+  }));
+}
+
+function moveAuthor(authors: PaperAuthor[], from: number, to: number) {
+  if (
+    from === to ||
+    from < 0 ||
+    to < 0 ||
+    from >= authors.length ||
+    to >= authors.length
+  ) {
+    return authors;
+  }
+  const next = [...authors];
+  const [item] = next.splice(from, 1);
+  next.splice(to, 0, item);
+  return next;
+}
+
+function ensureCorresponding(authors: PaperAuthor[]) {
+  if (authors.length === 0 || authors.some((author) => author.corresponding)) {
+    return authors;
+  }
+  return authors.map((author, index) => ({
+    ...author,
+    corresponding: index === 0,
+  }));
 }
 
 async function loadMemberships(): Promise<Membership[]> {
@@ -82,7 +124,7 @@ export function SubmissionEditorPage() {
       setStep(incoming);
     }
   }, [paperId, location.state]);
-  const [message, setMessage] = useState<string | null>(null);
+  const feedback = useFeedback();
   const [conferenceId, setConferenceId] = useState(
     () => searchParams.get('conference') ?? '',
   );
@@ -90,9 +132,12 @@ export function SubmissionEditorPage() {
   const [abstractText, setAbstractText] = useState('');
   const [trackId, setTrackId] = useState('');
   const [keywordsText, setKeywordsText] = useState('');
-  const [paperKind, setPaperKind] = useState<'ABSTRACT' | 'FULL'>('FULL');
-  const [authorName, setAuthorName] = useState('');
+  const [paperKind, setPaperKind] = useState<'ABSTRACT' | 'FULL' | ''>('');
+  const [authorLastName, setAuthorLastName] = useState('');
+  const [authorFirstName, setAuthorFirstName] = useState('');
+  const [authorAffiliation, setAuthorAffiliation] = useState('');
   const [authorEmail, setAuthorEmail] = useState('');
+  const [authorCorresponding, setAuthorCorresponding] = useState(false);
   const memberships = useQuery({
     queryKey: ['conferences'],
     queryFn: loadMemberships,
@@ -109,11 +154,17 @@ export function SubmissionEditorPage() {
         account.data?.platformRole === 'SYSTEM_ADMIN',
         memberships.data,
         chosen,
+        account.data?.profile?.academicTitle,
       )
     ) {
       setConferenceId('');
     }
-  }, [account.data?.platformRole, conferenceId, memberships.data]);
+  }, [
+    account.data?.platformRole,
+    account.data?.profile?.academicTitle,
+    conferenceId,
+    memberships.data,
+  ]);
   const paper = useQuery({
     queryKey: ['paper', paperId],
     queryFn: () => loadPaper(paperId ?? ''),
@@ -170,7 +221,7 @@ export function SubmissionEditorPage() {
           .map((item) => item.trim())
           .filter(Boolean),
         trackId: trackId || null,
-        paperKind,
+        paperKind: paperKind === 'ABSTRACT' ? 'ABSTRACT' : 'FULL',
         authors: [],
       }),
     onSuccess: async (created) => {
@@ -187,7 +238,7 @@ export function SubmissionEditorPage() {
         title: title || current?.title,
         abstract: abstractText || current?.abstract,
         trackId: trackId || null,
-        paperKind,
+        ...(paperKind ? { paperKind } : {}),
         keywords: keywordsText
           .split(',')
           .map((item) => item.trim())
@@ -195,25 +246,43 @@ export function SubmissionEditorPage() {
       }),
   });
 
+  const saveAuthors = useMutation({
+    mutationFn: (authors: PaperAuthor[]) =>
+      send(`/api/v1/papers/${paperId}/authors`, 'PUT', {
+        authors: authorInput(ensureCorresponding(authors)),
+      }),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['paper', paperId] });
+      feedback.success(t('workflow.saved'));
+    },
+  });
+
   const addAuthor = useMutation({
     mutationFn: () => {
-      const [firstName, ...rest] = authorName.trim().split(/\s+/);
-      const authors = [
-        ...(current?.authors ?? []),
-        {
-          firstName: firstName || authorName,
-          lastName: rest.join(' ') || firstName || 'Author',
-          email: authorEmail,
-          affiliation: '',
-          corresponding: (current?.authors.length ?? 0) === 0,
-        },
-      ];
-      return send(`/api/v1/papers/${paperId}/authors`, 'PUT', { authors });
+      const firstName = authorFirstName.trim();
+      const lastName = authorLastName.trim();
+      const email = authorEmail.trim();
+      const affiliation = authorAffiliation.trim();
+      const existing = current?.authors ?? [];
+      const corresponding = authorCorresponding || existing.length === 0;
+      const authors = ensureCorresponding([
+        ...(corresponding
+          ? existing.map((author) => ({ ...author, corresponding: false }))
+          : existing),
+        { firstName, lastName, email, affiliation, corresponding },
+      ]);
+      return send(`/api/v1/papers/${paperId}/authors`, 'PUT', {
+        authors: authorInput(authors),
+      });
     },
     onSuccess: async () => {
-      setAuthorName('');
+      setAuthorLastName('');
+      setAuthorFirstName('');
+      setAuthorAffiliation('');
       setAuthorEmail('');
+      setAuthorCorresponding(false);
       await queryClient.invalidateQueries({ queryKey: ['paper', paperId] });
+      feedback.success(t('workflow.saved'));
     },
   });
 
@@ -222,6 +291,7 @@ export function SubmissionEditorPage() {
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ['paper', paperId] });
       await queryClient.invalidateQueries({ queryKey: ['papers'] });
+      feedback.success(t('papers.submitted'));
     },
   });
 
@@ -233,6 +303,7 @@ export function SubmissionEditorPage() {
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ['paper', paperId] });
       await queryClient.invalidateQueries({ queryKey: ['papers'] });
+      feedback.success(t('papers.withdrawn'));
     },
   });
 
@@ -244,24 +315,47 @@ export function SubmissionEditorPage() {
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ['paper', paperId] });
       await queryClient.invalidateQueries({ queryKey: ['papers'] });
+      feedback.success(t('papers.cancelled'));
     },
   });
 
+  function fail(caught: unknown) {
+    feedback.error(caught instanceof Error ? caught.message : t('papers.failed'));
+  }
+
+  const tracks = conference.data?.tracks ?? [];
+  const trackRequired = tracks.length > 0;
+  const depositFiles = current?.dossier?.files ?? [];
+  const hasAbstractFile = depositFiles.some((file) => file.kind === 'ABSTRACT');
+  const hasRegularFile = depositFiles.some((file) => file.kind === 'MANUSCRIPT');
+  const filesReady = hasAbstractFile && hasRegularFile;
+
   async function goNext() {
-    setMessage(null);
     try {
       if (step === 0 && !locked) {
+        if (!paperId && !conferenceId) {
+          fail(new Error(t('papers.chooseConference')));
+          return;
+        }
+        if (trackRequired && !trackId) {
+          fail(new Error(t('papers.trackRequired')));
+          return;
+        }
         if (!paperId) {
-          pendingStep.current = 1;
+          pendingStep.current = 0;
           await create.mutateAsync();
           return;
         }
         await saveText.mutateAsync();
         await queryClient.invalidateQueries({ queryKey: ['paper', paperId] });
+        if (!filesReady) {
+          fail(new Error(t('papers.filesRequired')));
+          return;
+        }
       }
-      setStep((value) => Math.min(value + 1, 3));
+      setStep((value) => Math.min(value + 1, 2));
     } catch (caught: unknown) {
-      setMessage(caught instanceof Error ? caught.message : t('papers.failed'));
+      fail(caught);
     }
   }
 
@@ -279,24 +373,27 @@ export function SubmissionEditorPage() {
               type="button"
               disabled={create.isPending || saveText.isPending || locked}
               onClick={() => {
-                setMessage(null);
                 pendingStep.current = 0;
                 const action = paperId ? saveText.mutateAsync() : create.mutateAsync();
-                void action.catch((caught: unknown) => {
-                  setMessage(
-                    caught instanceof Error ? caught.message : t('papers.failed'),
-                  );
-                });
+                void action
+                  .then(() => feedback.success(t('workflow.saved')))
+                  .catch(fail);
               }}
             >
               {t('papers.saveDraft')}
             </Button>
           ) : null}
         </div>
-        {step < 3 ? (
+        {step < 2 ? (
           <Button
             type="button"
-            disabled={create.isPending || saveText.isPending}
+            disabled={
+              create.isPending ||
+              saveText.isPending ||
+              (step === 0 &&
+                !locked &&
+                ((trackRequired && !trackId) || (Boolean(current) && !filesReady)))
+            }
             onClick={() => void goNext()}
           >
             {t('papers.next')}
@@ -306,20 +403,37 @@ export function SubmissionEditorPage() {
     );
   }
 
-  async function upload(file: File) {
-    setMessage(null);
+  async function upload(file: File, kind: 'ABSTRACT' | 'FULL') {
+    setPaperKind((currentKind) => currentKind || kind);
     const body = new FormData();
     body.set('manuscript', file);
-    const response = await apiFetch(`/api/v1/papers/${paperId}/manuscript`, {
-      method: 'POST',
-      body,
-    });
+    const response = await apiFetch(
+      `/api/v1/papers/${paperId}/manuscript?as=${encodeURIComponent(kind)}`,
+      {
+        method: 'POST',
+        body,
+      },
+    );
     if (!response.ok) {
-      setMessage(await apiErrorMessage(response));
+      feedback.error(await apiErrorMessage(response));
       return;
     }
     await queryClient.invalidateQueries({ queryKey: ['paper', paperId] });
+    feedback.success(t('workflow.saved'));
   }
+
+  const managerWorkspace =
+    account.data?.platformRole === 'SYSTEM_ADMIN' ||
+    isCreatedAdmin(account.data?.profile?.academicTitle) ||
+    isSessionChair(account.data?.profile?.academicTitle) ||
+    (memberships.data?.some(
+      (item) =>
+        item.membershipStatus === 'ACTIVE' &&
+        (item.role === 'CHAIR' ||
+          item.role === 'ADMINISTRATOR' ||
+          item.role === 'COMMITTEE'),
+    ) ??
+      false);
 
   const extras = usePaperStageExtras(
     current,
@@ -327,13 +441,12 @@ export function SubmissionEditorPage() {
       await queryClient.invalidateQueries({ queryKey: ['paper', paperId] });
       await queryClient.invalidateQueries({ queryKey: ['papers'] });
     },
-    setMessage,
+    (msg) => feedback.error(msg),
   );
 
   const steps = [
     t('papers.stepDetails'),
     t('papers.stepAuthors'),
-    t('papers.stepFile'),
     t('papers.stepSubmit'),
   ];
 
@@ -392,49 +505,27 @@ export function SubmissionEditorPage() {
 
   return (
     <div className="space-y-5">
-      <div>
-        <h1 className="break-words text-xl sm:text-2xl lg:text-3xl">
-          {current?.title || t('papers.new')}
-        </h1>
-        {current ? (
-          <p className="mt-2 flex flex-wrap items-center gap-2">
-            {(current.conferenceName || conference.data?.name) ? (
-              <span className="rounded-full border border-[#d8dce6] bg-[#f6f7fb] px-3 py-1 text-xs font-extrabold text-[#1c2744]">
-                {current.conferenceName || conference.data?.name}
-              </span>
-            ) : null}
-            <span
-              className={`rounded-full px-3 py-1 text-xs font-extrabold ${
-                current.status === 'DRAFT'
-                  ? 'bg-[#f0a04b]/16 text-[#9a6410]'
-                  : current.status === 'WITHDRAWN' || current.status === 'CANCELLED'
-                    ? 'bg-[#e35d5d]/12 text-[#c54545]'
-                    : 'bg-[#2fbf71]/14 text-[#1c9a57]'
-              }`}
-            >
-              {current.status === 'DRAFT'
-                ? t('papers.draft')
-                : current.status === 'WITHDRAWN'
-                  ? t('papers.withdrawn')
-                  : current.status === 'CANCELLED'
-                    ? t('papers.cancelled')
-                    : t('papers.submitted')}
-            </span>
-            {current.publicId ? (
-              <span className="text-sm text-[#5c6578]">{current.publicId}</span>
-            ) : null}
-          </p>
-        ) : null}
-      </div>
-      {message ? (
-        <p className="text-sm font-bold text-[#c54545]" role="alert">
-          {message}
-        </p>
-      ) : null}
       <PaperWorkflow
         paper={current}
+        authorLayout={!current && !managerWorkspace}
+        authorsBusy={saveAuthors.isPending || addAuthor.isPending}
+        onAuthorsChange={
+          current?.status === 'WITHDRAWN' || current?.status === 'CANCELLED'
+            ? undefined
+            : (authors) =>
+                void saveAuthors
+                  .mutateAsync(
+                    authors.map((author) => ({
+                      firstName: author.firstName,
+                      lastName: author.lastName,
+                      email: author.email,
+                      affiliation: author.affiliation ?? '',
+                      corresponding: Boolean(author.corresponding),
+                    })),
+                  )
+                  .catch(fail)
+        }
         onScope={(accept, reason) => {
-          setMessage(null);
           void apiFetch(`/api/v1/papers/${paperId}/scope`, {
             method: 'POST',
             body: JSON.stringify({
@@ -443,10 +534,11 @@ export function SubmissionEditorPage() {
             }),
           }).then(async (response) => {
             if (!response.ok) {
-              setMessage(await apiErrorMessage(response));
+              feedback.error(await apiErrorMessage(response));
               return;
             }
             await queryClient.invalidateQueries({ queryKey: ['paper', paperId] });
+            feedback.success(t('workflow.saved'));
           });
         }}
         extras={extras}
@@ -466,7 +558,7 @@ export function SubmissionEditorPage() {
           </div>
 
           <div
-            className="grid grid-cols-2 gap-1.5 rounded-2xl border border-[#d8dce6] bg-[#f6f7fb] p-1.5 sm:grid-cols-4"
+            className="grid grid-cols-3 gap-1.5 rounded-2xl border border-[#d8dce6] bg-[#f6f7fb] p-1.5"
             role="tablist"
             aria-label={t('papers.depositEditor')}
           >
@@ -509,57 +601,85 @@ export function SubmissionEditorPage() {
                 {!paperId ? (
                   <label className="text-xs font-extrabold text-[#5c6578] sm:col-span-2">
                     {t('papers.conference')}
-                    <select
+                    <FieldSelect
                       className={field}
                       value={conferenceId}
-                      onChange={(event) => setConferenceId(event.target.value)}
-                    >
-                      <option value="">{t('papers.chooseConference')}</option>
-                      {memberships.data
-                        ?.filter((item) =>
+                      onChange={setConferenceId}
+                      placeholder={t('papers.chooseConference')}
+                      options={(memberships.data ?? [])
+                        .filter((item) =>
                           canSubmitToConference(
                             account.data?.platformRole === 'SYSTEM_ADMIN',
                             memberships.data ?? [],
                             item,
+                            account.data?.profile?.academicTitle,
                           ),
                         )
-                        .map((item) => (
-                          <option key={item.id} value={item.id}>
-                            {item.name}
-                          </option>
-                        ))}
-                    </select>
+                        .map((item) => ({ value: item.id, label: item.name }))}
+                    />
                   </label>
                 ) : null}
-                <label className="text-xs font-extrabold text-[#5c6578]">
-                  {t('papers.kind')}
-                  <select
-                    className={field}
-                    value={paperKind}
-                    disabled={locked}
-                    onChange={(event) =>
-                      setPaperKind(event.target.value as 'ABSTRACT' | 'FULL')
-                    }
-                  >
-                    <option value="FULL">{t('dossier.full')}</option>
-                    <option value="ABSTRACT">{t('dossier.abstract')}</option>
-                  </select>
-                </label>
+                <div className="sm:col-span-2">
+                  <p className="text-xs font-extrabold text-[#5c6578]">
+                    {t('papers.kind')}
+                  </p>
+                  <p className="mt-0.5 text-xs font-semibold text-[#8b909a]">
+                    {t('papers.kindHint')}
+                  </p>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {(
+                      [
+                        ['ABSTRACT', 'dossier.asAbstract'],
+                        ['FULL', 'dossier.asRegular'],
+                      ] as const
+                    ).map(([kind, label]) => {
+                      const files = current?.dossier?.files ?? [];
+                      const hasFile = files.some((file) =>
+                        kind === 'ABSTRACT'
+                          ? file.kind === 'ABSTRACT'
+                          : file.kind === 'MANUSCRIPT',
+                      );
+                      const active = hasFile || paperKind === kind;
+                      return (
+                        <button
+                          key={kind}
+                          type="button"
+                          disabled={locked}
+                          aria-pressed={active}
+                          onClick={() =>
+                            setPaperKind((currentKind) =>
+                              currentKind === kind ? '' : kind,
+                            )
+                          }
+                          className={`rounded-full px-3 py-1.5 text-sm font-extrabold ${
+                            active
+                              ? 'bg-[#5d74ff]/15 text-[#3d4fd4]'
+                              : 'bg-[#f4f7ff] text-[#5c6578]'
+                          }`}
+                        >
+                          {t(label)}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
                 <label className="text-xs font-extrabold text-[#5c6578]">
                   {t('papers.track')}
-                  <select
+                  {trackRequired ? (
+                    <span className="ml-1 text-[#c54545]">*</span>
+                  ) : null}
+                  <FieldSelect
                     className={field}
                     value={trackId}
                     disabled={locked || !tracksOf}
-                    onChange={(event) => setTrackId(event.target.value)}
-                  >
-                    <option value="">{t('papers.chooseTrack')}</option>
-                    {conference.data?.tracks.map((track) => (
-                      <option key={track.id} value={track.id}>
-                        {track.code} · {track.name}
-                      </option>
-                    ))}
-                  </select>
+                    required={trackRequired}
+                    onChange={setTrackId}
+                    placeholder={t('papers.chooseTrack')}
+                    options={tracks.map((track) => ({
+                      value: track.id,
+                      label: `${track.code} · ${track.name}`,
+                    }))}
+                  />
                 </label>
                 <label className="text-xs font-extrabold text-[#5c6578] sm:col-span-2">
                   {t('papers.paperTitle')}
@@ -590,6 +710,48 @@ export function SubmissionEditorPage() {
                   />
                 </label>
               </div>
+              <div className="mt-4 space-y-3">
+                <p className="text-sm font-semibold text-[#5c6578]">
+                  {t('papers.filesRequired')}
+                </p>
+                {current ? (
+                  <div className="grid gap-3 lg:grid-cols-2">
+                    {(
+                      [
+                        ['ABSTRACT', 'dossier.asAbstract'],
+                        ['FULL', 'dossier.asRegular'],
+                      ] as const
+                    ).map(([kind, label]) => {
+                      const fileKind = kind === 'ABSTRACT' ? 'ABSTRACT' : 'MANUSCRIPT';
+                      const file =
+                        current.dossier?.files.find((item) => item.kind === fileKind) ??
+                        null;
+                      const shown = file
+                        ? { ...file, stateLabel: t(label) }
+                        : null;
+                      return (
+                        <PaperFileSlot
+                          key={kind}
+                          paperId={current.id}
+                          title={`${t(label)} *`}
+                          hint={t('papers.fileHint')}
+                          kind={fileKind}
+                          file={shown}
+                          uploadLabel={t('papers.uploadManuscript')}
+                          onUpload={
+                            locked ? undefined : (next) => void upload(next, kind)
+                          }
+                          done={Boolean(shown)}
+                        />
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <p className="text-sm font-semibold text-[#8b909a]">
+                    {t('papers.needDraft')}
+                  </p>
+                )}
+              </div>
               {stepNav(true)}
             </StagePanel>
           ) : null}
@@ -601,53 +763,197 @@ export function SubmissionEditorPage() {
               status={`${current.authors.length}`}
               statusTone={current.authors.length > 0 ? 'ok' : 'missing'}
             >
-              <ul className="grid gap-2 sm:grid-cols-2">
-                {current.authors.map((author, index) => (
-                  <li
-                    key={`${author.email}-${index}`}
-                    className="rounded-xl border border-[#d8dce6] bg-white px-4 py-3 text-sm"
-                  >
-                    <span className="font-extrabold text-[#1c2744]">
-                      {author.firstName} {author.lastName}
-                    </span>
-                    <span className="mt-0.5 block break-all text-xs font-semibold text-[#8b909a]">
-                      {author.email}
-                    </span>
-                    {author.corresponding ? (
-                      <span className="mt-2 inline-block rounded-full bg-[#eef2ff] px-2 py-0.5 text-[11px] font-extrabold text-[#3d4fd4]">
-                        {t('papers.corresponding')}
-                      </span>
-                    ) : null}
-                  </li>
-                ))}
-              </ul>
+              <ol className="grid gap-2">
+                {current.authors.map((author, index) => {
+                  const total = current.authors.length;
+                  const busy = saveAuthors.isPending || addAuthor.isPending;
+                  return (
+                    <li
+                      key={`${author.email}-${index}`}
+                      className="flex flex-col gap-3 rounded-xl border border-[#d8dce6] bg-white px-4 py-3 sm:flex-row sm:items-start sm:justify-between"
+                    >
+                      <div className="flex min-w-0 items-start gap-3">
+                        <span className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-full bg-[#eef2ff] text-xs font-extrabold text-[#3d4fd4]">
+                          {index + 1}
+                        </span>
+                        <div className="min-w-0">
+                          <p className="font-extrabold text-[#1c2744]">
+                            {author.lastName} {author.firstName}
+                          </p>
+                          {author.affiliation ? (
+                            <p className="mt-0.5 text-xs font-semibold text-[#5c6578]">
+                              {author.affiliation}
+                            </p>
+                          ) : null}
+                          <p className="mt-0.5 break-all text-xs font-semibold text-[#8b909a]">
+                            {author.email}
+                          </p>
+                          {author.corresponding ? (
+                            <span className="mt-2 inline-block rounded-full bg-[#eef2ff] px-2 py-0.5 text-[11px] font-extrabold text-[#3d4fd4]">
+                              {t('papers.corresponding')}
+                            </span>
+                          ) : locked ? null : (
+                            <button
+                              type="button"
+                              disabled={busy}
+                              className="mt-2 text-[11px] font-extrabold text-[#3d4fd4] hover:underline"
+                              onClick={() =>
+                                void saveAuthors
+                                  .mutateAsync(
+                                    current.authors.map((item, itemIndex) => ({
+                                      ...item,
+                                      corresponding: itemIndex === index,
+                                    })),
+                                  )
+                                  .catch(fail)
+                              }
+                            >
+                              {t('papers.markCorresponding')}
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                      {locked ? null : (
+                        <div
+                          className="flex shrink-0 items-center gap-1"
+                          role="group"
+                          aria-label={t('papers.authorOrder')}
+                        >
+                          {total > 1 ? (
+                            <>
+                              <Button
+                                type="button"
+                                size="icon"
+                                variant="outline"
+                                className="border-[#c5cad6]"
+                                disabled={busy || index === 0}
+                                aria-label={t('papers.moveUp')}
+                                title={t('papers.moveUp')}
+                                onClick={() =>
+                                  void saveAuthors
+                                    .mutateAsync(
+                                      moveAuthor(current.authors, index, index - 1),
+                                    )
+                                    .catch(fail)
+                                }
+                              >
+                                <ArrowUp className="size-4" />
+                              </Button>
+                              <Button
+                                type="button"
+                                size="icon"
+                                variant="outline"
+                                className="border-[#c5cad6]"
+                                disabled={busy || index === total - 1}
+                                aria-label={t('papers.moveDown')}
+                                title={t('papers.moveDown')}
+                                onClick={() =>
+                                  void saveAuthors
+                                    .mutateAsync(
+                                      moveAuthor(current.authors, index, index + 1),
+                                    )
+                                    .catch(fail)
+                                }
+                              >
+                                <ArrowDown className="size-4" />
+                              </Button>
+                            </>
+                          ) : null}
+                          <Button
+                            type="button"
+                            size="icon"
+                            variant="outline"
+                            className="border-[#c5cad6] text-[#c54545]"
+                            disabled={busy}
+                            aria-label={t('papers.removeAuthor')}
+                            title={t('papers.removeAuthor')}
+                            onClick={() =>
+                              void saveAuthors
+                                .mutateAsync(
+                                  current.authors.filter(
+                                    (_, itemIndex) => itemIndex !== index,
+                                  ),
+                                )
+                                .catch(fail)
+                            }
+                          >
+                            <X className="size-4" />
+                          </Button>
+                        </div>
+                      )}
+                    </li>
+                  );
+                })}
+              </ol>
               {locked ? null : (
                 <form
-                  className="mt-3 grid gap-2 sm:grid-cols-[1fr_1fr_auto]"
+                  className="mt-3 grid gap-2 sm:grid-cols-2"
                   onSubmit={(event) => {
                     event.preventDefault();
-                    setMessage(null);
-                    void addAuthor.mutateAsync().catch((caught: unknown) => {
-                      setMessage(
-                        caught instanceof Error ? caught.message : t('papers.failed'),
-                      );
-                    });
+                    void addAuthor.mutateAsync().catch(fail);
                   }}
                 >
-                  <Input
-                    className={field}
-                    value={authorName}
-                    onChange={(event) => setAuthorName(event.target.value)}
-                    placeholder={t('papers.authorName')}
-                  />
-                  <Input
-                    className={field}
-                    type="email"
-                    value={authorEmail}
-                    onChange={(event) => setAuthorEmail(event.target.value)}
-                    placeholder={t('auth.email')}
-                  />
-                  <Button type="submit">{t('papers.addAuthor')}</Button>
+                  <label className="text-xs font-extrabold text-[#5c6578]">
+                    {t('auth.lastName')}
+                    <Input
+                      className={field}
+                      value={authorLastName}
+                      required
+                      onChange={(event) => setAuthorLastName(event.target.value)}
+                    />
+                  </label>
+                  <label className="text-xs font-extrabold text-[#5c6578]">
+                    {t('auth.firstName')}
+                    <Input
+                      className={field}
+                      value={authorFirstName}
+                      required
+                      onChange={(event) => setAuthorFirstName(event.target.value)}
+                    />
+                  </label>
+                  <label className="text-xs font-extrabold text-[#5c6578]">
+                    {t('papers.affiliation')}
+                    <Input
+                      className={field}
+                      value={authorAffiliation}
+                      required
+                      onChange={(event) => setAuthorAffiliation(event.target.value)}
+                    />
+                  </label>
+                  <label className="text-xs font-extrabold text-[#5c6578]">
+                    {t('auth.email')}
+                    <Input
+                      className={field}
+                      type="email"
+                      value={authorEmail}
+                      required
+                      onChange={(event) => setAuthorEmail(event.target.value)}
+                    />
+                  </label>
+                  <label className="flex items-center gap-2 text-xs font-extrabold text-[#5c6578]">
+                    <input
+                      type="checkbox"
+                      checked={authorCorresponding || current.authors.length === 0}
+                      onChange={(event) =>
+                        setAuthorCorresponding(event.target.checked)
+                      }
+                    />
+                    {t('papers.corresponding')}
+                  </label>
+                  <div className="flex items-end justify-end">
+                    <Button
+                      type="submit"
+                      disabled={
+                        addAuthor.isPending ||
+                        !authorLastName.trim() ||
+                        !authorFirstName.trim() ||
+                        !authorAffiliation.trim() ||
+                        !authorEmail.trim()
+                      }
+                    >
+                      {t('papers.addAuthor')}
+                    </Button>
+                  </div>
                 </form>
               )}
               {stepNav(false)}
@@ -655,31 +961,6 @@ export function SubmissionEditorPage() {
           ) : null}
 
           {step === 2 && current ? (
-            <div className="space-y-3">
-              <PaperFileSlot
-                paperId={current.id}
-                title={t('papers.stepFile')}
-                hint={t('papers.fileHint')}
-                kind="MANUSCRIPT"
-                file={
-                  current.manuscript
-                    ? {
-                        kind: 'MANUSCRIPT',
-                        originalName: current.manuscript.originalName,
-                        contentType: current.manuscript.contentType ?? 'application/pdf',
-                        sizeBytes: current.manuscript.sizeBytes,
-                      }
-                    : null
-                }
-                uploadLabel={t('papers.uploadManuscript')}
-                onUpload={locked ? undefined : (file) => void upload(file)}
-                done={Boolean(current.manuscript)}
-              />
-              {stepNav(false)}
-            </div>
-          ) : null}
-
-          {step === 3 && current ? (
             <StagePanel
               title={t('papers.stepSubmit')}
               hint={t('papers.submitHint')}
@@ -703,16 +984,25 @@ export function SubmissionEditorPage() {
               <div className="flex flex-wrap items-center gap-3">
                 {current.status === 'DRAFT' ? (
                   <>
+                    {trackRequired && !trackId ? (
+                      <p className="w-full text-sm font-bold text-[#c54545]" role="alert">
+                        {t('papers.trackRequired')}
+                      </p>
+                    ) : null}
+                    {!filesReady ? (
+                      <p className="w-full text-sm font-bold text-[#c54545]" role="alert">
+                        {t('papers.filesRequired')}
+                      </p>
+                    ) : null}
                     <button
                       type="button"
-                      disabled={submit.isPending}
+                      disabled={
+                        submit.isPending ||
+                        (trackRequired && !trackId) ||
+                        !filesReady
+                      }
                       onClick={() => {
-                        setMessage(null);
-                        void submit.mutateAsync().catch((caught: unknown) => {
-                          setMessage(
-                            caught instanceof Error ? caught.message : t('papers.failed'),
-                          );
-                        });
+                        void submit.mutateAsync().catch(fail);
                       }}
                       className="inline-flex min-h-12 items-center rounded-full bg-[#3d4fd4] px-6 text-sm font-extrabold text-white shadow-[0_8px_20px_rgba(61,79,212,0.35)] disabled:opacity-60"
                     >
@@ -724,12 +1014,7 @@ export function SubmissionEditorPage() {
                       className="border-[#c5cad6]"
                       disabled={cancelPaper.isPending}
                       onClick={() => {
-                        setMessage(null);
-                        void cancelPaper.mutateAsync().catch((caught: unknown) => {
-                          setMessage(
-                            caught instanceof Error ? caught.message : t('papers.failed'),
-                          );
-                        });
+                        void cancelPaper.mutateAsync().catch(fail);
                       }}
                     >
                       {t('papers.cancel')}
@@ -747,12 +1032,7 @@ export function SubmissionEditorPage() {
                       className="border-[#c5cad6]"
                       disabled={withdraw.isPending}
                       onClick={() => {
-                        setMessage(null);
-                        void withdraw.mutateAsync().catch((caught: unknown) => {
-                          setMessage(
-                            caught instanceof Error ? caught.message : t('papers.failed'),
-                          );
-                        });
+                        void withdraw.mutateAsync().catch(fail);
                       }}
                     >
                       {t('papers.withdraw')}

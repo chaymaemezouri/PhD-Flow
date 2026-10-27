@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useSearchParams } from 'react-router';
 import { Button } from '@/components/ui/button';
+import { useFeedback } from '@/features/feedback/feedback';
 import { apiErrorMessage, apiFetch } from '@/services/api';
 
 interface AssignedConference {
@@ -28,7 +29,7 @@ export function ConferenceAccessPage() {
   const preset = params.get('conference');
   const [selected, setSelected] = useState<string | null>(preset);
   const [password, setPassword] = useState('');
-  const [notice, setNotice] = useState<string | null>(null);
+  const feedback = useFeedback();
   const resumed = useRef(false);
   const assigned = useQuery({
     queryKey: ['assigned-conferences'],
@@ -61,7 +62,7 @@ export function ConferenceAccessPage() {
       await queryClient.invalidateQueries({ queryKey: ['conferences'] });
       void navigate('/workspace/administrator');
     },
-    onError: (error: Error) => setNotice(error.message),
+    onError: (error: Error) => feedback.error(error.message),
   });
 
   useEffect(() => {
@@ -83,7 +84,6 @@ export function ConferenceAccessPage() {
           {t('access.intro')}
         </p>
       </div>
-      {notice ? <p className="text-sm font-extrabold text-[#c54545]">{notice}</p> : null}
       {assigned.isPending ? (
         <p className="text-sm text-[#8b909a]">{t('common.loading')}</p>
       ) : null}
@@ -103,7 +103,6 @@ export function ConferenceAccessPage() {
                 }`}
                 onClick={() => {
                   setSelected(item.id);
-                  setNotice(null);
                 }}
               >
                 <span className="block text-lg font-extrabold text-[#1c2744]">
@@ -128,7 +127,6 @@ export function ConferenceAccessPage() {
               return;
             }
             setSelected(conferenceId);
-            setNotice(null);
             void open.mutateAsync({
               conferenceId,
               password: chosen?.granted ? undefined : password,

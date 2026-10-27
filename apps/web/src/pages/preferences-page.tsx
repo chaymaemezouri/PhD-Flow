@@ -3,7 +3,6 @@ import { interfacePreferencesSchema } from '@scholarflow/validation';
 import type { InterfaceLanguage, InterfaceTheme } from '@scholarflow/types';
 import { useForm } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
-import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import {
   Card,
@@ -12,6 +11,7 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
+import { useFeedback } from '@/features/feedback/feedback';
 import { usePreferences } from '@/features/preferences/preferences-context';
 
 const themes: InterfaceTheme[] = ['light', 'dark', 'system'];
@@ -19,6 +19,7 @@ const languages: InterfaceLanguage[] = ['en', 'fr'];
 
 export function PreferencesPage() {
   const { t } = useTranslation();
+  const feedback = useFeedback();
   const { preferences, savePreferences } = usePreferences();
   const form = useForm({
     resolver: zodResolver(interfacePreferencesSchema),
@@ -36,7 +37,7 @@ export function PreferencesPage() {
           className="space-y-6"
           onSubmit={form.handleSubmit((values) => {
             savePreferences(values);
-            toast.success(t('preferences.saved'));
+            feedback.success(t('preferences.saved'));
           })}
         >
           <fieldset className="space-y-2">

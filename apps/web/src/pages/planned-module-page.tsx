@@ -1,12 +1,21 @@
-import { Link, useParams } from 'react-router';
+import { Link, Navigate, useParams } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { findPlannedModule } from '@/features/navigation/modules';
 
+const REDIRECTS: Record<string, string> = {
+  program: '/workspace/program',
+  decisions: '/workspace/administrator?board=decisions',
+  administration: '/workspace/conferences',
+};
+
 export function PlannedModulePage() {
   const { t } = useTranslation();
   const { moduleId } = useParams();
+  if (moduleId && REDIRECTS[moduleId]) {
+    return <Navigate to={REDIRECTS[moduleId]} replace />;
+  }
   const module = moduleId ? findPlannedModule(moduleId) : undefined;
 
   return (
@@ -23,7 +32,7 @@ export function PlannedModulePage() {
           </p>
         ) : null}
         <Button asChild variant="outline">
-          <Link to="/workspace/author">{t('nav.overview')}</Link>
+          <Link to="/workspace/administrator">{t('nav.overview')}</Link>
         </Button>
       </CardContent>
     </Card>

@@ -15,6 +15,7 @@ import {
 import { PrismaService } from '../../prisma/prisma.service.js';
 import type { AuthenticatedUser } from '../auth/auth.types.js';
 import { PasswordService } from '../auth/password.service.js';
+import { readConferenceFee, writeConferenceFee } from '../conferences/conference-fee.js';
 
 type ResetPasswordInput = z.infer<typeof resetAdminPasswordSchema>;
 type AssignChairInput = z.infer<typeof assignConferenceChairSchema>;
@@ -387,9 +388,6 @@ export class SystemService {
     if (!conference) {
       throw new NotFoundException('Conference not found');
     }
-    if (input.status === ConferenceStatus.PUBLISHED && !conference.accessPasswordHash) {
-      throw new ForbiddenException('Set the conference password before publishing');
-    }
     await this.prisma.conference.update({
       where: { id: conferenceId },
       data: { status: input.status },
@@ -510,6 +508,10 @@ export class SystemService {
       });
       return conference;
     });
+    const fee = await readConferenceFee(this.prisma, source.id);
+    if (fee) {
+      await writeConferenceFee(this.prisma, created.id, fee);
+    }
     return this.conferences().then((rows) => rows.find((item) => item.id === created.id));
   }
 

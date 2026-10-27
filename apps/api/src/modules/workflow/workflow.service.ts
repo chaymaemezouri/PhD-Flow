@@ -37,6 +37,15 @@ import { PrismaService } from '../../prisma/prisma.service.js';
 import type { AuthenticatedUser } from '../auth/auth.types.js';
 import { EmailService } from '../auth/email.service.js';
 import { ObjectStorage } from '../papers/object-storage.js';
+import {
+  appendCopyrightRemarkRound,
+  readCopyrightRemarks,
+  writeCopyrightRemarks,
+} from '../papers/copyright-remarks.js';
+import {
+  splitPresentationStaff,
+  staffSummary,
+} from '../papers/presentation-staff.js';
 
 /** Conference ops on papers: admin, under-admin, and programme committee. */
 const CHAIRS = new Set<ConferenceRole>([
@@ -415,7 +424,10 @@ export class WorkflowService {
     input: SlidesDecisionInput,
   ) {
     const paper = await this.loadPaper(paperId);
-    this.assertChair(actor, paper.conference.memberships);
+    const presentationStaff = (paper.sessionChairIds ?? []).includes(actor.id);
+    if (!presentationStaff) {
+      this.assertChair(actor, paper.conference.memberships);
+    }
     if (
       paper.slidesStatus !== SlidesStatus.DEPOSITED &&
       paper.slidesStatus !== SlidesStatus.WILL_DEPOSIT &&
@@ -457,19 +469,22 @@ export class WorkflowService {
   ) {
     const paper = await this.loadPaper(paperId);
     this.assertChair(actor, paper.conference.memberships);
-    if (
-      paper.cameraReadyStatus !== CameraReadyStatus.DEPOSITED &&
-      paper.cameraReadyStatus !== CameraReadyStatus.WILL_DEPOSIT &&
-      paper.cameraReadyStatus !== CameraReadyStatus.NEEDS_MODS
-    ) {
-      throw new ForbiddenException('Wait for the author to deposit the final version');
+    if (paper.cameraReadyStatus === CameraReadyStatus.VALIDATED) {
+      throw new ForbiddenException('Camera-ready is already validated');
     }
     const hasPdf = paper.files.some((file) => file.kind === PaperFileKind.CAMERA_READY);
     const hasEditable = paper.files.some((file) => file.kind === PaperFileKind.EDITABLE);
-    if (!hasPdf || !hasEditable) {
-      throw new BadRequestException('Both PDF and editable/ZIP files are required');
-    }
     if (input.outcome === 'VALIDATED') {
+      if (
+        paper.cameraReadyStatus !== CameraReadyStatus.DEPOSITED &&
+        paper.cameraReadyStatus !== CameraReadyStatus.WILL_DEPOSIT &&
+        paper.cameraReadyStatus !== CameraReadyStatus.NEEDS_MODS
+      ) {
+        throw new ForbiddenException('Wait for the author to deposit the final version');
+      }
+      if (!hasPdf || !hasEditable) {
+        throw new BadRequestException('Both PDF and editable/ZIP files are required');
+      }
       return this.prisma.paper.update({
         where: { id: paperId },
         data: {
@@ -480,6 +495,15 @@ export class WorkflowService {
               : paper.similarityStatus,
         },
       });
+    }
+    if (paper.cameraReadyStatus === CameraReadyStatus.LOCKED) {
+      const slidesDone =
+        paper.slidesStatus === SlidesStatus.VALIDATED || paper.presentedAt !== null;
+      if (!slidesDone) {
+        throw new ForbiddenException(
+          'Camera-ready opens after the presentation is validated',
+        );
+      }
     }
     await this.seedCameraReadyRemarks(paperId, input.note);
     return this.prisma.paper.update({
@@ -605,25 +629,32 @@ export class WorkflowService {
   async assignSessionChair(actor: AuthenticatedUser, paperId: string, userId: string) {
     const paper = await this.loadPaper(paperId);
     this.assertChair(actor, paper.conference.memberships);
-    const roles = new Set<ConferenceRole>([
-      ConferenceRole.REVIEWER,
-      ConferenceRole.COMMITTEE,
-      ConferenceRole.CHAIR,
-      ConferenceRole.ADMINISTRATOR,
-    ]);
-    const member = paper.conference.memberships.find((item) => item.userId === userId);
+    this.assertPresentationStaffMember(paper, userId);
+    const sessionChairIds = [userId];
+    await this.prisma.paper.update({ where: { id: paperId }, data: { sessionChairIds } });
+    return { sessionChairIds };
+  }
+
+  async assignPresentationReviewer(
+    actor: AuthenticatedUser,
+    paperId: string,
+    userId: string,
+  ) {
+    const paper = await this.loadPaper(paperId);
+    this.assertChair(actor, paper.conference.memberships);
+    this.assertPresentationStaffMember(paper, userId);
+    const { chairs, reviewers } = await this.presentationStaffOf(paper.sessionChairIds);
     if (
-      !member ||
-      member.status !== MembershipStatus.ACTIVE ||
-      !roles.has(member.role) ||
-      userId === paper.createdById
+      chairs.some((item) => item.id === userId) ||
+      reviewers.some((item) => item.id === userId)
     ) {
-      throw new ForbiddenException('Choose a session chair for this conference');
-    }
-    if (paper.sessionChairIds.includes(userId)) {
       return { sessionChairIds: paper.sessionChairIds };
     }
-    const sessionChairIds = [...paper.sessionChairIds, userId];
+    const sessionChairIds = [
+      ...chairs.map((item) => item.id),
+      ...reviewers.map((item) => item.id),
+      userId,
+    ];
     await this.prisma.paper.update({ where: { id: paperId }, data: { sessionChairIds } });
     return { sessionChairIds };
   }
@@ -849,46 +880,111 @@ export class WorkflowService {
       throw new NotFoundException('Conference not found');
     }
     const template = conference.templates.find((item) => item.kind === 'COPYRIGHT');
+    const defaultBody =
+      'I transfer the publication rights for the accepted paper to the conference and confirm the work is original.';
     return {
       subject: template?.subject ?? 'Copyright transfer',
       body:
-        template?.body ??
-        'I transfer the publication rights for the accepted paper to the conference and confirm the work is original.',
+        !template?.body || template.body.startsWith('SF_FILE:')
+          ? defaultBody
+          : template.body,
     };
   }
 
-  async validateCopyright(actor: AuthenticatedUser, paperId: string, accept: boolean) {
+  async validateCopyright(
+    actor: AuthenticatedUser,
+    paperId: string,
+    input: { accept: boolean; note?: string },
+  ) {
     const paper = await this.loadPaper(paperId);
     this.assertChair(actor, paper.conference.memberships);
-    if (!paper.copyright) {
-      throw new NotFoundException('Copyright file not found');
-    }
-    if (
-      accept &&
-      paper.copyrightStageStatus !== CopyrightStageStatus.DEPOSITED &&
-      paper.copyrightStageStatus !== CopyrightStageStatus.OPEN
-    ) {
-      throw new ForbiddenException('Wait for the author to deposit the copyright form');
+    if (paper.copyrightStageStatus === CopyrightStageStatus.VALIDATED && input.accept) {
+      throw new ForbiddenException('Copyright is already validated');
     }
     const hasFile = paper.files.some((file) => file.kind === PaperFileKind.COPYRIGHT);
-    if (accept && !hasFile) {
-      throw new ForbiddenException('Upload the copyright form before validation');
+    if (input.accept) {
+      if (!paper.copyright) {
+        throw new NotFoundException('Copyright file not found');
+      }
+      if (
+        paper.copyrightStageStatus !== CopyrightStageStatus.DEPOSITED &&
+        paper.copyrightStageStatus !== CopyrightStageStatus.OPEN
+      ) {
+        throw new ForbiddenException('Wait for the author to deposit the copyright form');
+      }
+      if (!hasFile) {
+        throw new ForbiddenException('Upload the copyright form before validation');
+      }
+      const [record] = await this.prisma.$transaction([
+        this.prisma.copyrightRecord.update({
+          where: { paperId },
+          data: { status: CopyrightStatus.VALIDATED },
+        }),
+        this.prisma.paper.update({
+          where: { id: paperId },
+          data: { copyrightStageStatus: CopyrightStageStatus.VALIDATED },
+        }),
+      ]);
+      return record;
     }
-    const [record] = await this.prisma.$transaction([
-      this.prisma.copyrightRecord.update({
+    if (paper.copyrightStageStatus === CopyrightStageStatus.LOCKED) {
+      if (paper.similarityStatus !== SimilarityStatus.VALIDATED) {
+        throw new ForbiddenException(
+          'Copyright opens after the similarity check is validated',
+        );
+      }
+    }
+    await this.seedCopyrightRemarks(paperId, input.note ?? '');
+    if (paper.copyright) {
+      await this.prisma.copyrightRecord.update({
         where: { paperId },
-        data: { status: accept ? CopyrightStatus.VALIDATED : CopyrightStatus.REJECTED },
-      }),
-      this.prisma.paper.update({
-        where: { id: paperId },
-        data: {
-          copyrightStageStatus: accept
-            ? CopyrightStageStatus.VALIDATED
-            : CopyrightStageStatus.OPEN,
-        },
-      }),
-    ]);
-    return record;
+        data: { status: CopyrightStatus.REJECTED },
+      });
+    }
+    return this.prisma.paper.update({
+      where: { id: paperId },
+      data: { copyrightStageStatus: CopyrightStageStatus.OPEN },
+    });
+  }
+
+  async updateCopyrightRemark(
+    actor: AuthenticatedUser,
+    paperId: string,
+    remarkId: string,
+    status: RemarkStatusInput,
+  ) {
+    const paper = await this.loadPaper(paperId);
+    const remarks = await readCopyrightRemarks(this.prisma, paperId);
+    const remark = remarks.find((item) => item.id === remarkId);
+    if (!remark) {
+      throw new NotFoundException('Remark not found');
+    }
+    const chair = this.isChair(actor, paper.conference.memberships);
+    const author =
+      paper.createdById === actor.id ||
+      paper.authors.some((item) => item.email === actor.email.toLowerCase());
+    if (
+      status === 'VALIDATED' ||
+      (status === 'OPEN' && remark.status === 'VALIDATED')
+    ) {
+      if (!chair) {
+        throw new ForbiddenException('Only the committee can validate remarks');
+      }
+    } else if (status === 'ADDRESSED' || status === 'OPEN') {
+      if (!author && !chair) {
+        throw new ForbiddenException('Only the author can mark a remark as addressed');
+      }
+    } else {
+      throw new BadRequestException('Unsupported remark status');
+    }
+    if (paper.copyrightStageStatus === CopyrightStageStatus.VALIDATED) {
+      throw new ForbiddenException('Remarks can only change while modifications are open');
+    }
+    const next = remarks.map((item) =>
+      item.id === remarkId ? { ...item, status } : item,
+    );
+    await writeCopyrightRemarks(this.prisma, paperId, next);
+    return next.find((item) => item.id === remarkId);
   }
 
   async register(actor: AuthenticatedUser, conferenceId: string) {
@@ -1011,13 +1107,6 @@ export class WorkflowService {
             where: { id: { in: chairIds } },
             include: { profile: true },
           });
-    const chairName = new Map(
-      chairs.map((user) => [
-        user.id,
-        `${user.profile?.firstName ?? ''} ${user.profile?.lastName ?? ''}`.trim() ||
-          user.email,
-      ]),
-    );
     return {
       sessions: sessions.map((session) => ({
         id: session.id,
@@ -1025,27 +1114,78 @@ export class WorkflowService {
         startsAt: session.startsAt,
         endsAt: session.endsAt,
         room: session.room,
-        presentations: session.presentations.map((item) => ({
-          id: item.id,
-          modality: item.modality,
-          score: item.score,
-          comment: item.comment,
-          presentedAt: item.presentedAt ?? item.paper.presentedAt,
-          paper: {
-            id: item.paper.id,
-            title: item.paper.title,
-            publicId: item.paper.publicId,
-            sessionComment: item.paper.sessionComment,
-            sessionChairs: item.paper.sessionChairIds.map((id) => ({
-              userId: id,
-              name: chairName.get(id) ?? id,
-              mine: id === actor.id,
-            })),
-          },
-        })),
+        presentations: session.presentations.map((item) => {
+          const staff = splitPresentationStaff(item.paper.sessionChairIds, chairs);
+          return {
+            id: item.id,
+            modality: item.modality,
+            score: item.score,
+            comment: item.comment,
+            presentedAt: item.presentedAt ?? item.paper.presentedAt,
+            paper: {
+              id: item.paper.id,
+              title: item.paper.title,
+              publicId: item.paper.publicId,
+              sessionComment: item.paper.sessionComment,
+              sessionChairs: staffSummary(staff.chairs, actor.id),
+              presentationReviewers: staffSummary(staff.reviewers, actor.id),
+            },
+          };
+        }),
       })),
       rooms,
     };
+  }
+
+  async myPresentations(actor: AuthenticatedUser) {
+    const rows = await this.prisma.paper.findMany({
+      where: { sessionChairIds: { has: actor.id } },
+      include: {
+        conference: { select: { id: true, name: true } },
+        presentation: { include: { session: { include: { room: true } } } },
+      },
+      orderBy: { updatedAt: 'desc' },
+    });
+    const ids = [...new Set(rows.flatMap((row) => row.sessionChairIds))];
+    const users =
+      ids.length === 0
+        ? []
+        : await this.prisma.user.findMany({
+            where: { id: { in: ids } },
+            include: { profile: true },
+          });
+    return rows.map((row) => {
+      const staff = splitPresentationStaff(row.sessionChairIds, users);
+      const role = staff.chairs.some((item) => item.id === actor.id)
+        ? 'CHAIR'
+        : 'REVIEWER';
+      const presentation = row.presentation;
+      const presented = Boolean(row.presentedAt || presentation?.presentedAt);
+      return {
+        paperId: row.id,
+        title: row.title,
+        publicId: row.publicId,
+        conferenceId: row.conference.id,
+        conferenceName: row.conference.name,
+        role,
+        slidesStatus: row.slidesStatus,
+        presented,
+        score: presentation?.score ?? null,
+        comment: presentation?.comment || row.sessionComment || null,
+        sessionChairs: staffSummary(staff.chairs, actor.id),
+        presentationReviewers: staffSummary(staff.reviewers, actor.id),
+        schedule: presentation
+          ? {
+              presentationId: presentation.id,
+              sessionTitle: presentation.session.title,
+              roomName: presentation.session.room.name,
+              startsAt: presentation.session.startsAt.toISOString(),
+              endsAt: presentation.session.endsAt.toISOString(),
+              modality: presentation.modality,
+            }
+          : null,
+      };
+    });
   }
 
   async publishDoi(actor: AuthenticatedUser, paperId: string) {
@@ -1128,7 +1268,8 @@ export class WorkflowService {
     if (!row) {
       throw new NotFoundException('Presentation not found');
     }
-    const sessionChair = row.paper.sessionChairIds.includes(actor.id);
+    const { chairs } = await this.presentationStaffOf(row.paper.sessionChairIds);
+    const sessionChair = chairs.some((item) => item.id === actor.id);
     if (!sessionChair) {
       this.assertChair(actor, row.session.conference.memberships);
     }
@@ -1473,6 +1614,21 @@ export class WorkflowService {
       where: { id: paperId },
       data: { cameraReadyStatus: next },
     });
+  }
+
+  private async seedCopyrightRemarks(paperId: string, note: string) {
+    const existing = await readCopyrightRemarks(this.prisma, paperId);
+    const texts = splitRemarkTexts(note);
+    if (texts.length === 0) {
+      texts.push(
+        note.trim() || 'Update the copyright form according to the admin comments.',
+      );
+    }
+    await writeCopyrightRemarks(
+      this.prisma,
+      paperId,
+      appendCopyrightRemarkRound(existing, texts),
+    );
   }
 
   private async seedCameraReadyRemarks(paperId: string, note: string) {
@@ -1848,6 +2004,47 @@ export class WorkflowService {
     if (!author) {
       throw new NotFoundException('Paper not found');
     }
+  }
+
+  private assertPresentationStaffMember(
+    paper: {
+      createdById: string;
+      conference: {
+        memberships: {
+          userId: string;
+          role: ConferenceRole;
+          status: MembershipStatus;
+        }[];
+      };
+    },
+    userId: string,
+  ) {
+    const roles = new Set<ConferenceRole>([
+      ConferenceRole.REVIEWER,
+      ConferenceRole.COMMITTEE,
+      ConferenceRole.CHAIR,
+      ConferenceRole.ADMINISTRATOR,
+    ]);
+    const member = paper.conference.memberships.find((item) => item.userId === userId);
+    if (
+      !member ||
+      member.status !== MembershipStatus.ACTIVE ||
+      !roles.has(member.role) ||
+      userId === paper.createdById
+    ) {
+      throw new ForbiddenException('Choose a committee member for this conference');
+    }
+  }
+
+  private async presentationStaffOf(ids: string[]) {
+    if (ids.length === 0) {
+      return { chairs: [], reviewers: [] };
+    }
+    const users = await this.prisma.user.findMany({
+      where: { id: { in: ids } },
+      include: { profile: true },
+    });
+    return splitPresentationStaff(ids, users);
   }
 
   private assertReader(

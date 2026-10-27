@@ -93,8 +93,13 @@
 
   html {
     font-family: var(--font-sans);
+    color-scheme: light;
     /* Mobile / tablet: original comfortable size */
     font-size: 16px;
+  }
+
+  html.dark {
+    color-scheme: dark;
   }
 
   /* Desktop only: compact scale */
@@ -134,6 +139,17 @@
 
   select {
     min-width: 0;
+    /* Windows paints native option lists from color-scheme; keep them
+       on a light sheet so text is never white-on-white. */
+    color-scheme: light;
+    background-color: #ffffff;
+    color: #1c2744;
+  }
+
+  select option,
+  select optgroup {
+    background-color: #ffffff;
+    color: #1c2744;
   }
 
   img,
