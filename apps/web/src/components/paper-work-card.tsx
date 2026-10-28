@@ -1,7 +1,10 @@
-import { ArrowUpRight } from 'lucide-react';
+import { ArrowUpRight, FileBadge, FileCheck, Receipt } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router';
+import { IconAction } from '@/components/icon-action';
 import { focusStep, stepAction, type PaperStep } from '@/components/step-bar';
+import { apiErrorMessage, apiFetch } from '@/services/api';
+import { useFeedback } from '@/features/feedback/feedback';
 
 export interface WorkPaper {
   id: string;
@@ -92,25 +95,43 @@ const actionStyles = {
   done: 'bg-[#eef2ff] text-[#3d4fd4]',
 } as const;
 
-export function PaperWorkQueueList({ papers }: { papers: WorkPaper[] }) {
+async function downloadPaperDoc(path: string, name: string) {
+  const response = await apiFetch(path);
+  if (!response.ok) {
+    throw new Error(await apiErrorMessage(response));
+  }
+  const url = URL.createObjectURL(await response.blob());
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = name;
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
+export function PaperWorkQueueList({
+  papers,
+  showDocs = false,
+}: {
+  papers: WorkPaper[];
+  showDocs?: boolean;
+}) {
   const { t } = useTranslation();
+  const feedback = useFeedback();
 
   return (
     <ul className="divide-y divide-[#eef1f6] overflow-hidden rounded-2xl border border-[#e4e7ee] bg-[#fafbfe]">
       {papers.map((paper) => {
         const meta = paperWorkMeta(paper, t);
         const styles = toneStyles[meta.tone];
+        const docsReady = showDocs && meta.tone === 'done';
         return (
           <li key={paper.id}>
-            <Link
-              to={meta.href}
-              className="relative flex items-center gap-3 py-3.5 pl-5 pr-3 text-[#1c2744] no-underline hover:bg-white sm:gap-4 sm:px-5 sm:pl-6"
-            >
+            <div className="relative flex items-center gap-3 py-3.5 pl-5 pr-3 text-[#1c2744] sm:gap-4 sm:px-5 sm:pl-6">
               <span
                 className={`absolute inset-y-3 left-0 w-1 rounded-r-full ${styles.bar}`}
                 aria-hidden
               />
-              <div className="min-w-0 flex-1">
+              <Link to={meta.href} className="min-w-0 flex-1 no-underline hover:opacity-90">
                 <div className="flex flex-wrap items-center gap-2">
                   <p className="text-[11px] font-extrabold tracking-wide text-[#8b909a]">
                     {paper.publicId ?? t('papers.draft')}
@@ -126,7 +147,7 @@ export function PaperWorkQueueList({ papers }: { papers: WorkPaper[] }) {
                     {paper.conferenceName}
                   </p>
                 ) : null}
-                <h3 className="mt-1 truncate text-sm font-extrabold sm:text-base">
+                <h3 className="mt-1 truncate text-sm font-extrabold text-[#1c2744] sm:text-base">
                   {paper.title}
                 </h3>
                 <p className={`mt-1 text-xs font-semibold sm:text-sm ${styles.text}`}>
@@ -135,14 +156,64 @@ export function PaperWorkQueueList({ papers }: { papers: WorkPaper[] }) {
                 <p className="mt-1 text-xs font-semibold text-[#8b909a]">
                   {meta.stepName} · {meta.done}/{meta.total}
                 </p>
+              </Link>
+              <div className="flex shrink-0 items-center gap-1.5">
+                {docsReady ? (
+                  <>
+                    <IconAction
+                      icon={FileBadge}
+                      label={t('dossier.downloadCertificate')}
+                      tone="accent"
+                      onClick={() => {
+                        void downloadPaperDoc(
+                          `/api/v1/papers/${paper.id}/certificate`,
+                          'certificate.pdf',
+                        ).catch(async (error: unknown) => {
+                          feedback.error(
+                            error instanceof Error ? error.message : t('common.error'),
+                          );
+                        });
+                      }}
+                    />
+                    <IconAction
+                      icon={Receipt}
+                      label={t('dossier.downloadReceipt')}
+                      onClick={() => {
+                        void downloadPaperDoc(
+                          `/api/v1/papers/${paper.id}/receipt`,
+                          'receipt.pdf',
+                        ).catch(async (error: unknown) => {
+                          feedback.error(
+                            error instanceof Error ? error.message : t('common.error'),
+                          );
+                        });
+                      }}
+                    />
+                    <IconAction
+                      icon={FileCheck}
+                      label={t('dossier.downloadAttestation')}
+                      onClick={() => {
+                        void downloadPaperDoc(
+                          `/api/v1/papers/${paper.id}/attestation`,
+                          'attestation.pdf',
+                        ).catch(async (error: unknown) => {
+                          feedback.error(
+                            error instanceof Error ? error.message : t('common.error'),
+                          );
+                        });
+                      }}
+                    />
+                  </>
+                ) : null}
+                <Link
+                  to={meta.href}
+                  className={`inline-flex min-h-9 shrink-0 items-center justify-center gap-1 whitespace-nowrap rounded-xl px-3 text-[11px] font-extrabold no-underline sm:min-h-10 sm:px-4 sm:text-xs ${actionStyles[meta.tone]}`}
+                >
+                  {t('papers.open')}
+                  <ArrowUpRight className="size-3.5" />
+                </Link>
               </div>
-              <span
-                className={`inline-flex min-h-9 shrink-0 items-center justify-center gap-1 whitespace-nowrap rounded-full px-3 text-[11px] font-extrabold sm:min-h-10 sm:px-4 sm:text-xs ${actionStyles[meta.tone]}`}
-              >
-                {t('papers.open')}
-                <ArrowUpRight className="size-3.5" />
-              </span>
-            </Link>
+            </div>
           </li>
         );
       })}
@@ -150,52 +221,106 @@ export function PaperWorkQueueList({ papers }: { papers: WorkPaper[] }) {
   );
 }
 
-export function PaperWorkCard({ paper }: { paper: WorkPaper }) {
+export function PaperWorkCard({
+  paper,
+  showDocs = false,
+}: {
+  paper: WorkPaper;
+  showDocs?: boolean;
+}) {
   const { t } = useTranslation();
+  const feedback = useFeedback();
   const meta = paperWorkMeta(paper, t);
   const styles = toneStyles[meta.tone];
+  const docsReady = showDocs && meta.tone === 'done';
 
   return (
-    <Link
-      to={meta.href}
-      className="flex h-full flex-col rounded-xl border border-[#e4e7ee] bg-white p-4 text-[#1c2744] no-underline lg:p-3"
-    >
-      <div className="flex items-center justify-between gap-3">
-        <p className="text-xs font-bold tracking-wide text-[#6d7585]">
-          {paper.publicId ?? t('papers.draft')}
-        </p>
-        <span
-          className={`shrink-0 rounded-md px-2 py-0.5 text-xs font-bold ${styles.badge}`}
-        >
-          {meta.statusLabel}
-        </span>
-      </div>
-      {paper.conferenceName ? (
-        <p className="mt-1.5 truncate text-[11px] font-bold text-[#8b909a]">
-          {paper.conferenceName}
-        </p>
-      ) : null}
-      <h3 className="mt-1 truncate text-base font-extrabold lg:mt-2 lg:text-sm">
-        {paper.title}
-      </h3>
-      {meta.label === meta.stepName ? null : (
-        <p className={`mt-1 text-sm font-semibold lg:text-xs ${styles.text}`}>
-          {meta.label}
-        </p>
-      )}
-      <div className="mt-4 flex items-center gap-3 lg:mt-3 lg:gap-2">
-        <div className="h-1 flex-1 overflow-hidden rounded-full bg-[#eef1f6]">
-          <div
-            className={`h-full rounded-full ${styles.bar}`}
-            style={{ width: `${meta.progress}%` }}
+    <div className="flex h-full flex-col rounded-xl border border-[#e4e7ee] bg-white p-4 text-[#1c2744] lg:p-3">
+      <Link to={meta.href} className="min-w-0 flex-1 no-underline">
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-xs font-bold tracking-wide text-[#6d7585]">
+            {paper.publicId ?? t('papers.draft')}
+          </p>
+          <span
+            className={`shrink-0 rounded-md px-2 py-0.5 text-xs font-bold ${styles.badge}`}
+          >
+            {meta.statusLabel}
+          </span>
+        </div>
+        {paper.conferenceName ? (
+          <p className="mt-1.5 truncate text-[11px] font-bold text-[#8b909a]">
+            {paper.conferenceName}
+          </p>
+        ) : null}
+        <h3 className="mt-1 truncate text-base font-extrabold text-[#1c2744] lg:mt-2 lg:text-sm">
+          {paper.title}
+        </h3>
+        {meta.label === meta.stepName ? null : (
+          <p className={`mt-1 text-sm font-semibold lg:text-xs ${styles.text}`}>
+            {meta.label}
+          </p>
+        )}
+        <div className="mt-4 flex items-center gap-3 lg:mt-3 lg:gap-2">
+          <div className="h-1 flex-1 overflow-hidden rounded-full bg-[#eef1f6]">
+            <div
+              className={`h-full rounded-full ${styles.bar}`}
+              style={{ width: `${meta.progress}%` }}
+            />
+          </div>
+          <span className="shrink-0 text-xs font-bold text-[#6d7585]">
+            {meta.stepName} · {meta.done}/{meta.total}
+          </span>
+          <ArrowUpRight className="size-4 shrink-0 text-[#8b909a]" />
+        </div>
+      </Link>
+      {docsReady ? (
+        <div className="mt-3 flex flex-wrap gap-1.5 border-t border-[#eef1f8] pt-3">
+          <IconAction
+            icon={FileBadge}
+            label={t('dossier.downloadCertificate')}
+            tone="accent"
+            onClick={() => {
+              void downloadPaperDoc(
+                `/api/v1/papers/${paper.id}/certificate`,
+                'certificate.pdf',
+              ).catch((error: unknown) => {
+                feedback.error(
+                  error instanceof Error ? error.message : t('common.error'),
+                );
+              });
+            }}
+          />
+          <IconAction
+            icon={Receipt}
+            label={t('dossier.downloadReceipt')}
+            onClick={() => {
+              void downloadPaperDoc(
+                `/api/v1/papers/${paper.id}/receipt`,
+                'receipt.pdf',
+              ).catch((error: unknown) => {
+                feedback.error(
+                  error instanceof Error ? error.message : t('common.error'),
+                );
+              });
+            }}
+          />
+          <IconAction
+            icon={FileCheck}
+            label={t('dossier.downloadAttestation')}
+            onClick={() => {
+              void downloadPaperDoc(
+                `/api/v1/papers/${paper.id}/attestation`,
+                'attestation.pdf',
+              ).catch((error: unknown) => {
+                feedback.error(
+                  error instanceof Error ? error.message : t('common.error'),
+                );
+              });
+            }}
           />
         </div>
-        <span className="shrink-0 text-xs font-bold text-[#6d7585]">
-          {meta.stepName} · {meta.done}/{meta.total}
-        </span>
-        <ArrowUpRight className="size-4 shrink-0 text-[#8b909a]" />
-      </div>
-    </Link>
+      ) : null}
+    </div>
   );
 }
 

@@ -9,9 +9,11 @@ import { useTranslation } from 'react-i18next';
 export function PapersLayoutView({
   layout,
   papers,
+  showDocs = false,
 }: {
   layout: PapersLayout;
   papers: WorkPaper[];
+  showDocs?: boolean;
 }) {
   const { t } = useTranslation();
 
@@ -24,7 +26,7 @@ export function PapersLayoutView({
       <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
         {papers.map((paper) => (
           <li key={paper.id} className="min-w-0">
-            <PaperWorkCard paper={paper} />
+            <PaperWorkCard paper={paper} showDocs={showDocs} />
           </li>
         ))}
       </ul>
@@ -36,7 +38,7 @@ export function PapersLayoutView({
       <ul className="grid gap-3 md:hidden">
         {papers.map((paper) => (
           <li key={paper.id} className="min-w-0">
-            <PaperWorkCard paper={paper} />
+            <PaperWorkCard paper={paper} showDocs={showDocs} />
           </li>
         ))}
       </ul>

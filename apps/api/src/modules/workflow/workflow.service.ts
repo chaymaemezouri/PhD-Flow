@@ -113,12 +113,55 @@ export class WorkflowService {
     if (needle.length < 2) {
       return { papers: [], conferences: [], reviews: [] };
     }
+    const managerRoles = [
+      ConferenceRole.CHAIR,
+      ConferenceRole.ADMINISTRATOR,
+      ConferenceRole.COMMITTEE,
+    ];
+    const isPlatformAdmin = actor.platformRole === PlatformRole.SYSTEM_ADMIN;
+    const managedMemberships = await this.prisma.membership.findMany({
+      where: {
+        userId: actor.id,
+        status: MembershipStatus.ACTIVE,
+        role: { in: managerRoles },
+      },
+      select: { conferenceId: true },
+    });
+    const managedConferenceIds = managedMemberships.map((row) => row.conferenceId);
+    const paperScope = isPlatformAdmin
+      ? { title: { contains: needle, mode: 'insensitive' as const } }
+      : {
+          AND: [
+            { title: { contains: needle, mode: 'insensitive' as const } },
+            {
+              OR: [
+                { createdById: actor.id },
+                { authors: { some: { email: actor.email } } },
+                ...(managedConferenceIds.length > 0
+                  ? [{ conferenceId: { in: managedConferenceIds } }]
+                  : []),
+              ],
+            },
+          ],
+        };
+    const reviewScope = isPlatformAdmin
+      ? { paper: { title: { contains: needle, mode: 'insensitive' as const } } }
+      : {
+          AND: [
+            { paper: { title: { contains: needle, mode: 'insensitive' as const } } },
+            {
+              OR: [
+                { reviewerId: actor.id },
+                ...(managedConferenceIds.length > 0
+                  ? [{ paper: { conferenceId: { in: managedConferenceIds } } }]
+                  : []),
+              ],
+            },
+          ],
+        };
     const [papers, conferences, reviews] = await Promise.all([
       this.prisma.paper.findMany({
-        where: {
-          OR: [{ createdById: actor.id }, { authors: { some: { email: actor.email } } }],
-          title: { contains: needle, mode: 'insensitive' },
-        },
+        where: paperScope,
         take: 8,
         select: { id: true, title: true, publicId: true, status: true },
       }),
@@ -138,10 +181,7 @@ export class WorkflowService {
         select: { id: true, name: true, slug: true },
       }),
       this.prisma.reviewAssignment.findMany({
-        where: {
-          reviewerId: actor.id,
-          paper: { title: { contains: needle, mode: 'insensitive' } },
-        },
+        where: reviewScope,
         take: 8,
         include: { paper: { select: { title: true, publicId: true } } },
       }),
@@ -1085,6 +1125,40 @@ export class WorkflowService {
     });
   }
 
+  async updateRoom(actor: AuthenticatedUser, roomId: string, input: RoomInput) {
+    const room = await this.prisma.room.findUnique({
+      where: { id: roomId },
+      include: { conference: { include: { memberships: true } } },
+    });
+    if (!room) {
+      throw new NotFoundException('Room not found');
+    }
+    this.assertChair(actor, room.conference.memberships);
+    return this.prisma.room.update({
+      where: { id: roomId },
+      data: { name: input.name, capacity: input.capacity },
+    });
+  }
+
+  async removeRoom(actor: AuthenticatedUser, roomId: string) {
+    const room = await this.prisma.room.findUnique({
+      where: { id: roomId },
+      include: {
+        conference: { include: { memberships: true } },
+        _count: { select: { sessions: true } },
+      },
+    });
+    if (!room) {
+      throw new NotFoundException('Room not found');
+    }
+    this.assertChair(actor, room.conference.memberships);
+    if (room._count.sessions > 0) {
+      throw new BadRequestException('Move or delete the sessions in this room first');
+    }
+    await this.prisma.room.delete({ where: { id: roomId } });
+    return { ok: true };
+  }
+
   async program(actor: AuthenticatedUser, conferenceId: string) {
     const conference = await this.loadConference(conferenceId);
     const member = conference.memberships.some(
@@ -1277,6 +1351,12 @@ export class WorkflowService {
     if (input.endsAt <= input.startsAt) {
       throw new BadRequestException('The session ends before it starts');
     }
+    const room = await this.prisma.room.findFirst({
+      where: { id: input.roomId, conferenceId },
+    });
+    if (!room) {
+      throw new NotFoundException('Room not found');
+    }
     return this.prisma.programSession.create({
       data: {
         conferenceId,
@@ -1286,6 +1366,48 @@ export class WorkflowService {
         endsAt: new Date(input.endsAt),
       },
     });
+  }
+
+  async updateSession(actor: AuthenticatedUser, sessionId: string, input: SessionInput) {
+    const session = await this.prisma.programSession.findUnique({
+      where: { id: sessionId },
+      include: { conference: { include: { memberships: true } } },
+    });
+    if (!session) {
+      throw new NotFoundException('Session not found');
+    }
+    this.assertChair(actor, session.conference.memberships);
+    if (input.endsAt <= input.startsAt) {
+      throw new BadRequestException('The session ends before it starts');
+    }
+    const room = await this.prisma.room.findFirst({
+      where: { id: input.roomId, conferenceId: session.conferenceId },
+    });
+    if (!room) {
+      throw new NotFoundException('Room not found');
+    }
+    return this.prisma.programSession.update({
+      where: { id: sessionId },
+      data: {
+        roomId: input.roomId,
+        title: input.title,
+        startsAt: new Date(input.startsAt),
+        endsAt: new Date(input.endsAt),
+      },
+    });
+  }
+
+  async removeSession(actor: AuthenticatedUser, sessionId: string) {
+    const session = await this.prisma.programSession.findUnique({
+      where: { id: sessionId },
+      include: { conference: { include: { memberships: true } } },
+    });
+    if (!session) {
+      throw new NotFoundException('Session not found');
+    }
+    this.assertChair(actor, session.conference.memberships);
+    await this.prisma.programSession.delete({ where: { id: sessionId } });
+    return { ok: true };
   }
 
   async assignPresentation(

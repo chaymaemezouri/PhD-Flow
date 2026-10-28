@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { Search } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Link, useSearchParams } from 'react-router';
 import { ConferenceWorkNav } from '@/components/conference-work-nav';
@@ -55,6 +56,7 @@ export function FollowUpPage() {
   const paperId = params.get('paper');
   const view = params.get('view') === 'published' ? 'published' : 'ready';
   const [layout, setLayout] = useState<PapersLayout>(() => readPapersLayout());
+  const [query, setQuery] = useState('');
   const conferences = useQuery({
     queryKey: ['conferences'],
     queryFn: async () => {
@@ -84,7 +86,16 @@ export function FollowUpPage() {
       paperId ? item.id === paperId && isPublishedPaper(item) : isPublishedPaper(item),
     );
   }, [paperId, papers.data]);
-  const visible = view === 'published' ? published : ready;
+  const needle = query.trim().toLowerCase();
+  const visible = (view === 'published' ? published : ready).filter((item) => {
+    if (!needle) {
+      return true;
+    }
+    return [item.title, item.publicId ?? '', item.conferenceName ?? '']
+      .join(' ')
+      .toLowerCase()
+      .includes(needle);
+  });
 
   function chooseLayout(next: PapersLayout) {
     setLayout(next);
@@ -118,26 +129,34 @@ export function FollowUpPage() {
           <p className="mt-2 max-w-2xl text-sm text-[#5c6578]">{t('followUp.intro')}</p>
         </div>
       )}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex flex-wrap gap-2">
-          {(
-            [
-              ['ready', 'followUp.ready', ready.length],
-              ['published', 'followUp.published', published.length],
-            ] as const
-          ).map(([id, label, count]) => (
-            <button
-              key={id}
-              type="button"
-              aria-pressed={view === id}
-              onClick={() => setView(id)}
-              className={`rounded-full px-3 py-1.5 text-sm font-extrabold ${
-                view === id ? 'bg-[#3d4fd4] text-white' : 'bg-[#f4f7ff] text-[#5c6578]'
-              }`}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <div className="flex min-w-0 flex-1 flex-col gap-3 sm:flex-row sm:items-end">
+          <label className="block text-xs font-extrabold uppercase tracking-[0.06em] text-[#8b909a]">
+            {t('home.filterBoard')}
+            <select
+              value={view}
+              onChange={(event) =>
+                setView(event.target.value === 'published' ? 'published' : 'ready')
+              }
+              className="mt-1.5 block min-h-10 w-full min-w-[12rem] rounded-2xl border border-[#e4e7ee] bg-white px-3 py-2 text-sm font-semibold normal-case tracking-normal text-[#1c2744]"
             >
-              {t(label)} · {count}
-            </button>
-          ))}
+              <option value="ready">
+                {t('followUp.ready')} · {ready.length}
+              </option>
+              <option value="published">
+                {t('followUp.published')} · {published.length}
+              </option>
+            </select>
+          </label>
+          <label className="relative block min-w-0 flex-1 sm:max-w-xs">
+            <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-[#8b909a]" />
+            <input
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder={t('home.searchPapers')}
+              className="w-full rounded-2xl border border-[#e4e7ee] bg-white py-2.5 pr-3 pl-9 text-sm font-semibold text-[#1c2744] outline-none"
+            />
+          </label>
         </div>
         <PapersLayoutToggle
           layout={layout}

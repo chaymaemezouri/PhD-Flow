@@ -201,3 +201,18 @@
     }
   }
 }
+
+@media print {
+  .workspace-shell aside,
+  .workspace-shell header {
+    display: none !important;
+  }
+
+  body {
+    background: white !important;
+  }
+
+  main {
+    padding: 0 !important;
+  }
+}

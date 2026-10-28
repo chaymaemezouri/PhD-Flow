@@ -3,7 +3,11 @@ import { useQuery } from '@tanstack/react-query';
 import { Search } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router';
-import { paperWorkMeta, type WorkPaper } from '@/components/paper-work-card';
+import {
+  PaperWorkQueueList,
+  paperWorkMeta,
+  type WorkPaper,
+} from '@/components/paper-work-card';
 import { PapersLayoutToggle } from '@/components/papers-layout-toggle';
 import { PapersLayoutView } from '@/components/papers-layout-view';
 import { Button } from '@/components/ui/button';
@@ -152,47 +156,40 @@ export function SubmissionsPage() {
           className="w-full bg-transparent text-sm outline-none placeholder:text-[#a0a6b2]"
         />
       </label>
-      <div className="flex flex-wrap gap-2">
-        {(
-          [
-            ['submissions', 'papers.title', rows.length],
-            ['waiting', 'home.boardWaiting', waitingCount],
-            ['blocked', 'home.boardBlocked', blockedCount],
-            ['complete', 'home.boardClear', completeCount],
-          ] as const
-        ).map(([id, label, count]) => {
-          const active = filter === id;
-          const tone =
-            id === 'blocked'
-              ? 'bg-[#e35d5d]/15 text-[#c54545]'
-              : id === 'waiting'
-                ? 'bg-[#f0a04b]/20 text-[#9a6410]'
-                : id === 'complete'
-                  ? 'bg-[#2fbf71]/15 text-[#1c9a57]'
-                  : 'bg-[#5d74ff]/15 text-[#3d4fd4]';
-          return (
-            <button
-              key={id}
-              type="button"
-              aria-pressed={active}
-              onClick={() => setFilter(id)}
-              className={`rounded-full px-3 py-1.5 text-sm font-extrabold ${
-                active ? tone : 'bg-[#f4f7ff] text-[#5c6578]'
-              }`}
-            >
-              {t(label)}
-              <span className="ml-1.5 tabular-nums opacity-80">{count}</span>
-            </button>
-          );
-        })}
-      </div>
+      <label className="block text-xs font-extrabold uppercase tracking-[0.06em] text-[#8b909a]">
+        {t('home.filterBoard')}
+        <select
+          value={filter}
+          onChange={(event) => setFilter(event.target.value as SubmissionsFilter)}
+          className="mt-1.5 block min-h-10 w-full max-w-md rounded-2xl border border-[#e4e7ee] bg-white px-3 py-2 text-sm font-semibold normal-case tracking-normal text-[#1c2744]"
+        >
+          <option value="submissions">
+            {t('papers.title')} · {rows.length}
+          </option>
+          <option value="waiting">
+            {t('home.boardWaiting')} · {waitingCount}
+          </option>
+          <option value="blocked">
+            {t('home.boardBlocked')} · {blockedCount}
+          </option>
+          <option value="complete">
+            {t('home.boardClear')} · {completeCount}
+          </option>
+        </select>
+      </label>
       {papers.isPending ? <p>{t('common.loading')}</p> : null}
       {!papers.isPending && visible.length === 0 ? (
         <p className="text-sm text-muted-foreground">
           {rows.length === 0 ? t('papers.empty') : t('papers.noneMatch')}
         </p>
+      ) : layout === 'list' ? (
+        <PaperWorkQueueList papers={visible} showDocs={!isManager && !isReviewerOnly} />
       ) : (
-        <PapersLayoutView layout={layout} papers={visible} />
+        <PapersLayoutView
+          layout={layout}
+          papers={visible}
+          showDocs={!isManager && !isReviewerOnly}
+        />
       )}
     </div>
   );

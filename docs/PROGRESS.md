@@ -6,7 +6,7 @@ Phase 14 — first version. Phases 5–13 are implemented: review scores, decisi
 
 ## Overall status
 
-Three local demo accounts can sign in. A chair sees conference statistics and can score a presentation. An author sees papers, the decision letter, file versions, and the copyright template. A reviewer sees assignments on the home page. Similarity stays unsatisfied at 20 percent until a chair verifies a report under that threshold.
+Local seed accounts cover superadmin, chair, sub-admin, committee, reviewers, session chair, and authors (password `Demo-scholar-12`). Full conference workflow is available in the React workspace: submissions, reviews, decisions, registration, program board, publication, and document downloads. Similarity stays unsatisfied at 20 percent until a chair verifies a report under that threshold.
 
 ## Completed functionality
 
@@ -17,9 +17,9 @@ Three local demo accounts can sign in. A chair sees conference statistics and ca
 - [x] HttpOnly session cookie, double-submit CSRF, and a system-admin guard on `GET /api/v1/system/status`
 - [x] Docker Compose for PostgreSQL, Redis, MinIO, and Mailpit
 - [x] React workspace shell with English and French copy, light, dark, and system theme, and a saved preferences form
-- [x] Role preview dashboards that are labeled as not connected
-- [x] Reserved navigation entries that explain which phase will implement them
-- [x] Live API health display on the introduction page and in the workspace footer
+- [x] Role dashboards for author, reviewer, committee, chair, session chair, and system admin
+- [x] Conference work navigation (fiche, papers, reviews, program, publication, team)
+- [x] Live API health display on the landing page and in the workspace footer
 - [x] GitHub Actions workflow for lint, format, build, test, and migration deploy
 - [x] Local verification of build, lint, tests, migration, seed, and startup
 
@@ -66,7 +66,7 @@ Three local demo accounts can sign in. A chair sees conference statistics and ca
 - [x] `/workspace/administrator`
 - [x] `/workspace/system`
 - [x] `/workspace/preferences`
-- [x] `/workspace/planned/:moduleId`
+- [x] Workspace routes for submissions, reviews, program, session board, assignments (planned-module stubs removed)
 - [x] Unknown URLs show a not-found page
 
 ## Tests

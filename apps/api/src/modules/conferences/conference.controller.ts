@@ -118,6 +118,17 @@ export class ConferenceController {
     return this.conferences.createSubAdmin(request.user!, id, body);
   }
 
+  @Post('conferences/:id/team')
+  @UseGuards(AuthGuard)
+  createTeamMember(
+    @Req() request: AuthenticatedRequest,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body(new ZodValidationPipe(createTeamMemberSchema))
+    body: z.infer<typeof createTeamMemberSchema>,
+  ) {
+    return this.conferences.createTeamMember(request.user!, id, body);
+  }
+
   @Post('conferences/:id/session-chairs')
   @UseGuards(AuthGuard)
   createSessionChair(

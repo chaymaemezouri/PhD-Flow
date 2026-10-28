@@ -1,17 +1,17 @@
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { ChevronDown, Plus, Search } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useSearchParams } from 'react-router';
-import { AssignmentField } from '@/components/assignment-picker';
+import { ConferenceFilterList } from '@/components/conference-filter-list';
 import {
-  ConferenceTeamNav,
+  ConferenceProgramNav,
   ConferenceWorkNav,
 } from '@/components/conference-work-nav';
 import { CreateSessionChairDialog } from '@/components/create-session-chair-dialog';
+import { RoleContextBanner } from '@/components/role-context-banner';
 import { Button } from '@/components/ui/button';
 import { useCurrentUser } from '@/features/auth/use-account';
-import { useFeedback } from '@/features/feedback/feedback';
 import { isSessionChair } from '@/features/navigation/home-path';
 import { pickConference } from '@/features/navigation/pick-conference';
 import {
@@ -45,19 +45,10 @@ interface SessionChairCandidate {
   loginPassword?: string | null;
 }
 
-interface AssignPaper {
-  id: string;
-  title: string;
-  publicId: string | null;
-  sessionChairs: { userId: string; name: string }[];
-}
-
 export function SessionChairPage() {
   const { t } = useTranslation();
   const account = useCurrentUser();
-  const queryClient = useQueryClient();
   const [params, setParams] = useSearchParams();
-  const feedback = useFeedback();
   const board = parseSessionChairBoard(params.get('board'));
   const [query, setQuery] = useState('');
   const [createOpen, setCreateOpen] = useState(false);
@@ -82,11 +73,11 @@ export function SessionChairPage() {
     !sessionChairSelf &&
     (platformAdmin ||
       conference?.role === 'CHAIR' ||
-      conference?.role === 'ADMINISTRATOR');
+      conference?.role === 'ADMINISTRATOR' ||
+      conference?.role === 'COMMITTEE');
   const waitingRole =
     account.isPending ||
     (!sessionChairSelf && !platformAdmin && conferences.isPending);
-  const [chairPick, setChairPick] = useState<Record<string, string>>({});
   const chairs = useQuery({
     queryKey: ['session-chairs', conference?.id],
     enabled: Boolean(conference?.id && canManage),
@@ -100,17 +91,6 @@ export function SessionChairPage() {
       return response.json() as Promise<SessionChairCandidate[]>;
     },
   });
-  const papers = useQuery({
-    queryKey: ['conference-papers', conference?.id],
-    enabled: Boolean(conference?.id && canManage),
-    queryFn: async () => {
-      const response = await apiFetch(`/api/v1/conferences/${conference!.id}/papers`);
-      if (!response.ok) {
-        throw new Error(await apiErrorMessage(response));
-      }
-      return response.json() as Promise<AssignPaper[]>;
-    },
-  });
   const dedicated =
     chairs.data?.filter((item) => item.academicTitle === 'Session chair') ?? [];
   const needle = search.trim().toLowerCase();
@@ -119,13 +99,13 @@ export function SessionChairPage() {
         `${item.name} ${item.shortName ?? ''}`.toLowerCase().includes(needle),
       )
     : active;
-  const visiblePapers = needle
-    ? (papers.data ?? []).filter((paper) =>
-        `${paper.title} ${paper.publicId ?? ''} ${paper.sessionChairs.map((item) => item.name).join(' ')}`
+  const visibleAccounts = needle
+    ? dedicated.filter((item) =>
+        `${item.firstName} ${item.lastName} ${item.email ?? ''}`
           .toLowerCase()
           .includes(needle),
       )
-    : (papers.data ?? []);
+    : dedicated;
   const assigned = useQuery({
     queryKey: ['presentations-mine'],
     enabled: Boolean(account.data) && !canManage && !waitingRole,
@@ -168,26 +148,6 @@ export function SessionChairPage() {
     setParams(nextParams);
   }
 
-  async function assignChair(paperId: string, userId: string) {
-    if (!userId) {
-      return;
-    }
-    const response = await apiFetch(`/api/v1/papers/${paperId}/session-chair`, {
-      method: 'POST',
-      body: JSON.stringify({ userId }),
-    });
-    if (!response.ok) {
-      feedback.error(await apiErrorMessage(response));
-      return;
-    }
-    setChairPick((current) => ({ ...current, [paperId]: '' }));
-    feedback.success(t('workflow.saved'));
-    await queryClient.invalidateQueries({ queryKey: ['conference-papers'] });
-    await queryClient.invalidateQueries({ queryKey: ['program'] });
-    await queryClient.invalidateQueries({ queryKey: ['paper'] });
-    await queryClient.invalidateQueries({ queryKey: ['presentations-mine'] });
-  }
-
   return (
     <div className={canManage ? 'space-y-6' : 'space-y-5 lg:space-y-4'}>
       {canManage ? (
@@ -197,7 +157,7 @@ export function SessionChairPage() {
               conferenceId={conference.id}
               conferenceName={conference.name}
               role={conference.role}
-              current="team"
+              current="program"
             />
           ) : (
             <header className="border-b border-[#e6e8ec] pb-4 sm:pb-5">
@@ -207,19 +167,22 @@ export function SessionChairPage() {
             </header>
           )}
           {conference ? (
-            <ConferenceTeamNav conferenceId={conference.id} current="sessionChairs" />
+            <ConferenceProgramNav conferenceId={conference.id} current="sessionChairs" />
           ) : null}
         </div>
       ) : waitingRole ? null : (
-        <header className="border-b border-[#e6e8ec] pb-4">
-          <p className="text-xs font-extrabold uppercase tracking-wide text-[#8b909a]">
-            {t('sessionChair.role')}
-          </p>
-          <h1 className="mt-1 text-xl font-extrabold text-[#1c2744] sm:text-2xl">
-            {conference?.name ?? t('sessionChair.queue')}
-          </h1>
-          <p className="mt-1 text-sm text-[#5c6578]">{t('sessionChair.listIntro')}</p>
-        </header>
+        <>
+          <RoleContextBanner
+            role="session"
+            title={t('sessionChair.role')}
+            hint={t('sessionChair.listIntro')}
+          />
+          <header className="border-b border-[#e6e8ec] pb-4">
+            <h1 className="text-xl font-extrabold text-[#1c2744] sm:text-2xl">
+              {conference?.name ?? t('sessionChair.queue')}
+            </h1>
+          </header>
+        </>
       )}
 
       {canManage ? (
@@ -279,7 +242,7 @@ export function SessionChairPage() {
                 <input
                   value={search}
                   onChange={(event) => setSearch(event.target.value)}
-                  placeholder={t('superadmin.searchHint')}
+                  placeholder={t('sessionChair.searchAccounts')}
                   className="mt-1.5 block min-h-10 w-full rounded-2xl border border-[#e4e7ee] bg-white px-3 py-2 text-sm font-semibold text-[#1c2744] outline-none placeholder:font-medium placeholder:text-[#8b909a]"
                 />
               </label>
@@ -296,19 +259,33 @@ export function SessionChairPage() {
 
               <section className="rounded-[28px] border border-[#e4e7ee] bg-white p-4 sm:p-5">
                 <div className="flex flex-wrap items-center justify-between gap-3">
-                  <h2 className="text-lg font-extrabold text-[#1c2744]">
-                    {t('sessionChair.accounts')}
-                  </h2>
-                  <Button type="button" onClick={() => setCreateOpen(true)}>
-                    <Plus className="size-4" />
-                    {t('sessionChair.createTitle')}
-                  </Button>
+                  <div>
+                    <h2 className="text-lg font-extrabold text-[#1c2744]">
+                      {t('sessionChair.accounts')}
+                    </h2>
+                    <p className="mt-1 text-sm text-[#5c6578]">
+                      {t('sessionChair.accountsManageHint')}
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <Button asChild type="button" variant="secondary">
+                      <Link to={`/workspace/session-board?conference=${conference.id}`}>
+                        {t('sessionChair.goAssignBoard')}
+                      </Link>
+                    </Button>
+                    <Button type="button" onClick={() => setCreateOpen(true)}>
+                      <Plus className="size-4" />
+                      {t('sessionChair.createTitle')}
+                    </Button>
+                  </div>
                 </div>
-                {dedicated.length === 0 ? (
+                {chairs.isPending ? (
+                  <p className="mt-4 text-sm text-[#8b909a]">{t('common.loading')}</p>
+                ) : visibleAccounts.length === 0 ? (
                   <p className="mt-4 text-sm text-[#5c6578]">{t('sessionChair.accountsEmpty')}</p>
                 ) : (
                   <ul className="mt-4 grid gap-3">
-                    {dedicated.map((item) => (
+                    {visibleAccounts.map((item) => (
                       <li
                         key={item.userId}
                         className="rounded-2xl bg-[#f6f7fb] px-4 py-3"
@@ -324,67 +301,6 @@ export function SessionChairPage() {
                         ) : null}
                       </li>
                     ))}
-                  </ul>
-                )}
-              </section>
-
-              <section className="rounded-[28px] border border-[#e4e7ee] bg-white p-4 sm:p-5">
-                <div>
-                  <h2 className="text-lg font-extrabold text-[#1c2744]">
-                    {t('sessionChair.assignTitle')}
-                  </h2>
-                  <p className="mt-1 text-xs font-bold text-[#8b909a]">
-                    {visiblePapers.length} / {papers.data?.length ?? 0}
-                  </p>
-                </div>
-                {papers.isPending ? (
-                  <p className="mt-4 text-sm text-[#8b909a]">{t('common.loading')}</p>
-                ) : visiblePapers.length === 0 ? (
-                  <p className="mt-4 text-sm text-[#5c6578]">{t('sessionChair.noPapers')}</p>
-                ) : (
-                  <ul className="mt-4 grid gap-3">
-                    {visiblePapers.map((paper) => {
-                      const assigned = (paper.sessionChairs ?? []).length > 0;
-                      return (
-                        <li
-                          key={paper.id}
-                          className={`grid gap-3 rounded-2xl px-4 py-4 sm:grid-cols-[minmax(0,1fr)_16rem] sm:items-center ${
-                            assigned ? 'bg-[#2fbf71]/14' : 'bg-[#f0a04b]/16'
-                          }`}
-                        >
-                          <div className="min-w-0">
-                            <p className="text-xs font-bold text-[#8b909a]">
-                              {paper.publicId ?? '—'}
-                            </p>
-                            <p className="mt-1 text-sm font-extrabold text-[#1c2744]">
-                              {paper.title}
-                            </p>
-                            <p className="mt-2 text-xs font-bold text-[#5c6578]">
-                              {assigned
-                                ? paper.sessionChairs.map((item) => item.name).join(', ')
-                                : t('dossier.noChair')}
-                            </p>
-                          </div>
-                          <AssignmentField
-                            className="min-w-0 text-xs font-extrabold text-[#1c2744]"
-                            label={t('dossier.sessionChair')}
-                            title={t('dossier.assignChair')}
-                            hint={t('dossier.chooseChair')}
-                            placeholder={t('dossier.chooseChair')}
-                            value={chairPick[paper.id] ?? ''}
-                            onChange={(id) => {
-                              setChairPick((current) => ({ ...current, [paper.id]: id }));
-                              void assignChair(paper.id, id);
-                            }}
-                            options={dedicated.map((item) => ({
-                              id: item.userId,
-                              title: `${item.firstName} ${item.lastName}`.trim(),
-                              subtitle: item.email,
-                            }))}
-                          />
-                        </li>
-                      );
-                    })}
                   </ul>
                 )}
               </section>
@@ -465,25 +381,11 @@ function SessionChairDashboard({
 
   return (
     <div className="space-y-4">
-      {conferences.length > 1 ? (
-        <div className="flex flex-wrap gap-2">
-          {conferences.map((item) => (
-            <button
-              key={item.id}
-              type="button"
-              aria-pressed={item.id === conferenceId}
-              className={`rounded-full px-3 py-1.5 text-sm font-bold ${
-                item.id === conferenceId
-                  ? 'bg-[#5d74ff]/15 text-[#3d4fd4]'
-                  : 'bg-white text-[#5c6578]'
-              }`}
-              onClick={() => onPickConference(item.id)}
-            >
-              {item.name}
-            </button>
-          ))}
-        </div>
-      ) : null}
+      <ConferenceFilterList
+        items={conferences}
+        value={conferenceId}
+        onChange={onPickConference}
+      />
 
       <section className="rounded-2xl border border-[#e4e7ee] bg-white p-4 sm:p-5">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">

@@ -1,23 +1,21 @@
-import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Plus } from 'lucide-react';
-import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { Download, Printer, Search } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useSearchParams } from 'react-router';
-import { AssignmentField } from '@/components/assignment-picker';
-import { FieldSelect } from '@/components/field-select';
-import { ConferenceWorkNav } from '@/components/conference-work-nav';
-import { Button } from '@/components/ui/button';
+import { Link, useSearchParams } from 'react-router';
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogTitle,
-} from '@/components/ui/dialog';
+  ConferenceProgramNav,
+  ConferenceWorkNav,
+} from '@/components/conference-work-nav';
+import { EmptyState } from '@/components/empty-state';
+import { IconAction } from '@/components/icon-action';
+import { Button } from '@/components/ui/button';
 import { useCurrentUser } from '@/features/auth/use-account';
-import { useFeedback } from '@/features/feedback/feedback';
+import { useBoardShortcuts } from '@/hooks/use-board-shortcuts';
 import { isSessionChair } from '@/features/navigation/home-path';
 import { pickConference } from '@/features/navigation/pick-conference';
 import { apiErrorMessage, apiFetch } from '@/services/api';
+import { cn } from '@/lib/utils';
 
 interface Membership {
   id: string;
@@ -59,9 +57,9 @@ interface ProgramView {
 export function ProgramPage() {
   const { t } = useTranslation();
   const account = useCurrentUser();
-  const queryClient = useQueryClient();
   const [params] = useSearchParams();
-  const feedback = useFeedback();
+  const [query, setQuery] = useState('');
+  const [focusIndex, setFocusIndex] = useState(0);
   const sessionChairSelf = isSessionChair(account.data?.profile?.academicTitle);
   const conferences = useQuery({
     queryKey: ['conferences'],
@@ -76,7 +74,12 @@ export function ProgramPage() {
   const active =
     conferences.data?.filter((item) => item.membershipStatus === 'ACTIVE') ?? [];
   const conference = pickConference(active, params.get('conference'));
-  const chair = conference?.role === 'CHAIR' || conference?.role === 'ADMINISTRATOR';
+  const platformAdmin = account.data?.platformRole === 'SYSTEM_ADMIN';
+  const manager =
+    platformAdmin ||
+    conference?.role === 'CHAIR' ||
+    conference?.role === 'ADMINISTRATOR' ||
+    conference?.role === 'COMMITTEE';
   const program = useQuery({
     queryKey: ['program', conference?.id],
     queryFn: async () => {
@@ -88,64 +91,78 @@ export function ProgramPage() {
     },
     enabled: Boolean(conference?.id),
   });
-  const papers = useQuery({
-    queryKey: ['conference-papers', conference?.id],
-    queryFn: async () => {
-      const response = await apiFetch(`/api/v1/conferences/${conference!.id}/papers`);
-      if (!response.ok) {
-        throw new Error(await apiErrorMessage(response));
-      }
-      return response.json() as Promise<
-        {
-          id: string;
-          title: string;
-          publicId: string | null;
-          decision: { outcome: string; status: string } | null;
-        }[]
-      >;
-    },
-    enabled: Boolean(conference?.id && chair),
-  });
-  const accepted =
-    papers.data?.filter(
-      (paper) =>
-        paper.decision?.status === 'PUBLISHED' &&
-        paper.decision.outcome === 'ACCEPTED',
-    ) ?? [];
-  const [roomId, setRoomId] = useState('');
-  const [placeSessionId, setPlaceSessionId] = useState('');
-  const [placePaperId, setPlacePaperId] = useState('');
-  const [addSessionOpen, setAddSessionOpen] = useState(false);
-  const [addPlaceOpen, setAddPlaceOpen] = useState(false);
-  const [addRoomOpen, setAddRoomOpen] = useState(false);
-  const field =
-    'mt-1 block rounded-2xl border border-[#e4e7ee] bg-[#f6f7fb] px-3 py-2 text-sm';
 
-  const visibleSessions =
-    program.data?.sessions
-      .map((session) => ({
-        ...session,
-        presentations: sessionChairSelf
-          ? session.presentations.filter((item) =>
-              item.paper.sessionChairs.some((chairItem) => chairItem.mine),
-            )
-          : session.presentations,
-      }))
-      .filter((session) =>
-        sessionChairSelf ? session.presentations.length > 0 : true,
-      ) ?? [];
+  const visibleSessions = useMemo(() => {
+    const needle = query.trim().toLowerCase();
+    return (
+      program.data?.sessions
+        .map((session) => ({
+          ...session,
+          presentations: sessionChairSelf
+            ? session.presentations.filter((item) =>
+                item.paper.sessionChairs.some((chairItem) => chairItem.mine),
+              )
+            : session.presentations,
+        }))
+        .filter((session) =>
+          sessionChairSelf ? session.presentations.length > 0 : true,
+        )
+        .filter((session) => {
+          if (!needle) {
+            return true;
+          }
+          const hay = [
+            session.title,
+            session.room.name,
+            ...session.presentations.map((item) => item.paper.title),
+            ...session.presentations.map((item) => item.paper.publicId ?? ''),
+          ]
+            .join(' ')
+            .toLowerCase();
+          return hay.includes(needle);
+        }) ?? []
+    );
+  }, [program.data?.sessions, query, sessionChairSelf]);
+
+  useEffect(() => {
+    setFocusIndex(0);
+  }, [conference?.id, query]);
+
+  useBoardShortcuts({
+    enabled: visibleSessions.length > 0,
+    count: visibleSessions.length,
+    index: focusIndex,
+    onIndexChange: setFocusIndex,
+    onPrevGroup: () =>
+      setFocusIndex((current) =>
+        visibleSessions.length === 0
+          ? 0
+          : (current - 1 + visibleSessions.length) % visibleSessions.length,
+      ),
+    onNextGroup: () =>
+      setFocusIndex((current) =>
+        visibleSessions.length === 0
+          ? 0
+          : (current + 1) % visibleSessions.length,
+      ),
+  });
 
   return (
     <div className="space-y-5">
       {conference && !sessionChairSelf ? (
-        <ConferenceWorkNav
-          conferenceId={conference.id}
-          conferenceName={conference.name}
-          role={conference.role}
-          current="program"
-        />
+        <div className="space-y-3 print:hidden">
+          <ConferenceWorkNav
+            conferenceId={conference.id}
+            conferenceName={conference.name}
+            role={conference.role}
+            current="program"
+          />
+          {manager ? (
+            <ConferenceProgramNav conferenceId={conference.id} current="program" />
+          ) : null}
+        </div>
       ) : (
-        <div>
+        <div className="print:hidden">
           <h1 className="text-xl font-extrabold text-[#1c2744] sm:text-2xl lg:text-3xl">
             {conference?.name ?? t('workflow.programTitle')}
           </h1>
@@ -158,46 +175,109 @@ export function ProgramPage() {
           ) : null}
         </div>
       )}
-      {chair && !sessionChairSelf && conference ? (
-        <div className="flex flex-wrap gap-2">
-          <Button type="button" size="sm" onClick={() => setAddSessionOpen(true)}>
-            <Plus className="size-4" />
-            {t('workflow.addSession')}
+
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between print:hidden">
+        <label className="relative block min-w-0 flex-1 sm:max-w-md">
+          <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-[#8b909a]" />
+          <input
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder={t('sessionBoard.searchSessions')}
+            className="w-full rounded-2xl border border-[#e4e7ee] bg-white py-2.5 pr-3 pl-9 text-sm font-semibold text-[#1c2744] outline-none"
+          />
+        </label>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            disabled={visibleSessions.length < 2}
+            onClick={() =>
+              setFocusIndex(
+                (current) =>
+                  (current - 1 + visibleSessions.length) % visibleSessions.length,
+              )
+            }
+            aria-label={t('sessionBoard.prevSession')}
+          >
+            ←
           </Button>
           <Button
             type="button"
             size="sm"
-            variant="secondary"
-            onClick={() => setAddPlaceOpen(true)}
-            disabled={!program.data || accepted.length === 0}
+            variant="outline"
+            disabled={visibleSessions.length < 2}
+            onClick={() =>
+              setFocusIndex((current) => (current + 1) % visibleSessions.length)
+            }
+            aria-label={t('sessionBoard.nextSession')}
           >
-            <Plus className="size-4" />
-            {t('workflow.placePaper')}
+            →
           </Button>
-          <Button type="button" size="sm" variant="secondary" onClick={() => setAddRoomOpen(true)}>
-            <Plus className="size-4" />
-            {t('workflow.addRoom')}
-          </Button>
-          <a
-            className="inline-flex min-h-9 items-center rounded-full px-3 text-sm font-semibold text-[#1f3a5f]"
-            href={`/api/v1/conferences/${conference.id}/export`}
-          >
-            {t('workflow.export')}
-          </a>
+          {conference && manager && !sessionChairSelf ? (
+            <Link
+              to={`/workspace/session-board?conference=${conference.id}`}
+              className="inline-flex min-h-9 items-center rounded-xl bg-[#3d4fd4] px-3.5 text-sm font-extrabold text-white no-underline"
+            >
+              {t('nav.sessionBoard')}
+            </Link>
+          ) : null}
+          <IconAction
+            icon={Printer}
+            label={t('print.program')}
+            onClick={() => window.print()}
+            tone="accent"
+          />
+          {conference ? (
+            <IconAction
+              icon={Download}
+              label={`${t('workflow.export')} — ${t('workflow.exportHint')}`}
+              href={`/api/v1/conferences/${conference.id}/export`}
+            />
+          ) : null}
         </div>
-      ) : null}
-      {program.data && visibleSessions.length === 0 ? (
-        <p className="rounded-2xl bg-[#f6f7fb] px-4 py-3 text-sm text-[#5c6578]">
-          {sessionChairSelf
-            ? t('sessionChair.programEmpty')
-            : t('workflow.noSessions')}
+      </div>
+      <p className="text-xs font-semibold text-[#8b909a] print:hidden">
+        {t('workflow.exportHint')} · {t('print.hint')} · {t('sessionBoard.shortcuts')}
+      </p>
+
+      {program.isError ? (
+        <p className="rounded-2xl bg-[#fde8e8] px-4 py-3 text-sm font-semibold text-[#b42318]" role="alert">
+          {program.error instanceof Error ? program.error.message : t('common.error')}
         </p>
       ) : null}
-      <ul className="grid gap-3">
-        {visibleSessions.map((session) => (
+      {program.isPending ? (
+        <p className="text-sm text-[#8b909a]">{t('common.loading')}</p>
+      ) : null}
+      {program.data && visibleSessions.length === 0 ? (
+        <EmptyState
+          title={
+            sessionChairSelf
+              ? t('sessionChair.programEmpty')
+              : t('workflow.noSessions')
+          }
+          body={t('home.emptyFilterBody')}
+          actionTo={
+            conference && manager
+              ? `/workspace/session-board?conference=${conference.id}`
+              : '/workspace/conferences'
+          }
+          actionLabel={
+            conference && manager ? t('nav.sessionBoard') : t('nav.conferences')
+          }
+        />
+      ) : null}
+      <h1 className="hidden text-2xl font-extrabold text-[#1c2744] print:block">
+        {conference?.name ?? t('workflow.programTitle')}
+      </h1>
+      <ul className="grid gap-3 print:gap-4">
+        {visibleSessions.map((session, index) => (
           <li
             key={session.id}
-            className="rounded-[28px] border border-[#e4e7ee] bg-white p-5"
+            className={cn(
+              'rounded-[28px] border border-[#e4e7ee] bg-gradient-to-b from-white to-[#f8faff] p-5 print:rounded-none print:border print:border-black print:bg-white print:p-3',
+              index === focusIndex && 'ring-2 ring-[#3d4fd4]/30 print:ring-0',
+            )}
           >
             <p className="text-lg font-extrabold text-[#1c2744]">{session.title}</p>
             <p className="mt-1 text-sm text-[#5c6578]">
@@ -248,178 +328,6 @@ export function ProgramPage() {
           </li>
         ))}
       </ul>
-      <Dialog open={addSessionOpen} onOpenChange={setAddSessionOpen}>
-        <DialogContent>
-          <DialogTitle>{t('workflow.addSession')}</DialogTitle>
-          <DialogDescription>{t('workflow.sessionTitle')}</DialogDescription>
-          {conference && program.data ? (
-            <form
-              className="grid gap-3"
-              onSubmit={(event) => {
-                event.preventDefault();
-                const data = new FormData(event.currentTarget);
-                const startsAt = new Date(String(data.get('startsAt'))).toISOString();
-                const endsAt = new Date(String(data.get('endsAt'))).toISOString();
-                void apiFetch(`/api/v1/conferences/${conference.id}/sessions`, {
-                  method: 'POST',
-                  body: JSON.stringify({
-                    roomId: roomId || String(data.get('roomId')),
-                    title: String(data.get('title')),
-                    startsAt,
-                    endsAt,
-                  }),
-                }).then(async (response) => {
-                  if (response.ok) {
-                    feedback.success(t('workflow.saved'));
-                    setAddSessionOpen(false);
-                  } else {
-                    feedback.error(await apiErrorMessage(response));
-                  }
-                  await queryClient.invalidateQueries({ queryKey: ['program'] });
-                });
-              }}
-            >
-              <AssignmentField
-                label={t('workflow.room')}
-                title={t('workflow.room')}
-                placeholder={t('workflow.room')}
-                value={roomId}
-                onChange={setRoomId}
-                options={program.data.rooms.map((room) => ({
-                  id: room.id,
-                  title: room.name,
-                  subtitle: room.capacity != null ? String(room.capacity) : undefined,
-                }))}
-              />
-              <label className="text-sm font-bold">
-                {t('workflow.sessionTitle')}
-                <input name="title" required className={field} />
-              </label>
-              <label className="text-sm font-bold">
-                {t('workflow.starts')}
-                <input name="startsAt" type="datetime-local" required className={field} />
-              </label>
-              <label className="text-sm font-bold">
-                {t('workflow.ends')}
-                <input name="endsAt" type="datetime-local" required className={field} />
-              </label>
-              <Button type="submit" disabled={program.data.rooms.length === 0 || !roomId}>
-                {t('workflow.save')}
-              </Button>
-            </form>
-          ) : null}
-        </DialogContent>
-      </Dialog>
-      <Dialog open={addPlaceOpen} onOpenChange={setAddPlaceOpen}>
-        <DialogContent>
-          <DialogTitle>{t('workflow.placePaper')}</DialogTitle>
-          <DialogDescription>{t('workflow.choosePaper')}</DialogDescription>
-          {program.data ? (
-            <form
-              className="grid gap-3"
-              onSubmit={(event) => {
-                event.preventDefault();
-                const data = new FormData(event.currentTarget);
-                void apiFetch(`/api/v1/sessions/${placeSessionId}/presentations`, {
-                  method: 'POST',
-                  body: JSON.stringify({
-                    paperId: placePaperId,
-                    modality: String(data.get('modality') || 'IN_PERSON'),
-                  }),
-                }).then(async (response) => {
-                  if (response.ok) {
-                    feedback.success(t('workflow.saved'));
-                    setAddPlaceOpen(false);
-                  } else {
-                    feedback.error(await apiErrorMessage(response));
-                  }
-                  await queryClient.invalidateQueries({ queryKey: ['program'] });
-                  await queryClient.invalidateQueries({ queryKey: ['conference-papers'] });
-                });
-              }}
-            >
-              <AssignmentField
-                label={t('workflow.session')}
-                title={t('workflow.session')}
-                placeholder={t('workflow.session')}
-                value={placeSessionId}
-                onChange={setPlaceSessionId}
-                options={program.data.sessions.map((session) => ({
-                  id: session.id,
-                  title: session.title,
-                  subtitle: session.room.name,
-                }))}
-              />
-              <AssignmentField
-                label={t('workflow.choosePaper')}
-                title={t('workflow.choosePaper')}
-                placeholder={t('workflow.choosePaper')}
-                value={placePaperId}
-                onChange={setPlacePaperId}
-                options={accepted.map((paper) => ({
-                  id: paper.id,
-                  title: paper.title,
-                  subtitle: paper.publicId ?? undefined,
-                  code: paper.publicId?.replace(/\D/g, '').slice(-4),
-                }))}
-              />
-              <label className="text-sm font-bold">
-                {t('dossier.scheduleModality')}
-                <FieldSelect
-                  name="modality"
-                  className={field}
-                  defaultValue="IN_PERSON"
-                  options={[
-                    { value: 'IN_PERSON', label: t('dossier.modalityInPerson') },
-                    { value: 'ONLINE', label: t('dossier.modalityOnline') },
-                  ]}
-                />
-              </label>
-              <Button
-                type="submit"
-                disabled={
-                  program.data.sessions.length === 0 || !placeSessionId || !placePaperId
-                }
-              >
-                {t('workflow.save')}
-              </Button>
-            </form>
-          ) : null}
-        </DialogContent>
-      </Dialog>
-      <Dialog open={addRoomOpen} onOpenChange={setAddRoomOpen}>
-        <DialogContent>
-          <DialogTitle>{t('workflow.addRoom')}</DialogTitle>
-          <DialogDescription>{t('workflow.room')}</DialogDescription>
-          {conference ? (
-            <form
-              className="grid gap-3"
-              onSubmit={(event) => {
-                event.preventDefault();
-                const name = String(new FormData(event.currentTarget).get('name') ?? '');
-                void apiFetch(`/api/v1/conferences/${conference.id}/rooms`, {
-                  method: 'POST',
-                  body: JSON.stringify({ name, capacity: 40 }),
-                }).then(async (response) => {
-                  if (response.ok) {
-                    feedback.success(t('workflow.saved'));
-                    setAddRoomOpen(false);
-                  } else {
-                    feedback.error(await apiErrorMessage(response));
-                  }
-                  await queryClient.invalidateQueries({ queryKey: ['program'] });
-                });
-              }}
-            >
-              <label className="text-sm font-bold">
-                {t('workflow.room')}
-                <input name="name" required className={field} />
-              </label>
-              <Button type="submit">{t('workflow.save')}</Button>
-            </form>
-          ) : null}
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }

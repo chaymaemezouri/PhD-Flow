@@ -24,9 +24,14 @@ export function ForgotPasswordPage() {
 
   return (
     <AuthLayout>
-      <h1 className="text-2xl text-navy">{t('auth.forgotTitle')}</h1>
-      <p className="mt-2 text-sm text-muted-foreground">{t('auth.forgotBody')}</p>
-      {sent ? <p className="mt-4 text-sm">{t('auth.forgotSent')}</p> : null}
+      <h1 className="text-2xl font-extrabold text-[#1c2744]">{t('auth.forgotTitle')}</h1>
+      <p className="mt-2 text-sm text-[#5c6578]">{t('auth.forgotBody')}</p>
+      {sent ? (
+        <div className="mt-4 rounded-2xl bg-[#e8f8ef] px-4 py-3 text-sm font-semibold text-[#1f7a4d]">
+          <p>{t('auth.forgotSent')}</p>
+          <p className="mt-1 font-medium text-[#5c6578]">{t('auth.forgotMailpit')}</p>
+        </div>
+      ) : null}
       <form
         className="mt-6 space-y-4"
         onSubmit={form.handleSubmit(async (values) => {
@@ -38,11 +43,11 @@ export function ForgotPasswordPage() {
           feedback.success(t('auth.forgotSent'));
         })}
       >
-        <label className="block text-sm">
+        <label className="block text-sm font-bold text-[#1c2744]">
           {t('auth.email')}
           <Input
             type="email"
-            className="mt-1"
+            className="mt-1.5 rounded-2xl"
             autoComplete="email"
             {...form.register('email')}
           />
@@ -51,7 +56,7 @@ export function ForgotPasswordPage() {
           {t('auth.sendReset')}
         </Button>
       </form>
-      <Link to="/login" className="mt-4 inline-block text-sm text-teal">
+      <Link to="/login" className="mt-4 inline-block text-sm font-semibold text-[#1f9a7a]">
         {t('auth.login')}
       </Link>
     </AuthLayout>

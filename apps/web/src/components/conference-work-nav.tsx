@@ -19,6 +19,10 @@ const HINT: Record<ConferenceWorkTab, string> = {
   team: 'conferences.workHintTeam',
 };
 
+function isManagerRole(role?: string) {
+  return role === 'CHAIR' || role === 'ADMINISTRATOR' || role === 'COMMITTEE';
+}
+
 export function ConferenceWorkNav({
   conferenceId,
   conferenceName,
@@ -40,6 +44,9 @@ export function ConferenceWorkNav({
     role === 'COMMITTEE'
       ? `/workspace/committee${query}`
       : `/workspace/administrator${query}`;
+  const programTo = isManagerRole(role)
+    ? `/workspace/session-board${query}`
+    : `/workspace/program${query}`;
   const items: { id: ConferenceWorkTab; to: string; label: string }[] = [
     {
       id: 'record',
@@ -54,7 +61,7 @@ export function ConferenceWorkNav({
     },
     {
       id: 'program',
-      to: `/workspace/program${query}`,
+      to: programTo,
       label: t('conferences.workProgram'),
     },
     {
@@ -81,7 +88,7 @@ export function ConferenceWorkNav({
       ) : null}
       <nav
         aria-label={t('conferences.workNavLabel')}
-        className="flex flex-wrap items-center gap-1.5 rounded-2xl border border-[#e4e7ee] bg-white p-1.5 sm:gap-2"
+        className="flex flex-wrap items-center gap-1.5 rounded-2xl border border-[#e4e7ee] bg-gradient-to-r from-white to-[#f6f8ff] p-1.5 sm:gap-2"
       >
         {items.map((item) => {
           const active = item.id === current;
@@ -93,7 +100,7 @@ export function ConferenceWorkNav({
               className={cn(
                 'inline-flex min-h-9 items-center rounded-xl px-3 text-xs font-extrabold no-underline sm:min-h-10 sm:px-3.5 sm:text-sm',
                 active
-                  ? 'bg-[#3d4fd4] text-white'
+                  ? 'bg-[#3d4fd4] text-white shadow-[0_6px_16px_rgba(61,79,212,0.25)]'
                   : 'text-[#5c6578] hover:bg-[#eef2ff] hover:text-[#3d4fd4]',
               )}
             >
@@ -122,7 +129,7 @@ export function ConferenceTeamNav({
   current,
 }: {
   conferenceId: string;
-  current: 'reviewers' | 'sessionChairs';
+  current: 'reviewers' | 'assignments';
 }) {
   const { t } = useTranslation();
   const query = `?conference=${conferenceId}`;
@@ -133,17 +140,14 @@ export function ConferenceTeamNav({
       label: t('nav.reviewers'),
     },
     {
-      id: 'sessionChairs' as const,
-      to: `/workspace/session-chair${query}`,
-      label: t('nav.sessionChair'),
+      id: 'assignments' as const,
+      to: `/workspace/assignments${query}`,
+      label: t('nav.assignments'),
     },
   ];
 
   return (
-    <nav
-      aria-label={t('conferences.workTeam')}
-      className="flex flex-wrap gap-2"
-    >
+    <nav aria-label={t('conferences.workTeam')} className="flex flex-wrap gap-2">
       {items.map((item) => {
         const active = item.id === current;
         return (
@@ -152,7 +156,58 @@ export function ConferenceTeamNav({
             to={item.to}
             aria-current={active ? 'page' : undefined}
             className={cn(
-              'inline-flex min-h-9 items-center rounded-full px-3.5 text-xs font-extrabold no-underline sm:text-sm',
+              'inline-flex min-h-9 items-center rounded-xl px-3.5 text-xs font-extrabold no-underline sm:text-sm',
+              active
+                ? 'bg-[#eef2ff] text-[#3d4fd4] ring-1 ring-[#c5cad6]'
+                : 'bg-[#f6f7fb] text-[#5c6578] hover:bg-[#eef2ff]',
+            )}
+          >
+            {item.label}
+          </Link>
+        );
+      })}
+    </nav>
+  );
+}
+
+export function ConferenceProgramNav({
+  conferenceId,
+  current,
+}: {
+  conferenceId: string;
+  current: 'program' | 'sessionBoard' | 'sessionChairs';
+}) {
+  const { t } = useTranslation();
+  const query = `?conference=${conferenceId}`;
+  const items = [
+    {
+      id: 'sessionBoard' as const,
+      to: `/workspace/session-board${query}`,
+      label: t('nav.sessionBoard'),
+    },
+    {
+      id: 'program' as const,
+      to: `/workspace/program${query}`,
+      label: t('conferences.programView'),
+    },
+    {
+      id: 'sessionChairs' as const,
+      to: `/workspace/session-chair${query}`,
+      label: t('conferences.programChairs'),
+    },
+  ];
+
+  return (
+    <nav aria-label={t('conferences.workProgram')} className="flex flex-wrap gap-2">
+      {items.map((item) => {
+        const active = item.id === current;
+        return (
+          <Link
+            key={item.id}
+            to={item.to}
+            aria-current={active ? 'page' : undefined}
+            className={cn(
+              'inline-flex min-h-9 items-center rounded-xl px-3.5 text-xs font-extrabold no-underline sm:text-sm',
               active
                 ? 'bg-[#eef2ff] text-[#3d4fd4] ring-1 ring-[#c5cad6]'
                 : 'bg-[#f6f7fb] text-[#5c6578] hover:bg-[#eef2ff]',
@@ -184,7 +239,7 @@ export function ConferenceFicheParts() {
         <a
           key={part.id}
           href={`#${part.id}`}
-          className="inline-flex min-h-9 items-center rounded-full bg-white px-3 text-xs font-extrabold text-[#3d4fd4] no-underline ring-1 ring-[#d8dce6] hover:bg-[#eef2ff]"
+          className="inline-flex min-h-9 items-center rounded-xl bg-white px-3 text-xs font-extrabold text-[#3d4fd4] no-underline ring-1 ring-[#d8dce6] hover:bg-[#eef2ff]"
         >
           {part.label}
         </a>

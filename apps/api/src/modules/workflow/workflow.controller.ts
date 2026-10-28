@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Header,
   Param,
@@ -389,6 +390,23 @@ export class WorkflowController {
     return this.workflow.addRoom(request.user!, id, body);
   }
 
+  @Patch('rooms/:id')
+  updateRoom(
+    @Req() request: AuthenticatedRequest,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body(new ZodValidationPipe(roomSchema)) body: z.infer<typeof roomSchema>,
+  ) {
+    return this.workflow.updateRoom(request.user!, id, body);
+  }
+
+  @Delete('rooms/:id')
+  removeRoom(
+    @Req() request: AuthenticatedRequest,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return this.workflow.removeRoom(request.user!, id);
+  }
+
   @Post('conferences/:id/sessions')
   session(
     @Req() request: AuthenticatedRequest,
@@ -396,6 +414,23 @@ export class WorkflowController {
     @Body(new ZodValidationPipe(sessionSchema)) body: z.infer<typeof sessionSchema>,
   ) {
     return this.workflow.addSession(request.user!, id, body);
+  }
+
+  @Patch('sessions/:id')
+  updateSession(
+    @Req() request: AuthenticatedRequest,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body(new ZodValidationPipe(sessionSchema)) body: z.infer<typeof sessionSchema>,
+  ) {
+    return this.workflow.updateSession(request.user!, id, body);
+  }
+
+  @Delete('sessions/:id')
+  removeSession(
+    @Req() request: AuthenticatedRequest,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return this.workflow.removeSession(request.user!, id);
   }
 
   @Post('sessions/:id/presentations')

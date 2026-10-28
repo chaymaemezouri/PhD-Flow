@@ -1,4 +1,5 @@
 import {
+  ArrowLeftRight,
   CalendarRange,
   ClipboardList,
   Home,
@@ -7,11 +8,11 @@ import {
   ListChecks,
   LogOut,
   Menu,
-  Mic2,
   NotebookPen,
   ScrollText,
   Settings2,
   Shield,
+  Sparkles,
   Users,
   UserRound,
   X,
@@ -21,6 +22,7 @@ import { useEffect, useState } from 'react';
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { DeadlineBell } from '@/components/deadline-bell';
+import { GlobalSearch } from '@/components/global-search';
 import { Button } from '@/components/ui/button';
 import { useCurrentUser, useLogout } from '@/features/auth/use-account';
 import { canStartSubmission } from '@/features/navigation/can-submit';
@@ -49,6 +51,13 @@ const shared = {
     to: '/workspace/preferences',
     label: 'nav.preferences',
     icon: Settings2,
+    end: false,
+  },
+  demoGuide: {
+    id: 'demoGuide',
+    to: '/workspace/demo-guide',
+    label: 'nav.demoGuide',
+    icon: Sparkles,
     end: false,
   },
 } as const;
@@ -90,17 +99,24 @@ function tabsFor(home: string, audience: NavAudience): NavTab[] {
         end: false,
       },
       {
-        id: 'sysSessionChairs',
-        to: '/workspace/session-chair',
-        label: 'nav.sessionChair',
-        icon: Mic2,
-        end: false,
-      },
-      {
         id: 'sysReviewers',
         to: '/workspace/reviewers',
         label: 'nav.reviewers',
         icon: Users,
+        end: false,
+      },
+      {
+        id: 'sysAssignments',
+        to: '/workspace/assignments',
+        label: 'nav.assignments',
+        icon: ArrowLeftRight,
+        end: false,
+      },
+      {
+        id: 'sysProgram',
+        to: '/workspace/session-board',
+        label: 'nav.program',
+        icon: CalendarRange,
         end: false,
       },
       {
@@ -138,6 +154,7 @@ function tabsFor(home: string, audience: NavAudience): NavTab[] {
         icon: ListChecks,
         end: false,
       },
+      shared.demoGuide,
       shared.account,
       shared.preferences,
     ];
@@ -145,7 +162,13 @@ function tabsFor(home: string, audience: NavAudience): NavTab[] {
 
   if (audience === 'sessionChair') {
     return [
-      { id: 'home', to: home, label: 'nav.home', icon: Home, end: true },
+      {
+        id: 'home',
+        to: home,
+        label: 'nav.sessionQueue',
+        icon: ClipboardList,
+        end: true,
+      },
       {
         id: 'conferences',
         to: '/workspace/conferences',
@@ -160,6 +183,7 @@ function tabsFor(home: string, audience: NavAudience): NavTab[] {
         icon: CalendarRange,
         end: false,
       },
+      shared.demoGuide,
       shared.account,
       shared.preferences,
     ];
@@ -169,6 +193,13 @@ function tabsFor(home: string, audience: NavAudience): NavTab[] {
     return [
       { id: 'home', to: home, label: 'nav.home', icon: Home, end: true },
       {
+        id: 'reviews',
+        to: '/workspace/reviewer',
+        label: 'nav.reviews',
+        icon: ClipboardList,
+        end: false,
+      },
+      {
         id: 'conferences',
         to: '/workspace/conferences',
         label: 'nav.conferences',
@@ -182,6 +213,7 @@ function tabsFor(home: string, audience: NavAudience): NavTab[] {
         icon: CalendarRange,
         end: false,
       },
+      shared.demoGuide,
       shared.account,
       shared.preferences,
     ];
@@ -205,8 +237,15 @@ function tabsFor(home: string, audience: NavAudience): NavTab[] {
         end: false,
       },
       {
+        id: 'assignments',
+        to: '/workspace/assignments',
+        label: 'nav.assignments',
+        icon: ArrowLeftRight,
+        end: false,
+      },
+      {
         id: 'program',
-        to: '/workspace/program',
+        to: '/workspace/session-board',
         label: 'nav.program',
         icon: CalendarRange,
         end: false,
@@ -225,13 +264,7 @@ function tabsFor(home: string, audience: NavAudience): NavTab[] {
         icon: Users,
         end: false,
       },
-      {
-        id: 'sessionChair',
-        to: '/workspace/session-chair',
-        label: 'nav.sessionChair',
-        icon: Mic2,
-        end: false,
-      },
+      shared.demoGuide,
       shared.account,
       shared.preferences,
     ];
@@ -274,6 +307,7 @@ function tabsFor(home: string, audience: NavAudience): NavTab[] {
       icon: CalendarRange,
       end: false,
     },
+    shared.demoGuide,
     shared.account,
     shared.preferences,
   ];
@@ -283,9 +317,27 @@ function tabsFor(home: string, audience: NavAudience): NavTab[] {
 }
 
 const mainIds = new Set(['home', 'conferences']);
-const workIds = new Set(['submissions', 'reviews', 'followUp', 'program']);
-const teamIds = new Set(['reviewers', 'sessionChair']);
-const accountIds = new Set(['account', 'preferences']);
+const workIds = new Set([
+  'submissions',
+  'reviews',
+  'assignments',
+  'followUp',
+  'program',
+]);
+const teamIds = new Set(['reviewers']);
+const accountIds = new Set(['account', 'preferences', 'demoGuide']);
+
+const SYSTEM_PLATFORM_IDS = [
+  'home',
+  'sysAdmins',
+  'sysConferences',
+  'sysReviewers',
+  'sysAssignments',
+  'sysProgram',
+  'sysUsers',
+  'sysSessions',
+  'sysAudit',
+];
 
 function groupTabs(tabs: NavTab[]) {
   const main: NavTab[] = [];
@@ -313,11 +365,11 @@ function mobilePrimary(tabs: NavTab[], audience: NavAudience): NavTab[] {
     audience === 'chair'
       ? ['home', 'reviews', 'program', 'followUp']
       : audience === 'reviewer'
-        ? ['home', 'conferences', 'program', 'account']
+        ? ['home', 'reviews', 'program', 'account']
         : audience === 'sessionChair'
           ? ['home', 'conferences', 'program', 'account']
           : audience === 'system'
-            ? ['home', 'sysConferences', 'sysUsers', 'submissions']
+            ? ['home', 'sysConferences', 'sysProgram', 'sysUsers']
             : ['home', 'conferences', 'submissions', 'followUp'];
   return ids
     .map((id) => tabs.find((tab) => tab.id === id))
@@ -515,17 +567,7 @@ export function AppShell() {
               <>
                 <NavSection
                   label={t('superadmin.navPlatform')}
-                  tabs={tabs.filter((tab) =>
-                    [
-                      'home',
-                      'sysAdmins',
-                      'sysConferences',
-                      'sysSessionChairs',
-                      'sysUsers',
-                      'sysSessions',
-                      'sysAudit',
-                    ].includes(tab.id),
-                  )}
+                  tabs={tabs.filter((tab) => SYSTEM_PLATFORM_IDS.includes(tab.id))}
                 />
                 <NavSection
                   label={t('superadmin.navContent')}
@@ -592,6 +634,7 @@ export function AppShell() {
             )}
 
             <div className="flex w-full shrink-0 flex-wrap items-center justify-end gap-2 sm:ml-auto sm:w-auto">
+              <GlobalSearch />
               <DeadlineBell />
               <Link
                 to="/workspace/account"
@@ -665,14 +708,7 @@ export function AppShell() {
                       label={t('superadmin.navPlatform')}
                       onNavigate={() => setMenuOpen(false)}
                       tabs={tabs.filter((tab) =>
-                        [
-                          'home',
-                          'sysAdmins',
-                          'sysConferences',
-                          'sysUsers',
-                          'sysSessions',
-                          'sysAudit',
-                        ].includes(tab.id),
+                        SYSTEM_PLATFORM_IDS.includes(tab.id),
                       )}
                     />
                     <NavSection

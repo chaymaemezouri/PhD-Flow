@@ -8,6 +8,7 @@ import { ConferenceAccessPage } from '@/pages/conference-access-page';
 import { ConferenceManagePage } from '@/pages/conference-manage-page';
 import { ConferencesPage } from '@/pages/conferences-page';
 import { DirectoryPage } from '@/pages/directory-page';
+import { DemoGuidePage } from '@/pages/demo-guide-page';
 import { InvitationPage } from '@/pages/invitation-page';
 import { ForgotPasswordPage } from '@/pages/forgot-password-page';
 import { LoginPage } from '@/pages/login-page';
@@ -21,7 +22,9 @@ import { RegistrationPage } from '@/pages/registration-page';
 import { ReviewDetailPage } from '@/pages/review-detail-page';
 import { ReviewsPage } from '@/pages/reviews-page';
 import { RoleDashboardPage, WorkspaceHome } from '@/pages/role-dashboard-page';
+import { AssignmentBoardPage } from '@/pages/assignment-board-page';
 import { ReviewersPage } from '@/pages/reviewers-page';
+import { SessionBoardPage } from '@/pages/session-board-page';
 import { SessionChairPage } from '@/pages/session-chair-page';
 import { SessionChairTalkPage } from '@/pages/session-chair-talk-page';
 import { SuperadminPage } from '@/pages/superadmin-page';
@@ -66,6 +69,7 @@ export const routes = [
           { path: 'system/*', element: <SuperadminPage /> },
           { path: 'conference-access', element: <ConferenceAccessPage /> },
           { path: 'preferences', element: <PreferencesPage /> },
+          { path: 'demo-guide', element: <DemoGuidePage /> },
           { path: 'account', element: <AccountPage /> },
           { path: 'conferences', element: <ConferencesPage /> },
           { path: 'conferences/:conferenceId', element: <ConferenceManagePage /> },
@@ -74,9 +78,11 @@ export const routes = [
           { path: 'submissions/:paperId', element: <SubmissionEditorPage /> },
           { path: 'reviews', element: <ReviewsPage /> },
           { path: 'reviews/:assignmentId', element: <ReviewDetailPage /> },
+          { path: 'assignments', element: <AssignmentBoardPage /> },
           { path: 'registration', element: <RegistrationPage /> },
           { path: 'follow-up', element: <FollowUpPage /> },
           { path: 'program', element: <ProgramPage /> },
+          { path: 'session-board', element: <SessionBoardPage /> },
           { path: 'session-chair', element: <SessionChairPage /> },
           { path: 'session-chair/:paperId', element: <SessionChairTalkPage /> },
           { path: 'reviewers', element: <ReviewersPage /> },

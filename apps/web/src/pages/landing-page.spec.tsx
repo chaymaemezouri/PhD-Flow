@@ -8,7 +8,7 @@ import { PreferencesProvider } from '@/features/preferences/preferences-context'
 import '@/lib/i18n';
 
 describe('Home entry', () => {
-  it('opens the sign-in page', async () => {
+  it('redirects guests to the sign-in page', async () => {
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('offline')));
     const router = createMemoryRouter(routes, { initialEntries: ['/'] });
     render(

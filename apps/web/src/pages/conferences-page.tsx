@@ -1,7 +1,10 @@
 import type { ConferenceRole, MembershipStatus } from '@scholarflow/types';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { Search } from 'lucide-react';
+import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router';
+import { EmptyState } from '@/components/empty-state';
 import { Button } from '@/components/ui/button';
 import { useCurrentUser } from '@/features/auth/use-account';
 import { useFeedback } from '@/features/feedback/feedback';
@@ -22,6 +25,8 @@ interface Mine {
   startsOn: string | null;
   endsOn: string | null;
 }
+
+type ConferenceFilter = 'all' | 'open' | 'mine' | 'invited';
 
 async function loadMine(): Promise<Mine[]> {
   const response = await apiFetch('/api/v1/conferences');
@@ -83,6 +88,8 @@ export function ConferencesPage() {
   const queryClient = useQueryClient();
   const feedback = useFeedback();
   const mine = useQuery({ queryKey: ['conferences'], queryFn: loadMine });
+  const [query, setQuery] = useState('');
+  const [filter, setFilter] = useState<ConferenceFilter>('all');
 
   async function respondInvite(id: string, accept: boolean) {
     const response = await apiFetch(`/api/v1/conferences/${id}/invitation/respond`, {
@@ -96,6 +103,35 @@ export function ConferencesPage() {
     await queryClient.invalidateQueries({ queryKey: ['conferences'] });
     feedback.success(t('conferences.invitationDone'));
   }
+
+  const visible = useMemo(() => {
+    const needle = query.trim().toLowerCase();
+    return (mine.data ?? []).filter((item) => {
+      if (filter === 'open' && item.membershipStatus !== 'OPEN') {
+        return false;
+      }
+      if (filter === 'mine' && item.membershipStatus !== 'ACTIVE') {
+        return false;
+      }
+      if (filter === 'invited' && item.membershipStatus !== 'INVITED') {
+        return false;
+      }
+      if (!needle) {
+        return true;
+      }
+      return [item.name, item.shortName, item.city ?? '', item.country ?? '']
+        .join(' ')
+        .toLowerCase()
+        .includes(needle);
+    });
+  }, [filter, mine.data, query]);
+
+  const filters: { id: ConferenceFilter; label: string }[] = [
+    { id: 'all', label: t('conferences.filterAll') },
+    { id: 'open', label: t('conferences.filterOpen') },
+    { id: 'mine', label: t('conferences.filterMine') },
+    { id: 'invited', label: t('conferences.filterInvited') },
+  ];
 
   return (
     <div className="space-y-4">
@@ -115,6 +151,36 @@ export function ConferencesPage() {
         ) : null}
       </div>
 
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <label className="flex min-w-0 flex-1 items-center gap-2 rounded-2xl border border-[#e4e7ee] bg-white px-3 py-2 sm:max-w-md">
+          <Search className="size-4 shrink-0 text-[#8b909a]" aria-hidden />
+          <span className="sr-only">{t('conferences.search')}</span>
+          <input
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder={t('conferences.search')}
+            className="w-full bg-transparent text-sm font-semibold outline-none placeholder:text-[#a0a6b2]"
+          />
+        </label>
+        <div className="flex flex-wrap gap-1.5" role="group" aria-label={t('conferences.filterAll')}>
+          {filters.map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              onClick={() => setFilter(item.id)}
+              className={cn(
+                'rounded-xl px-3 py-1.5 text-xs font-extrabold',
+                filter === item.id
+                  ? 'bg-[#3d4fd4] text-white'
+                  : 'bg-[#f4f6fb] text-[#5c6578] hover:bg-[#eef2ff] hover:text-[#3d4fd4]',
+              )}
+            >
+              {item.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
       {mine.isPending ? (
         <p className="text-sm text-[#8b909a]">{t('common.loading')}</p>
       ) : null}
@@ -122,13 +188,19 @@ export function ConferencesPage() {
         <p className="text-sm text-[#c54545]">{mine.error.message}</p>
       ) : null}
       {mine.data?.length === 0 ? (
-        <p className="rounded-xl border border-dashed border-[#d8dce6] bg-white px-4 py-8 text-center text-sm text-[#5c6578]">
-          {t(createdAdmin ? 'conferences.emptyAdmin' : 'conferences.empty')}
-        </p>
+        <EmptyState
+          title={t(createdAdmin ? 'conferences.emptyAdmin' : 'conferences.empty')}
+          body={t('conferences.emptyHint')}
+          actionTo="/directory"
+          actionLabel={t('conferences.emptyAction')}
+        />
+      ) : null}
+      {!mine.isPending && mine.data && mine.data.length > 0 && visible.length === 0 ? (
+        <EmptyState title={t('conferences.noneMatch')} body={t('conferences.emptyHint')} />
       ) : null}
 
       <ul className="grid gap-2.5">
-        {mine.data?.map((item) => {
+        {visible.map((item) => {
           const place = [item.city, item.country].filter(Boolean).join(', ');
           const when = formatRange(item.startsOn, item.endsOn, i18n.language);
           const invited = item.membershipStatus === 'INVITED';

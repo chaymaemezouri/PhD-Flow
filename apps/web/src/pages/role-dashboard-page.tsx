@@ -3,14 +3,17 @@ import { Search } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, Navigate, useSearchParams } from 'react-router';
+import { ConferenceFilterList } from '@/components/conference-filter-list';
 import { ConferenceWorkNav } from '@/components/conference-work-nav';
+import { EmptyState } from '@/components/empty-state';
 import { PaperWorkQueueList, type WorkPaper } from '@/components/paper-work-card';
 import { PapersLayoutToggle } from '@/components/papers-layout-toggle';
 import { PapersLayoutView } from '@/components/papers-layout-view';
 import { ReviewQueueList, ReviewQueueToolbar } from '@/components/review-queue-list';
+import { RoleContextBanner } from '@/components/role-context-banner';
 import { focusStep, type PaperStep } from '@/components/step-bar';
 import { useCurrentUser } from '@/features/auth/use-account';
-import { canSubmitToConference } from '@/features/navigation/can-submit';
+import { canStartSubmission } from '@/features/navigation/can-submit';
 import { homePathFor, isCreatedAdmin, isSessionChair } from '@/features/navigation/home-path';
 import { pickConference } from '@/features/navigation/pick-conference';
 import type { WorkspaceRole } from '@/features/navigation/modules';
@@ -65,6 +68,7 @@ async function loadPapers(): Promise<PaperSummary[]> {
 interface Membership {
   id: string;
   name: string;
+  shortName?: string;
   role: string;
   membershipStatus: string;
   status: string;
@@ -160,12 +164,7 @@ function AuthorDashboard() {
     }
     return true;
   });
-  const openConferences =
-    memberships.data?.filter((item) => item.membershipStatus === 'OPEN') ?? [];
-  const conference =
-    memberships.data?.find((item) => item.membershipStatus === 'ACTIVE') ??
-    openConferences[0] ??
-    null;
+  const canSubmit = canStartSubmission(false, memberships.data);
 
   const filters = [
     ['all', 'home.boardAll'],
@@ -176,40 +175,26 @@ function AuthorDashboard() {
 
   return (
     <div className="space-y-5 lg:space-y-3">
-      {openConferences.some((item) =>
-        canSubmitToConference(false, memberships.data ?? [], item),
-      ) ? (
-        <section className="rounded-2xl border border-[#e4e7ee] bg-white p-4 sm:p-5 lg:p-3">
-          <h2 className="text-lg font-extrabold lg:text-base">{t('home.openConferences')}</h2>
-          <ul className="mt-3 grid gap-2">
-            {openConferences
-              .filter((item) =>
-                canSubmitToConference(false, memberships.data ?? [], item),
-              )
-              .map((item) => (
-                <li
-                  key={item.id}
-                  className="flex flex-wrap items-center justify-between gap-2 rounded-2xl bg-[#f6f7fb] px-4 py-3 lg:px-3 lg:py-2.5"
-                >
-                  <span className="text-sm font-extrabold">{item.name}</span>
-                  <span className="flex flex-wrap gap-2">
-                    <Link
-                      to={`/workspace/submissions/new?conference=${item.id}`}
-                      className="inline-flex min-h-10 items-center justify-center rounded-full bg-[#5d74ff] px-4 py-2 text-sm font-extrabold text-white no-underline shadow-[0_6px_16px_rgba(93,116,255,0.28)] lg:min-h-8 lg:px-3 lg:py-1.5 lg:text-xs"
-                    >
-                      {t('home.submitPaper')}
-                    </Link>
-                    <Link
-                      to={`/workspace/conferences/${item.id}`}
-                      className="inline-flex min-h-10 items-center justify-center rounded-full border border-[#c5cad6] bg-white px-3.5 py-2 text-sm font-extrabold text-[#3d4fd4] no-underline lg:min-h-8 lg:px-2.5 lg:py-1.5 lg:text-xs"
-                    >
-                      {t('home.manage')}
-                    </Link>
-                  </span>
-                </li>
-              ))}
-          </ul>
-        </section>
+      <RoleContextBanner
+        role="author"
+        title={t('conferences.roles.AUTHOR')}
+        hint={t('home.authorHint')}
+      />
+      {canSubmit ? (
+        <div className="flex flex-wrap items-center gap-2">
+          <Link
+            to="/workspace/submissions/new"
+            className="inline-flex min-h-9 items-center rounded-xl bg-[#3d4fd4] px-3.5 text-sm font-extrabold text-white no-underline"
+          >
+            {t('home.submitPaper')}
+          </Link>
+          <Link
+            to="/workspace/conferences"
+            className="inline-flex min-h-9 items-center rounded-xl border border-[#d8dce6] bg-white px-3.5 text-sm font-extrabold text-[#3d4fd4] no-underline"
+          >
+            {t('nav.conferences')}
+          </Link>
+        </div>
       ) : null}
 
       <section className="grid grid-cols-2 gap-3 xl:grid-cols-4">
@@ -243,43 +228,32 @@ function AuthorDashboard() {
         />
       </section>
 
-      <section className="rounded-2xl border border-[#e4e7ee] bg-white p-4 sm:p-5 lg:p-3">
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-          <div className="flex flex-wrap gap-2">
-            {filters.map(([key, label]) => {
-              const active = board === key;
-              const tone =
-                key === 'blocked'
-                  ? 'bg-[#e35d5d]/15 text-[#c54545]'
-                  : key === 'waiting'
-                    ? 'bg-[#f0a04b]/20 text-[#9a6410]'
-                    : key === 'clear'
-                      ? 'bg-[#2fbf71]/15 text-[#1c9a57]'
-                      : 'bg-[#5d74ff]/15 text-[#3d4fd4]';
-              return (
-                <button
-                  key={key}
-                  type="button"
-                  className={`rounded-full px-3 py-1.5 text-sm font-extrabold lg:px-2.5 lg:py-1 lg:text-xs ${
-                    active ? tone : 'bg-[#f4f7ff] text-[#5c6578]'
-                  }`}
-                  onClick={() => setBoard(key)}
-                >
-                  {t(label)}
-                  <span className="ml-1.5 tabular-nums opacity-80">
-                    {key === 'all'
-                      ? counts.total
-                      : key === 'waiting'
-                        ? counts.waiting
-                        : key === 'blocked'
-                          ? counts.blocked
-                          : counts.clear}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-          <label className="flex items-center gap-2 rounded-full bg-[#f4f7ff] px-3 py-2">
+      <section className="rounded-2xl border border-[#e4e7ee] bg-gradient-to-b from-white to-[#fafbfe] p-4 sm:p-5 lg:p-3">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+          <label className="block text-xs font-extrabold uppercase tracking-[0.06em] text-[#8b909a]">
+            {t('home.filterBoard')}
+            <select
+              value={board}
+              onChange={(event) =>
+                setBoard(event.target.value as 'all' | 'waiting' | 'blocked' | 'clear')
+              }
+              className="mt-1.5 block min-h-10 w-full min-w-[14rem] rounded-2xl border border-[#e4e7ee] bg-white px-3 py-2 text-sm font-semibold normal-case tracking-normal text-[#1c2744]"
+            >
+              {filters.map(([key, label]) => (
+                <option key={key} value={key}>
+                  {t(label)} ·{' '}
+                  {key === 'all'
+                    ? counts.total
+                    : key === 'waiting'
+                      ? counts.waiting
+                      : key === 'blocked'
+                        ? counts.blocked
+                        : counts.clear}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="flex items-center gap-2 rounded-2xl border border-[#e4e7ee] bg-white px-3 py-2">
             <Search className="size-4 text-[#8b909a]" />
             <span className="sr-only">{t('top.search')}</span>
             <input
@@ -299,10 +273,27 @@ function AuthorDashboard() {
           </p>
         ) : null}
         {boardPapers.length === 0 && !papers.isPending ? (
-          <div className="mt-4 rounded-3xl bg-[#f6f7fb] px-5 py-5">
-            <p className="text-sm text-[#5c6370]">
-              {conference ? t('home.empty') : t('home.joinBody')}
-            </p>
+          <div className="mt-4">
+            <EmptyState
+              title={
+                board === 'all'
+                  ? t('home.emptyTitle')
+                  : t('home.emptyFilterTitle')
+              }
+              body={
+                board === 'all'
+                  ? papers.data && papers.data.length === 0
+                    ? t('home.emptyBody')
+                    : t('home.emptyFilterBody')
+                  : t('home.emptyFilterBody')
+              }
+              actionTo={canSubmit ? '/workspace/submissions/new' : '/workspace/conferences'}
+              actionLabel={
+                canSubmit ? t('home.submitPaper') : t('nav.conferences')
+              }
+              secondaryTo="/workspace/demo-guide"
+              secondaryLabel={t('nav.demoGuide')}
+            />
           </div>
         ) : null}
         {boardPapers.length > 0 ? (
@@ -332,6 +323,7 @@ const CHAIR_FILTERS: { id: AdminBoard; label: string }[] = [
 
 function ChairDashboard({ variant = 'admin' }: { variant?: 'admin' | 'committee' }) {
   const { t } = useTranslation();
+  const account = useCurrentUser();
   const [params, setParams] = useSearchParams();
   const [query, setQuery] = useState('');
   const [layout, setLayout] = useState<PapersLayout>(() => readPapersLayout());
@@ -347,7 +339,11 @@ function ChairDashboard({ variant = 'admin' }: { variant?: 'admin' | 'committee'
           item.role === 'COMMITTEE'),
     ) ?? [];
   const managed = pickConference(managedList, params.get('conference'));
-  const canStats = managed?.role === 'CHAIR' || managed?.role === 'ADMINISTRATOR';
+  const canStats =
+    managed?.role === 'CHAIR' ||
+    managed?.role === 'ADMINISTRATOR' ||
+    managed?.role === 'COMMITTEE' ||
+    account.data?.platformRole === 'SYSTEM_ADMIN';
   const stats = useQuery({
     queryKey: ['statistics', managed?.id],
     queryFn: async () => {
@@ -405,16 +401,14 @@ function ChairDashboard({ variant = 'admin' }: { variant?: 'admin' | 'committee'
 
   if (!memberships.isPending && managedList.length === 0) {
     return (
-      <div className="rounded-2xl border border-[#e4e7ee] bg-white p-5">
-        <h1 className="text-xl font-extrabold text-[#1c2744]">{t('home.overview')}</h1>
-        <p className="mt-2 text-sm text-[#5c6578]">{t('home.noManagedConference')}</p>
-        <Link
-          to="/workspace/conferences"
-          className="mt-4 inline-flex text-sm font-extrabold text-[#3d4fd4] no-underline"
-        >
-          {t('nav.conferences')}
-        </Link>
-      </div>
+      <EmptyState
+        title={t('home.overview')}
+        body={t('home.noManagedConference')}
+        actionTo="/workspace/conferences"
+        actionLabel={t('nav.conferences')}
+        secondaryTo="/workspace/demo-guide"
+        secondaryLabel={t('nav.demoGuide')}
+      />
     );
   }
 
@@ -428,28 +422,30 @@ function ChairDashboard({ variant = 'admin' }: { variant?: 'admin' | 'committee'
           current="papers"
         />
       ) : null}
-      <p className="max-w-2xl text-sm text-[#5c6578]">
-        {t(variant === 'committee' ? 'home.committeeIntro' : 'home.chairIntro')}
-      </p>
-      {managedList.length > 1 ? (
-        <div className="flex flex-wrap gap-1.5 sm:gap-2">
-          {managedList.map((item) => (
-            <button
-              key={item.id}
-              type="button"
-              aria-pressed={item.id === managed?.id}
-              className={`rounded-full px-2.5 py-1.5 text-xs font-bold sm:px-3 sm:py-2 sm:text-sm ${
-                item.id === managed?.id
-                  ? 'bg-[#5d74ff]/15 text-[#3d4fd4]'
-                  : 'bg-white text-[#5c6578]'
-              }`}
-              onClick={() => setParams({ conference: item.id })}
-            >
-              {item.name}
-            </button>
-          ))}
-        </div>
-      ) : null}
+      <RoleContextBanner
+        role={
+          variant === 'committee'
+            ? 'committee'
+            : managed?.role === 'ADMINISTRATOR'
+              ? 'admin'
+              : 'chair'
+        }
+        title={
+          variant === 'committee'
+            ? t('conferences.roles.COMMITTEE')
+            : managed?.role === 'ADMINISTRATOR'
+              ? t('conferences.roles.ADMINISTRATOR')
+              : t('conferences.roles.CHAIR')
+        }
+        hint={t(
+          variant === 'committee' ? 'home.committeeLimits' : 'home.chairPowers',
+        )}
+      />
+      <ConferenceFilterList
+        items={managedList}
+        value={managed?.id}
+        onChange={(id) => setParams({ conference: id })}
+      />
       <section className="grid grid-cols-2 gap-2 sm:gap-3 xl:grid-cols-4">
         <Metric
           tone="amber"
@@ -494,7 +490,7 @@ function ChairDashboard({ variant = 'admin' }: { variant?: 'admin' | 'committee'
           </Link>
         </p>
       ) : null}
-      <section className="space-y-3 rounded-2xl border border-[#e4e7ee] bg-white p-3 sm:space-y-4 sm:p-5">
+      <section className="space-y-3 rounded-2xl border border-[#e4e7ee] bg-gradient-to-b from-white to-[#fafbfe] p-3 sm:space-y-4 sm:p-5">
         <div className="flex flex-col gap-2.5 sm:flex-row sm:items-end sm:justify-between sm:gap-3">
           <div>
             <h2 className="text-base font-extrabold sm:text-lg">{t('home.chairPapers')}</h2>
@@ -515,26 +511,34 @@ function ChairDashboard({ variant = 'admin' }: { variant?: 'admin' | 'committee'
             </label>
           </div>
         </div>
-        <div className="touch-scroll flex gap-1.5 overflow-x-auto pb-1 sm:gap-2">
-          {CHAIR_FILTERS.map((item) => (
-            <button
-              key={item.id}
-              type="button"
-              aria-pressed={board === item.id}
-              onClick={() => setBoard(item.id)}
-              className={`shrink-0 rounded-full px-2.5 py-1.5 text-[11px] font-extrabold sm:px-3 sm:py-2 sm:text-sm ${
-                board === item.id ? 'bg-[#3d4fd4] text-white' : 'bg-[#f6f7fb] text-[#5c6578]'
-              }`}
-            >
-              {t(item.label)} · {counts[item.id]}
-            </button>
-          ))}
-        </div>
+        <label className="block text-xs font-extrabold uppercase tracking-[0.06em] text-[#8b909a]">
+          {t('home.filterBoard')}
+          <select
+            value={board}
+            onChange={(event) => setBoard(event.target.value as AdminBoard)}
+            className="mt-1.5 block min-h-10 w-full max-w-md rounded-2xl border border-[#e4e7ee] bg-white px-3 py-2 text-sm font-semibold normal-case tracking-normal text-[#1c2744]"
+          >
+            {CHAIR_FILTERS.map((item) => (
+              <option key={item.id} value={item.id}>
+                {t(item.label)} · {counts[item.id]}
+              </option>
+            ))}
+          </select>
+        </label>
         {papers.isPending ? (
           <p className="text-xs text-[#8b909a] sm:text-sm">{t('common.loading')}</p>
         ) : null}
         {!papers.isPending && boardPapers.length === 0 ? (
-          <p className="text-xs text-[#5c6370] sm:text-sm">{t('home.chairEmpty')}</p>
+          <EmptyState
+            title={t('home.chairEmpty')}
+            body={t('home.emptyFilterBody')}
+            actionTo={
+              managed
+                ? `/workspace/assignments?conference=${managed.id}`
+                : '/workspace/assignments'
+            }
+            actionLabel={t('nav.assignments')}
+          />
         ) : null}
         {!papers.isPending && boardPapers.length > 0 ? (
           layout === 'list' ? (
@@ -626,31 +630,21 @@ function ReviewerDashboard() {
 
   return (
     <div className="space-y-5 lg:space-y-4">
+      <RoleContextBanner
+        role="reviewer"
+        title={t('conferences.roles.REVIEWER')}
+        hint={t('home.reviewerIntro')}
+      />
       <div>
         <h1 className="text-xl font-extrabold text-[#1c2744] sm:text-2xl">
           {conference?.name ?? t('home.reviewQueue')}
         </h1>
-        <p className="mt-1 max-w-2xl text-sm text-[#5c6578]">{t('home.reviewerIntro')}</p>
       </div>
-      {reviewerConferences.length > 1 ? (
-        <div className="flex flex-wrap gap-1.5 sm:gap-2">
-          {reviewerConferences.map((item) => (
-            <button
-              key={item.id}
-              type="button"
-              aria-pressed={item.id === conferenceId}
-              className={`rounded-full px-2.5 py-1.5 text-xs font-bold sm:px-3 sm:py-2 sm:text-sm ${
-                item.id === conferenceId
-                  ? 'bg-[#5d74ff]/15 text-[#3d4fd4]'
-                  : 'bg-white text-[#5c6578]'
-              }`}
-              onClick={() => setParams({ conference: item.id })}
-            >
-              {item.name}
-            </button>
-          ))}
-        </div>
-      ) : null}
+      <ConferenceFilterList
+        items={reviewerConferences}
+        value={conferenceId}
+        onChange={(id) => setParams({ conference: id })}
+      />
       <section className="grid grid-cols-2 gap-2 sm:gap-3 xl:grid-cols-4">
         <Metric
           tone="amber"
@@ -708,13 +702,17 @@ function ReviewerDashboard() {
         />
         {reviews.isPending ? (
           <p className="text-sm text-[#8b909a]">{t('common.loading')}</p>
-        ) : (
-          <ReviewQueueList
-            items={visible}
-            empty={
+        ) : visible.length === 0 ? (
+          <EmptyState
+            title={
               scoped.length === 0 ? t('home.reviewEmpty') : t('reviews.noneMatch')
             }
+            body={t('home.emptyFilterBody')}
+            actionTo="/workspace/demo-guide"
+            actionLabel={t('nav.demoGuide')}
           />
+        ) : (
+          <ReviewQueueList items={visible} empty={t('reviews.noneMatch')} />
         )}
       </section>
       <section className="space-y-3 rounded-2xl border border-[#e4e7ee] bg-white p-3 sm:space-y-4 sm:p-5">

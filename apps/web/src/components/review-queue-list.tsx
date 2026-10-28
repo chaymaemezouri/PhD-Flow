@@ -30,28 +30,26 @@ export function ReviewQueueToolbar({
   onQuery: (value: string) => void;
 }) {
   const { t } = useTranslation();
+  const options = FILTERS.filter(
+    (item) => item.id !== 'waiting' || counts.waiting > 0,
+  );
   return (
-    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-      <div className="touch-scroll flex gap-1.5 overflow-x-auto pb-1 sm:gap-2">
-        {FILTERS.filter((item) => item.id !== 'waiting' || counts.waiting > 0).map(
-          (item) => (
-            <button
-              key={item.id}
-              type="button"
-              aria-pressed={board === item.id}
-              onClick={() => onBoard(item.id)}
-              className={`shrink-0 rounded-full px-2.5 py-1.5 text-[11px] font-extrabold sm:px-3 sm:py-2 sm:text-sm ${
-                board === item.id
-                  ? 'bg-[#3d4fd4] text-white'
-                  : 'bg-[#f6f7fb] text-[#5c6578]'
-              }`}
-            >
+    <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+      <label className="block text-xs font-extrabold uppercase tracking-[0.06em] text-[#8b909a]">
+        {t('home.filterBoard')}
+        <select
+          value={board}
+          onChange={(event) => onBoard(event.target.value as ReviewBoard)}
+          className="mt-1.5 block min-h-10 w-full min-w-[14rem] rounded-2xl border border-[#e4e7ee] bg-white px-3 py-2 text-sm font-semibold normal-case tracking-normal text-[#1c2744]"
+        >
+          {options.map((item) => (
+            <option key={item.id} value={item.id}>
               {t(item.label)} · {counts[item.id]}
-            </button>
-          ),
-        )}
-      </div>
-      <label className="flex min-w-0 items-center gap-2 rounded-full bg-[#f4f7ff] px-3 py-2 sm:w-72">
+            </option>
+          ))}
+        </select>
+      </label>
+      <label className="flex min-w-0 items-center gap-2 rounded-2xl border border-[#e4e7ee] bg-white px-3 py-2 sm:w-72">
         <Search className="size-4 shrink-0 text-[#8b909a]" />
         <span className="sr-only">{t('reviews.searchPlaceholder')}</span>
         <input

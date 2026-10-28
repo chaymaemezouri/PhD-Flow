@@ -2,7 +2,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, Navigate, useLocation, useSearchParams } from 'react-router';
-import { ChairAssignmentPanel } from '@/components/chair-assignment-panel';
+import { ConflictPanel } from '@/components/conflict-panel';
 import { ConferenceWorkNav } from '@/components/conference-work-nav';
 import { ReviewQueueList, ReviewQueueToolbar } from '@/components/review-queue-list';
 import { Button } from '@/components/ui/button';
@@ -215,9 +215,20 @@ export function ReviewsPage() {
                   );
                 })}
               </ul>
-              <ChairAssignmentPanel conferenceId={workConference.id} />
+              <div className="rounded-2xl border border-[#e4e7ee] bg-[#f6f7fb] px-4 py-4">
+                <p className="text-sm font-semibold text-[#5c6578]">
+                  {t('reviews.assignDashboardHint')}
+                </p>
+                <Link
+                  to={`/workspace/assignments?conference=${workConference.id}`}
+                  className="mt-3 inline-flex min-h-9 items-center rounded-full bg-[#3d4fd4] px-4 text-sm font-extrabold text-white no-underline"
+                >
+                  {t('reviews.openBoard')}
+                </Link>
+              </div>
             </>
           )}
+          <ConflictPanel conferenceId={workConference.id} />
         </section>
       ) : null}
     </div>

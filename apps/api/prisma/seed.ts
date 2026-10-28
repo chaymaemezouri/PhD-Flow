@@ -75,7 +75,7 @@ async function main(): Promise<void> {
     department: 'Informatique',
     disciplines: ['Informatique', 'Publication scientifique'],
     interests: 'Organisation de conférences et comités.',
-    biography: 'Présidente de ScholarFlow Demo 2027.',
+    biography: 'Présidente de PapersManagement Demo 2027.',
     photoPath: '/avatars/admin.jpg',
     orcid: '0000-0001-2345-6781',
     website: 'https://liris.cnrs.fr',
@@ -98,6 +98,22 @@ async function main(): Promise<void> {
     orcid: '0000-0001-2345-6785',
     website: 'https://www.insa-lyon.fr',
     education: [{ year: '2005', title: 'Doctorat en réseaux', place: 'INSA Lyon' }],
+  });
+
+  const subAdmin = await createUser('sousadmin', passwordHash, {
+    firstName: 'Amine',
+    lastName: 'Khalil',
+    academicTitle: 'Sous-admin',
+    institution: 'Université de Lyon',
+    laboratory: 'LIRIS',
+    department: 'Informatique',
+    disciplines: ['Organisation'],
+    interests: 'Gestion opérationnelle de conférence.',
+    biography: 'Sous-administrateur de PapersManagement Demo 2027.',
+    photoPath: '',
+    orcid: '',
+    website: '',
+    education: [],
   });
 
   const reviewer = await createUser('reviewer', passwordHash, {
@@ -186,6 +202,7 @@ async function main(): Promise<void> {
   const demoA = await seedConferenceA({
     passwordHash,
     admin,
+    subAdmin,
     committee,
     reviewer,
     reviewer2,
@@ -214,6 +231,7 @@ Mot de passe (tous) : ${DEMO_PASSWORD}
 Comptes :
   ${superadmin.email.padEnd(40)} Superadmin
   ${admin.email.padEnd(40)} Admin / chair
+  ${subAdmin.email.padEnd(40)} Sous-admin
   ${committee.email.padEnd(40)} Comité
   ${reviewer.email.padEnd(40)} Évaluateur
   ${reviewer2.email.padEnd(40)} Évaluateur 2
@@ -308,6 +326,7 @@ async function wipeDemos(): Promise<void> {
 async function seedConferenceA(input: {
   passwordHash: string;
   admin: { id: string; email: string };
+  subAdmin: { id: string };
   committee: { id: string };
   reviewer: { id: string };
   reviewer2: { id: string };
@@ -320,7 +339,7 @@ async function seedConferenceA(input: {
   const conference = await prisma.conference.create({
     data: {
       slug: 'demo-2027',
-      name: 'ScholarFlow Demo 2027',
+      name: 'PapersManagement Demo 2027',
       shortName: 'DEMO2027',
       description:
         'Première démo complète : tous les états du parcours, de la soumission à la publication.',
@@ -402,6 +421,11 @@ async function seedConferenceA(input: {
           {
             userId: input.admin.id,
             role: ConferenceRole.CHAIR,
+            status: MembershipStatus.ACTIVE,
+          },
+          {
+            userId: input.subAdmin.id,
+            role: ConferenceRole.ADMINISTRATOR,
             status: MembershipStatus.ACTIVE,
           },
           {
