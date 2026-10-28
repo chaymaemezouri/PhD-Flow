@@ -168,29 +168,6 @@ export function SessionChairPage() {
     setParams(nextParams);
   }
 
-  const field =
-    'mt-1 block w-full rounded-2xl border border-[#e4e7ee] bg-white px-3 py-2 text-sm';
-
-  async function assess(presentationId: string, form: FormData) {
-    const scoreRaw = String(form.get('score') ?? '');
-    const score = scoreRaw ? Number(scoreRaw) : undefined;
-    const comment = String(form.get('comment') ?? '');
-    const response = await apiFetch(`/api/v1/presentations/${presentationId}/assessment`, {
-      method: 'POST',
-      body: JSON.stringify({ score, comment, presented: true }),
-    });
-    if (response.ok) {
-      feedback.success(t('workflow.saved'));
-    } else {
-      feedback.error(await apiErrorMessage(response));
-    }
-    if (response.ok) {
-      await queryClient.invalidateQueries({ queryKey: ['program'] });
-      await queryClient.invalidateQueries({ queryKey: ['paper'] });
-      await queryClient.invalidateQueries({ queryKey: ['presentations-mine'] });
-    }
-  }
-
   async function assignChair(paperId: string, userId: string) {
     if (!userId) {
       return;
@@ -234,12 +211,15 @@ export function SessionChairPage() {
           ) : null}
         </div>
       ) : waitingRole ? null : (
-        <div>
-          <h1 className="text-xl font-extrabold text-[#1c2744] sm:text-2xl">
+        <header className="border-b border-[#e6e8ec] pb-4">
+          <p className="text-xs font-extrabold uppercase tracking-wide text-[#8b909a]">
+            {t('sessionChair.role')}
+          </p>
+          <h1 className="mt-1 text-xl font-extrabold text-[#1c2744] sm:text-2xl">
             {conference?.name ?? t('sessionChair.queue')}
           </h1>
-          <p className="mt-1 max-w-2xl text-sm text-[#5c6578]">{t('sessionChair.intro')}</p>
-        </div>
+          <p className="mt-1 text-sm text-[#5c6578]">{t('sessionChair.listIntro')}</p>
+        </header>
       )}
 
       {canManage ? (
@@ -431,8 +411,6 @@ export function SessionChairPage() {
           loading={assigned.isPending}
           items={visible}
           empty={mine.length === 0 ? t('sessionChair.empty') : t('sessionChair.noneMatch')}
-          field={field}
-          onAssess={assess}
           onPickConference={(id) => setParams({ conference: id })}
         />
       ) : null}
@@ -446,6 +424,7 @@ const CHAIR_FILTERS: { id: SessionChairBoard; label: string }[] = [
   { id: 'scheduled', label: 'sessionChair.scheduled' },
   { id: 'waiting', label: 'sessionChair.waiting' },
   { id: 'presented', label: 'dossier.presentationPresented' },
+  { id: 'absent', label: 'sessionChair.absent' },
 ];
 
 function SessionChairDashboard({
@@ -459,8 +438,6 @@ function SessionChairDashboard({
   loading,
   items,
   empty,
-  field,
-  onAssess,
   onPickConference,
 }: {
   conferenceId?: string;
@@ -473,21 +450,29 @@ function SessionChairDashboard({
   loading: boolean;
   items: AssignedPresentation[];
   empty: string;
-  field: string;
-  onAssess: (presentationId: string, form: FormData) => Promise<void>;
   onPickConference: (id: string) => void;
 }) {
   const { t } = useTranslation();
+  const filters = CHAIR_FILTERS.filter((item) => {
+    if (item.id === 'waiting') {
+      return counts.waiting > 0 || board === 'waiting';
+    }
+    if (item.id === 'absent') {
+      return counts.absent > 0 || board === 'absent';
+    }
+    return true;
+  });
+
   return (
-    <>
+    <div className="space-y-4">
       {conferences.length > 1 ? (
-        <div className="flex flex-wrap gap-1.5 sm:gap-2">
+        <div className="flex flex-wrap gap-2">
           {conferences.map((item) => (
             <button
               key={item.id}
               type="button"
               aria-pressed={item.id === conferenceId}
-              className={`rounded-full px-2.5 py-1.5 text-xs font-bold sm:px-3 sm:py-2 sm:text-sm ${
+              className={`rounded-full px-3 py-1.5 text-sm font-bold ${
                 item.id === conferenceId
                   ? 'bg-[#5d74ff]/15 text-[#3d4fd4]'
                   : 'bg-white text-[#5c6578]'
@@ -499,68 +484,16 @@ function SessionChairDashboard({
           ))}
         </div>
       ) : null}
-      <section className="grid grid-cols-2 gap-2 sm:gap-3 xl:grid-cols-4">
-        <Metric
-          tone="amber"
-          label={t('home.boardTodo')}
-          value={loading ? '—' : counts.pending}
-          hint={t('sessionChair.todoHint')}
-          active={board === 'pending'}
-          onClick={() => onBoard('pending')}
-        />
-        <Metric
-          tone="blue"
-          label={t('sessionChair.scheduled')}
-          value={loading ? '—' : counts.scheduled}
-          hint={t('sessionChair.scheduledHint')}
-          active={board === 'scheduled'}
-          onClick={() => onBoard('scheduled')}
-        />
-        <Metric
-          tone="red"
-          label={t('sessionChair.waiting')}
-          value={loading ? '—' : counts.waiting}
-          hint={t('sessionChair.waitingHint')}
-          active={board === 'waiting'}
-          onClick={() => onBoard('waiting')}
-        />
-        <Metric
-          tone="green"
-          label={t('dossier.presentationPresented')}
-          value={loading ? '—' : counts.presented}
-          hint={t('sessionChair.presentedHint')}
-          active={board === 'presented'}
-          onClick={() => onBoard('presented')}
-        />
-      </section>
-      <section className="space-y-3 rounded-2xl border border-[#e4e7ee] bg-white p-3 sm:space-y-4 sm:p-5">
-        <div>
-          <h2 className="text-base font-extrabold sm:text-lg">{t('sessionChair.queue')}</h2>
-          <p className="mt-0.5 text-xs text-[#5c6578] sm:mt-1 sm:text-sm">
-            {t('sessionChair.queueHint')}
-          </p>
-        </div>
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="touch-scroll flex gap-1.5 overflow-x-auto pb-1 sm:gap-2">
-            {CHAIR_FILTERS.filter(
-              (item) => item.id !== 'waiting' || counts.waiting > 0 || board === 'waiting',
-            ).map((item) => (
-              <button
-                key={item.id}
-                type="button"
-                aria-pressed={board === item.id}
-                onClick={() => onBoard(item.id)}
-                className={`shrink-0 rounded-full px-2.5 py-1.5 text-[11px] font-extrabold sm:px-3 sm:py-2 sm:text-sm ${
-                  board === item.id
-                    ? 'bg-[#3d4fd4] text-white'
-                    : 'bg-[#f6f7fb] text-[#5c6578]'
-                }`}
-              >
-                {t(item.label)} · {counts[item.id]}
-              </button>
-            ))}
+
+      <section className="rounded-2xl border border-[#e4e7ee] bg-white p-4 sm:p-5">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+          <div className="min-w-0">
+            <h2 className="text-lg font-extrabold text-[#1c2744]">
+              {t('sessionChair.queue')}
+            </h2>
+            <p className="mt-1 text-sm text-[#5c6578]">{t('sessionChair.listHint')}</p>
           </div>
-          <label className="flex min-w-0 items-center gap-2 rounded-full bg-[#f4f7ff] px-3 py-2 sm:w-72">
+          <label className="flex w-full min-w-0 items-center gap-2 rounded-full border border-[#e4e7ee] bg-[#f6f7fb] px-3 py-2">
             <Search className="size-4 shrink-0 text-[#8b909a]" />
             <span className="sr-only">{t('sessionChair.searchPlaceholder')}</span>
             <input
@@ -571,162 +504,96 @@ function SessionChairDashboard({
             />
           </label>
         </div>
-        {loading ? (
-          <p className="text-sm text-[#8b909a]">{t('common.loading')}</p>
-        ) : items.length === 0 ? (
-          <p className="rounded-2xl bg-[#f6f7fb] px-4 py-3 text-sm text-[#5c6578]">{empty}</p>
-        ) : (
-          <ul className="grid gap-3">
-            {items.map((item) => (
-              <li
-                key={item.paperId}
-                className="rounded-2xl border border-[#e4e7ee] bg-[#f6f7fb] px-4 py-4"
-              >
-                <div className="flex flex-wrap items-start justify-between gap-2">
-                  <div className="min-w-0">
-                    <p className="text-xs font-bold tracking-wide text-[#6d7585]">
-                      {item.publicId ?? '—'}
-                      {' · '}
-                      {item.presented
-                        ? t('dossier.presentationPresented')
-                        : item.schedule
-                          ? t('dossier.presentationScheduled')
-                          : t('dossier.waitingSchedule')}
-                    </p>
-                    <h3 className="mt-1 text-base font-extrabold text-[#1c2744]">
-                      {item.title}
-                    </h3>
-                    <p className="mt-1 text-xs font-semibold text-[#5c6578]">
-                      {item.schedule
-                        ? `${item.schedule.sessionTitle} · ${item.schedule.roomName}`
-                        : t('dossier.waitingSchedule')}
-                    </p>
-                    {item.schedule ? (
-                      <p className="mt-0.5 text-xs text-[#8b909a]">
-                        {new Date(item.schedule.startsAt).toLocaleString()} –{' '}
-                        {new Date(item.schedule.endsAt).toLocaleTimeString([], {
-                          hour: '2-digit',
-                          minute: '2-digit',
-                        })}
-                        {' · '}
-                        {item.schedule.modality === 'ONLINE'
-                          ? t('dossier.modalityOnline')
-                          : t('dossier.modalityInPerson')}
-                        {item.score !== null ? ` · ${item.score}/10` : ''}
-                      </p>
-                    ) : null}
-                  </div>
-                  <Link
-                    to={`/workspace/submissions/${item.paperId}`}
-                    className="rounded-full bg-white px-3 py-1.5 text-xs font-extrabold text-[#3d4fd4] no-underline"
-                  >
-                    {t('home.open')}
-                  </Link>
-                </div>
-                {item.presented && item.comment ? (
-                  <div className="mt-3 rounded-xl border border-[#2fbf71]/30 bg-[#e8f8ef] px-3 py-3">
-                    <p className="text-xs font-extrabold uppercase tracking-wide text-[#1c9a57]">
-                      {t('dossier.chairRemarks')}
-                    </p>
-                    <p className="mt-1 text-sm font-semibold text-[#1c2744]">{item.comment}</p>
-                  </div>
-                ) : null}
-                {!item.presented && item.schedule ? (
-                  <form
-                    className="mt-3 grid gap-2"
-                    onSubmit={(event) => {
-                      event.preventDefault();
-                      void onAssess(
-                        item.schedule!.presentationId,
-                        new FormData(event.currentTarget),
-                      );
-                    }}
-                  >
-                    <p className="text-xs font-extrabold text-[#1c2744]">
-                      {t('dossier.chairFollowUp')}
-                    </p>
-                    <p className="text-xs text-[#8b909a]">{t('dossier.chairFollowUpHint')}</p>
-                    <label className="text-xs font-bold text-[#5c6578]">
-                      {t('workflow.presentationScore')}
-                      <input
-                        name="score"
-                        type="number"
-                        min={1}
-                        max={10}
-                        defaultValue={item.score ?? ''}
-                        className="mt-1 block w-24 rounded-2xl border border-[#e4e7ee] bg-white px-3 py-2 text-sm"
-                      />
-                    </label>
-                    <label className="text-xs font-bold text-[#5c6578]">
-                      {t('dossier.chairRemarks')}
-                      <textarea
-                        name="comment"
-                        className={`${field} min-h-20`}
-                        placeholder={t('dossier.chairRemarksPlaceholder')}
-                        defaultValue={item.comment ?? ''}
-                        required
-                      />
-                    </label>
-                    <div>
-                      <Button type="submit" size="sm">
-                        {t('dossier.markPresented')}
-                      </Button>
-                    </div>
-                  </form>
-                ) : null}
-                {!item.presented && !item.schedule ? (
-                  <p className="mt-3 text-xs font-semibold text-[#8b909a]">
-                    {t('dossier.waitingScheduleHint')}
-                  </p>
-                ) : null}
-              </li>
-            ))}
-          </ul>
-        )}
+
+        <div
+          className="touch-scroll mt-4 flex gap-2 overflow-x-auto pb-1"
+          role="tablist"
+          aria-label={t('sessionChair.queue')}
+        >
+          {filters.map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              role="tab"
+              aria-selected={board === item.id}
+              onClick={() => onBoard(item.id)}
+              className={`shrink-0 rounded-full px-3 py-2 text-sm font-extrabold ${
+                board === item.id
+                  ? 'bg-[#3d4fd4] text-white'
+                  : 'bg-[#f6f7fb] text-[#5c6578]'
+              }`}
+            >
+              {t(item.label)} · {loading ? '—' : counts[item.id]}
+            </button>
+          ))}
+        </div>
+
+        <div className="mt-4">
+          {loading ? (
+            <p className="text-sm text-[#8b909a]">{t('common.loading')}</p>
+          ) : items.length === 0 ? (
+            <p className="rounded-2xl bg-[#f6f7fb] px-4 py-4 text-sm text-[#5c6578]">
+              {empty}
+            </p>
+          ) : (
+            <ul className="grid gap-2">
+              {items.map((item) => (
+                <SessionChairTalkRow key={item.paperId} item={item} />
+              ))}
+            </ul>
+          )}
+        </div>
       </section>
-    </>
+    </div>
   );
 }
 
-function Metric({
-  label,
-  value,
-  hint,
-  tone,
-  active,
-  onClick,
-}: {
-  label: string;
-  value: number | string;
-  hint: string;
-  tone: 'blue' | 'green' | 'amber' | 'red';
-  active?: boolean;
-  onClick?: () => void;
-}) {
-  const color = {
-    blue: 'bg-[#5d74ff]/12 text-[#3d4fd4]',
-    green: 'bg-[#2fbf71]/14 text-[#1c9a57]',
-    amber: 'bg-[#f0a04b]/16 text-[#9a6410]',
-    red: 'bg-[#e35d5d]/12 text-[#c54545]',
-  }[tone];
-  const className = `metric-card w-full rounded-[24px] px-5 py-4 text-left lg:rounded-lg lg:px-2.5 lg:py-2 ${color} ${
-    active ? 'ring-2 ring-[#3d4fd4]/40' : ''
-  }`;
-  const body = (
-    <>
-      <dt className="text-sm font-extrabold opacity-90 lg:text-[10px]">{label}</dt>
-      <dd className="mt-1 text-4xl font-extrabold tracking-tight lg:mt-0 lg:text-xl">
-        {value}
-      </dd>
-      <p className="mt-2 text-xs font-bold opacity-90 lg:mt-0.5 lg:text-[9px]">{hint}</p>
-    </>
+function SessionChairTalkRow({ item }: { item: AssignedPresentation }) {
+  const { t, i18n } = useTranslation();
+  const statusLabel = item.presented
+    ? t('dossier.presentationPresented')
+    : item.absent
+      ? t('sessionChair.absent')
+      : item.schedule
+        ? t('dossier.presentationScheduled')
+        : t('dossier.waitingSchedule');
+  const actionLabel = item.presented
+    ? t('sessionChair.editAssessment')
+    : item.schedule
+      ? t('sessionChair.manageTalk')
+      : t('sessionChair.viewTalk');
+
+  return (
+    <li>
+      <Link
+        to={`/workspace/session-chair/${item.paperId}`}
+        className="flex items-center justify-between gap-4 rounded-2xl bg-[#f6f7fb] px-4 py-3.5 no-underline transition hover:bg-[#eef2ff]"
+      >
+        <div className="min-w-0 flex-1">
+          <p className="text-xs font-bold text-[#8b909a]">
+            {item.publicId ?? '—'}
+            {' · '}
+            {statusLabel}
+            {item.presentationLanguage
+              ? ` · ${t(`sessionChair.lang${item.presentationLanguage}`)}`
+              : ''}
+            {item.score !== null ? ` · ${item.score}/10` : ''}
+          </p>
+          <h3 className="mt-1 truncate text-base font-extrabold text-[#1c2744]">
+            {item.title}
+          </h3>
+          <p className="mt-1 text-xs font-semibold text-[#5c6578]">
+            {item.schedule
+              ? `${item.schedule.sessionTitle} · ${item.schedule.roomName} · ${new Date(
+                  item.schedule.startsAt,
+                ).toLocaleString(i18n.language)}`
+              : t('dossier.waitingSchedule')}
+          </p>
+        </div>
+        <span className="shrink-0 rounded-full bg-[#3d4fd4] px-3.5 py-2 text-xs font-extrabold text-white">
+          {actionLabel}
+        </span>
+      </Link>
+    </li>
   );
-  if (onClick) {
-    return (
-      <button type="button" onClick={onClick} className={className}>
-        {body}
-      </button>
-    );
-  }
-  return <div className={className}>{body}</div>;
 }

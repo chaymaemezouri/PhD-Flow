@@ -15,6 +15,9 @@ export interface PaperDossier {
   trackName: string | null;
   canManage: boolean;
   isAuthor?: boolean;
+  isSessionChair?: boolean;
+  absent?: boolean;
+  presentationLanguage?: 'FR' | 'AR' | 'EN' | null;
   templateValidated: boolean;
   doi: string | null;
   files: PaperFileInfo[];
@@ -906,6 +909,9 @@ export function PaperWorkflow({
   // Doctorant: action menu = ses étapes, débloquées seulement si la précédente est terminée.
   const doctorantView =
     authorLayout || (Boolean(dossier?.isAuthor) && !dossier?.canManage);
+  // Session chair: only presentation follow-up — no admin stage actions.
+  const sessionChairView =
+    Boolean(dossier?.isSessionChair) && !dossier?.canManage && !doctorantView;
   const doctorantActionKeys = [
     'decision',
     'registration',
@@ -938,7 +944,14 @@ export function PaperWorkflow({
   const authorStages = doctorantActionKeys
     .map((key) => stages.find((item) => item.key === key))
     .filter((item): item is (typeof stages)[number] => Boolean(item));
-  const menuStages = doctorantView ? authorStages : stages;
+  const sessionChairStages = (['presentation'] as const)
+    .map((key) => stages.find((item) => item.key === key))
+    .filter((item): item is (typeof stages)[number] => Boolean(item));
+  const menuStages = doctorantView
+    ? authorStages
+    : sessionChairView
+      ? sessionChairStages
+      : stages;
 
   const openMenuIndex = menuStages.findIndex(
     (item) => item.tone === 'current' || item.tone === 'wait' || item.tone === 'stop',

@@ -25,6 +25,7 @@ import {
   roomSchema,
   sessionSchema,
   assessmentSchema,
+  presentationLanguageSchema,
   similaritySchema,
   revisionRemarkSchema,
   slidesDecisionSchema,
@@ -311,6 +312,16 @@ export class WorkflowController {
     body: z.infer<typeof sessionChairSchema>,
   ) {
     return this.workflow.assignSessionChair(request.user!, id, body.userId);
+  }
+
+  @Post('papers/:id/presentation-language')
+  presentationLanguage(
+    @Req() request: AuthenticatedRequest,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body(new ZodValidationPipe(presentationLanguageSchema))
+    body: z.infer<typeof presentationLanguageSchema>,
+  ) {
+    return this.workflow.setPresentationLanguage(request.user!, id, body.language);
   }
 
   @Post('papers/:id/presented')

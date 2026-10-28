@@ -121,6 +121,20 @@ export function ProgramPage() {
   const field =
     'mt-1 block rounded-2xl border border-[#e4e7ee] bg-[#f6f7fb] px-3 py-2 text-sm';
 
+  const visibleSessions =
+    program.data?.sessions
+      .map((session) => ({
+        ...session,
+        presentations: sessionChairSelf
+          ? session.presentations.filter((item) =>
+              item.paper.sessionChairs.some((chairItem) => chairItem.mine),
+            )
+          : session.presentations,
+      }))
+      .filter((session) =>
+        sessionChairSelf ? session.presentations.length > 0 : true,
+      ) ?? [];
+
   return (
     <div className="space-y-5">
       {conference && !sessionChairSelf ? (
@@ -137,12 +151,14 @@ export function ProgramPage() {
           </h1>
           {conference ? (
             <p className="mt-1 text-sm font-semibold text-[#5c6578]">
-              {t('conferences.workHintProgram')}
+              {sessionChairSelf
+                ? t('sessionChair.programHint')
+                : t('conferences.workHintProgram')}
             </p>
           ) : null}
         </div>
       )}
-      {chair && conference ? (
+      {chair && !sessionChairSelf && conference ? (
         <div className="flex flex-wrap gap-2">
           <Button type="button" size="sm" onClick={() => setAddSessionOpen(true)}>
             <Plus className="size-4" />
@@ -170,13 +186,15 @@ export function ProgramPage() {
           </a>
         </div>
       ) : null}
-      {program.data && program.data.sessions.length === 0 ? (
+      {program.data && visibleSessions.length === 0 ? (
         <p className="rounded-2xl bg-[#f6f7fb] px-4 py-3 text-sm text-[#5c6578]">
-          {t('workflow.noSessions')}
+          {sessionChairSelf
+            ? t('sessionChair.programEmpty')
+            : t('workflow.noSessions')}
         </p>
       ) : null}
       <ul className="grid gap-3">
-        {program.data?.sessions.map((session) => (
+        {visibleSessions.map((session) => (
           <li
             key={session.id}
             className="rounded-[28px] border border-[#e4e7ee] bg-white p-5"

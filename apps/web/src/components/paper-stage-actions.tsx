@@ -533,11 +533,22 @@ export function usePaperStageExtras(
       const peopleLine = (items: { name: string }[], empty: string) =>
         items.length > 0 ? items.map((item) => item.name).join(', ') : empty;
       const chairRemarksBlock =
-        dossier.presented &&
+        !sessionChair &&
+        (dossier.presented || dossier.absent) &&
         (dossier.schedule?.chairRemarks || dossier.sessionComment) ? (
-          <div className="rounded-xl border border-[#2fbf71]/30 bg-[#e8f8ef] px-3 py-3">
-            <p className="text-xs font-extrabold uppercase tracking-wide text-[#1c9a57]">
-              {t('dossier.chairRemarks')}
+          <div
+            className={`rounded-xl border px-3 py-3 ${
+              dossier.absent
+                ? 'border-[#e35d5d]/30 bg-[#fdecec]'
+                : 'border-[#2fbf71]/30 bg-[#e8f8ef]'
+            }`}
+          >
+            <p
+              className={`text-xs font-extrabold uppercase tracking-wide ${
+                dossier.absent ? 'text-[#c54545]' : 'text-[#1c9a57]'
+              }`}
+            >
+              {dossier.absent ? t('sessionChair.absent') : t('dossier.chairRemarks')}
             </p>
             <p className="mt-1 text-sm font-semibold text-[#1c2744]">
               {dossier.schedule?.chairRemarks || dossier.sessionComment}
@@ -551,12 +562,26 @@ export function usePaperStageExtras(
         ) : null;
 
       const chairFollowUp =
-        sessionChair && dossier.schedule && !dossier.presented ? (
+        sessionChair && dossier.schedule ? (
           <StagePanel
             title={t('dossier.chairFollowUp')}
-            hint={t('dossier.chairFollowUpHint')}
-            status={t('dossier.presentationScheduled')}
-            statusTone="wait"
+            hint={
+              dossier.presented
+                ? t('sessionChair.editHint')
+                : dossier.absent
+                  ? t('sessionChair.absentHint')
+                  : t('dossier.chairFollowUpHint')
+            }
+            status={
+              dossier.presented
+                ? t('dossier.presentationPresented')
+                : dossier.absent
+                  ? t('sessionChair.absent')
+                  : t('dossier.presentationScheduled')
+            }
+            statusTone={
+              dossier.presented ? 'ok' : dossier.absent ? 'missing' : 'wait'
+            }
           >
             <form
               className="grid gap-3"
@@ -564,38 +589,56 @@ export function usePaperStageExtras(
                 event.preventDefault();
                 const form = new FormData(event.currentTarget);
                 const scoreRaw = String(form.get('score') ?? '');
+                const intent = String(form.get('intent') ?? 'presented');
                 void send(
                   `/api/v1/presentations/${dossier.schedule!.presentationId}/assessment`,
                   {
                     score: scoreRaw ? Number(scoreRaw) : undefined,
                     comment: String(form.get('comment') ?? ''),
-                    presented: true,
+                    presented: intent !== 'absent',
+                    absent: intent === 'absent',
                   } as unknown as BodyInit,
                   true,
                 );
               }}
             >
-              <label className="text-xs font-extrabold text-[#5c6578]">
-                {t('dossier.chairScore')}
-                <input
-                  name="score"
-                  type="number"
-                  min={0}
-                  max={10}
-                  step={1}
-                  className={stageField}
-                />
-              </label>
+              {!dossier.absent ? (
+                <label className="text-xs font-extrabold text-[#5c6578]">
+                  {t('dossier.chairScore')}
+                  <input
+                    name="score"
+                    type="number"
+                    min={1}
+                    max={10}
+                    step={1}
+                    defaultValue={dossier.schedule.score ?? ''}
+                    className={stageField}
+                  />
+                </label>
+              ) : null}
               <label className="text-xs font-extrabold text-[#5c6578]">
                 {t('dossier.chairRemarks')}
                 <textarea
                   name="comment"
                   className={`${stageField} min-h-20`}
                   placeholder={t('dossier.chairRemarksPlaceholder')}
+                  defaultValue={
+                    dossier.schedule.chairRemarks || dossier.sessionComment || ''
+                  }
+                  required
                 />
               </label>
-              <div>
-                <Button type="submit">{t('dossier.markPresented')}</Button>
+              <div className="flex flex-wrap gap-2">
+                <Button type="submit" name="intent" value="presented">
+                  {dossier.presented
+                    ? t('sessionChair.saveAssessment')
+                    : t('dossier.markPresented')}
+                </Button>
+                {!dossier.presented ? (
+                  <Button type="submit" name="intent" value="absent" variant="secondary">
+                    {t('sessionChair.markAbsent')}
+                  </Button>
+                ) : null}
               </div>
             </form>
           </StagePanel>
@@ -665,8 +708,40 @@ export function usePaperStageExtras(
                         label: t('dossier.sessionChair'),
                         value: peopleLine(sessionChairs, t('dossier.noChair')),
                       },
+                      {
+                        label: t('sessionChair.talkLanguage'),
+                        value: dossier.presentationLanguage
+                          ? t(`sessionChair.lang${dossier.presentationLanguage}`)
+                          : t('sessionChair.talkLanguageUnset'),
+                      },
                     ]}
                   />
+                  <label className="mt-4 block text-xs font-extrabold text-[#5c6578]">
+                    {t('sessionChair.talkLanguage')}
+                    <select
+                      className={`${stageField} mt-1`}
+                      value={dossier.presentationLanguage ?? ''}
+                      onChange={(event) => {
+                        const language = event.target.value as 'FR' | 'AR' | 'EN';
+                        if (!language) {
+                          return;
+                        }
+                        void send(
+                          `/api/v1/papers/${paper.id}/presentation-language`,
+                          { language } as unknown as BodyInit,
+                          true,
+                        );
+                      }}
+                    >
+                      <option value="">{t('sessionChair.talkLanguageUnset')}</option>
+                      <option value="FR">{t('sessionChair.langFR')}</option>
+                      <option value="AR">{t('sessionChair.langAR')}</option>
+                      <option value="EN">{t('sessionChair.langEN')}</option>
+                    </select>
+                    <span className="mt-1 block text-xs font-semibold text-[#8b909a]">
+                      {t('sessionChair.talkLanguageHint')}
+                    </span>
+                  </label>
                   {chairRemarksBlock}
                 </PageSection>
                 {canSeeSlides ? (

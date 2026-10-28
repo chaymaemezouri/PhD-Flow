@@ -3,7 +3,8 @@ export type SessionChairBoard =
   | 'pending'
   | 'scheduled'
   | 'waiting'
-  | 'presented';
+  | 'presented'
+  | 'absent';
 
 export interface AssignedPresentation {
   paperId: string;
@@ -14,8 +15,16 @@ export interface AssignedPresentation {
   role: 'CHAIR' | 'REVIEWER';
   slidesStatus: string;
   presented: boolean;
+  absent?: boolean;
+  presentationLanguage?: 'FR' | 'AR' | 'EN' | null;
   score: number | null;
   comment: string | null;
+  slides?: {
+    kind: 'SLIDES';
+    originalName: string;
+    contentType: string;
+    sizeBytes: number;
+  } | null;
   schedule: {
     presentationId: string;
     sessionTitle: string;
@@ -32,6 +41,7 @@ const BOARDS: SessionChairBoard[] = [
   'scheduled',
   'waiting',
   'presented',
+  'absent',
 ];
 
 export function parseSessionChairBoard(value: string | null): SessionChairBoard {
@@ -45,6 +55,9 @@ export function sessionChairLane(
 ): Exclude<SessionChairBoard, 'all' | 'pending'> {
   if (item.presented) {
     return 'presented';
+  }
+  if (item.absent) {
+    return 'absent';
   }
   if (item.schedule) {
     return 'scheduled';
@@ -61,9 +74,10 @@ export function sessionChairCounts(
     scheduled: 0,
     waiting: 0,
     presented: 0,
+    absent: 0,
   };
   for (const item of items) {
-    if (!item.presented) {
+    if (!item.presented && !item.absent) {
       counts.pending += 1;
     }
     counts[sessionChairLane(item)] += 1;
@@ -78,7 +92,7 @@ export function visiblePresentations(
 ): AssignedPresentation[] {
   const needle = query.trim().toLowerCase();
   return items.filter((item) => {
-    if (board === 'pending' && item.presented) {
+    if (board === 'pending' && (item.presented || item.absent)) {
       return false;
     }
     if (board !== 'all' && board !== 'pending' && sessionChairLane(item) !== board) {

@@ -23,6 +23,7 @@ import { ReviewsPage } from '@/pages/reviews-page';
 import { RoleDashboardPage, WorkspaceHome } from '@/pages/role-dashboard-page';
 import { ReviewersPage } from '@/pages/reviewers-page';
 import { SessionChairPage } from '@/pages/session-chair-page';
+import { SessionChairTalkPage } from '@/pages/session-chair-talk-page';
 import { SuperadminPage } from '@/pages/superadmin-page';
 import { SubmissionEditorPage } from '@/pages/submission-editor-page';
 import { SubmissionsPage } from '@/pages/submissions-page';
@@ -77,6 +78,7 @@ export const routes = [
           { path: 'follow-up', element: <FollowUpPage /> },
           { path: 'program', element: <ProgramPage /> },
           { path: 'session-chair', element: <SessionChairPage /> },
+          { path: 'session-chair/:paperId', element: <SessionChairTalkPage /> },
           { path: 'reviewers', element: <ReviewersPage /> },
         ],
       },

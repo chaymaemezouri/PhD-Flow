@@ -296,7 +296,12 @@ async function wipeDemos(): Promise<void> {
     },
   });
   await prisma.platformMetadata.deleteMany({
-    where: { key: { startsWith: 'conference.fee.' } },
+    where: {
+      OR: [
+        { key: { startsWith: 'conference.fee.' } },
+        { key: { startsWith: 'paper.presentationLanguage.' } },
+      ],
+    },
   });
 }
 
@@ -1196,6 +1201,23 @@ async function seedConferenceA(input: {
       presentedAt: new Date('2026-10-20T15:30:00.000Z'),
     },
   });
+
+  // Spoken language of each talk (FR / AR / EN) — not the UI language.
+  for (const [paperId, language] of [
+    [a10.id, 'FR'],
+    [a11.id, 'FR'],
+    [a12.id, 'EN'],
+    [a13.id, 'AR'],
+    [a14.id, 'FR'],
+    [a15.id, 'EN'],
+  ] as const) {
+    const key = `paper.presentationLanguage.${paperId}`;
+    await prisma.platformMetadata.upsert({
+      where: { key },
+      update: { value: language },
+      create: { key, value: language },
+    });
+  }
 
   return conference;
 }

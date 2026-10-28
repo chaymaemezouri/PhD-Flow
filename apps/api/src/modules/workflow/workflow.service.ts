@@ -43,9 +43,16 @@ import {
   writeCopyrightRemarks,
 } from '../papers/copyright-remarks.js';
 import {
+  isSessionChairTitle,
   splitPresentationStaff,
   staffSummary,
 } from '../papers/presentation-staff.js';
+import {
+  readPresentationLanguage,
+  readPresentationLanguages,
+  writePresentationLanguage,
+  type PresentationLanguage,
+} from '../papers/presentation-language.js';
 
 /** Conference ops on papers: admin, under-admin, and programme committee. */
 const CHAIRS = new Set<ConferenceRole>([
@@ -59,6 +66,23 @@ const NEEDS_REVISION = new Set<DecisionOutcome>([
   DecisionOutcome.CONDITIONALLY_ACCEPTED,
   DecisionOutcome.REVISION_REQUIRED,
 ]);
+
+/** Stored on Presentation.comment when the talk did not take place (no schema change). */
+const ABSENT_MARKER = '[ABSENT]';
+const ABSENT_COMMENT_PREFIX = /^\[ABSENT\]\s*/i;
+
+function withAbsentPrefix(comment: string): string {
+  const bare = stripAbsentPrefix(comment) ?? comment.trim();
+  return `${ABSENT_MARKER}\n${bare}`;
+}
+
+function stripAbsentPrefix(comment: string | null | undefined): string | null {
+  if (!comment) {
+    return null;
+  }
+  const next = comment.replace(ABSENT_COMMENT_PREFIX, '').trim();
+  return next || null;
+}
 
 type DecisionInput = z.infer<typeof decisionSchema>;
 type RemarkStatusInput = 'OPEN' | 'ADDRESSED' | 'VALIDATED';
@@ -1143,6 +1167,11 @@ export class WorkflowService {
       include: {
         conference: { select: { id: true, name: true } },
         presentation: { include: { session: { include: { room: true } } } },
+        files: {
+          where: { kind: PaperFileKind.SLIDES },
+          orderBy: { createdAt: 'desc' },
+          take: 1,
+        },
       },
       orderBy: { updatedAt: 'desc' },
     });
@@ -1154,6 +1183,10 @@ export class WorkflowService {
             where: { id: { in: ids } },
             include: { profile: true },
           });
+    const languages = await readPresentationLanguages(
+      this.prisma,
+      rows.map((row) => row.id),
+    );
     return rows.map((row) => {
       const staff = splitPresentationStaff(row.sessionChairIds, users);
       const role = staff.chairs.some((item) => item.id === actor.id)
@@ -1161,6 +1194,13 @@ export class WorkflowService {
         : 'REVIEWER';
       const presentation = row.presentation;
       const presented = Boolean(row.presentedAt || presentation?.presentedAt);
+      const rawComment = presentation?.comment || row.sessionComment || null;
+      const absent =
+        Boolean(presentation) &&
+        !presented &&
+        Boolean(rawComment && ABSENT_COMMENT_PREFIX.test(rawComment));
+      const comment = stripAbsentPrefix(rawComment);
+      const slidesFile = row.files[0] ?? null;
       return {
         paperId: row.id,
         title: row.title,
@@ -1170,8 +1210,18 @@ export class WorkflowService {
         role,
         slidesStatus: row.slidesStatus,
         presented,
+        absent,
+        presentationLanguage: languages.get(row.id) ?? null,
         score: presentation?.score ?? null,
-        comment: presentation?.comment || row.sessionComment || null,
+        comment,
+        slides: slidesFile
+          ? {
+              kind: 'SLIDES' as const,
+              originalName: slidesFile.originalName,
+              contentType: slidesFile.contentType,
+              sizeBytes: slidesFile.sizeBytes,
+            }
+          : null,
         sessionChairs: staffSummary(staff.chairs, actor.id),
         presentationReviewers: staffSummary(staff.reviewers, actor.id),
         schedule: presentation
@@ -1186,6 +1236,24 @@ export class WorkflowService {
           : null,
       };
     });
+  }
+
+  async setPresentationLanguage(
+    actor: AuthenticatedUser,
+    paperId: string,
+    language: PresentationLanguage,
+  ) {
+    const paper = await this.loadPaper(paperId);
+    const { chairs } = await this.presentationStaffOf(paper.sessionChairIds);
+    const sessionChair = chairs.some((item) => item.id === actor.id);
+    const author =
+      paper.createdById === actor.id ||
+      paper.authors.some((item) => item.email === actor.email.toLowerCase());
+    if (!sessionChair && !author) {
+      this.assertChair(actor, paper.conference.memberships);
+    }
+    await writePresentationLanguage(this.prisma, paper.id, language);
+    return { presentationLanguage: language };
   }
 
   async publishDoi(actor: AuthenticatedUser, paperId: string) {
@@ -1256,7 +1324,12 @@ export class WorkflowService {
   async assessPresentation(
     actor: AuthenticatedUser,
     presentationId: string,
-    input: { score?: number; comment: string; presented?: boolean },
+    input: {
+      score?: number;
+      comment: string;
+      presented?: boolean;
+      absent?: boolean;
+    },
   ) {
     const row = await this.prisma.presentation.findUnique({
       where: { id: presentationId },
@@ -1273,32 +1346,51 @@ export class WorkflowService {
     if (!sessionChair) {
       this.assertChair(actor, row.session.conference.memberships);
     }
-    const markPresented = input.presented !== false;
-    if (markPresented) {
+
+    const alreadyPresented = Boolean(row.presentedAt || row.paper.presentedAt);
+    const markAbsent = input.absent === true && !alreadyPresented;
+    const markPresented = !markAbsent && input.presented !== false;
+
+    if (markAbsent && !input.comment.trim()) {
+      throw new BadRequestException('Remarks are required when marking absent');
+    }
+    if (markPresented && !alreadyPresented) {
       const paper = await this.loadPaper(row.paperId);
       await this.assertCanMarkPresented(paper);
     }
+
+    const storedComment = markAbsent
+      ? withAbsentPrefix(input.comment)
+      : stripAbsentPrefix(input.comment) ?? input.comment;
+    const displayComment = stripAbsentPrefix(storedComment) ?? storedComment;
     const now = row.presentedAt ?? row.paper.presentedAt ?? new Date();
+    const score =
+      markAbsent
+        ? null
+        : input.score !== undefined
+          ? input.score
+          : row.score;
+
     const [presentation] = await this.prisma.$transaction([
       this.prisma.presentation.update({
         where: { id: presentationId },
         data: {
-          score: input.score ?? row.score,
-          comment: input.comment,
-          presentedAt: markPresented ? now : row.presentedAt,
+          score,
+          comment: storedComment,
+          presentedAt: markPresented ? now : markAbsent ? null : row.presentedAt,
         },
       }),
-      ...(markPresented
-        ? [
-            this.prisma.paper.update({
-              where: { id: row.paperId },
-              data: {
-                presentedAt: row.paper.presentedAt ?? now,
-                sessionComment: input.comment || row.paper.sessionComment,
-              },
-            }),
-          ]
-        : []),
+      this.prisma.paper.update({
+        where: { id: row.paperId },
+        data: {
+          ...(markPresented
+            ? { presentedAt: row.paper.presentedAt ?? now }
+            : markAbsent
+              ? { presentedAt: null }
+              : {}),
+          sessionComment: displayComment || row.paper.sessionComment,
+        },
+      }),
     ]);
     return presentation;
   }
@@ -1974,6 +2066,10 @@ export class WorkflowService {
     actor: AuthenticatedUser,
     memberships: { userId: string; role: ConferenceRole; status: MembershipStatus }[],
   ) {
+    // Dedicated session chairs are presentation staff only, not conference managers.
+    if (isSessionChairTitle(actor.profile?.academicTitle)) {
+      return false;
+    }
     return (
       actor.platformRole === PlatformRole.SYSTEM_ADMIN ||
       memberships.some(

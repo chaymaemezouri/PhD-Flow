@@ -115,6 +115,13 @@ export const assessmentSchema = z.object({
   score: z.number().int().min(1).max(10).optional(),
   comment: z.string().trim().max(2000).default(''),
   presented: z.boolean().default(true),
+  /** Session chair: talk did not happen; remarks only, not Presented. */
+  absent: z.boolean().optional(),
+});
+
+/** Spoken language of the talk (not the UI language). */
+export const presentationLanguageSchema = z.object({
+  language: z.enum(['FR', 'AR', 'EN']),
 });
 
 export const presentationNoteSchema = z.object({

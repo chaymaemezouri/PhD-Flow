@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowDown, ArrowUp, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router';
+import { Link, Navigate, useLocation, useNavigate, useParams, useSearchParams } from 'react-router';
 import { usePaperStageExtras } from '@/components/paper-stage-actions';
 import { PaperFileSlot } from '@/components/paper-file-preview';
 import { useCurrentUser } from '@/features/auth/use-account';
@@ -422,16 +422,17 @@ export function SubmissionEditorPage() {
     feedback.success(t('workflow.saved'));
   }
 
+  const sessionChairSelf = isSessionChair(account.data?.profile?.academicTitle);
   const managerWorkspace =
     account.data?.platformRole === 'SYSTEM_ADMIN' ||
     isCreatedAdmin(account.data?.profile?.academicTitle) ||
-    isSessionChair(account.data?.profile?.academicTitle) ||
     (memberships.data?.some(
       (item) =>
         item.membershipStatus === 'ACTIVE' &&
         (item.role === 'CHAIR' ||
           item.role === 'ADMINISTRATOR' ||
-          item.role === 'COMMITTEE'),
+          item.role === 'COMMITTEE') &&
+        !sessionChairSelf,
     ) ??
       false);
 
@@ -452,6 +453,10 @@ export function SubmissionEditorPage() {
 
   const field = stageField;
   const editingExisting = Boolean(paperId);
+
+  if (paperId && sessionChairSelf) {
+    return <Navigate to={`/workspace/session-chair/${paperId}`} replace />;
+  }
 
   if (editingExisting && paper.isPending) {
     return (

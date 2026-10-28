@@ -31,7 +31,12 @@ import { readConferenceFee } from '../conferences/conference-fee.js';
 import { readCopyrightRemarks } from './copyright-remarks.js';
 import { ObjectStorage } from './object-storage.js';
 import { paperSteps } from './pipeline.js';
-import { splitPresentationStaff, staffSummary } from './presentation-staff.js';
+import {
+  isSessionChairTitle,
+  splitPresentationStaff,
+  staffSummary,
+} from './presentation-staff.js';
+import { readPresentationLanguage } from './presentation-language.js';
 
 const MAX_PDF_BYTES = 20 * 1024 * 1024;
 const SUBMITTERS = new Set<ConferenceRole>([ConferenceRole.AUTHOR]);
@@ -649,6 +654,10 @@ export class PaperService {
     if (actor.platformRole === PlatformRole.SYSTEM_ADMIN) {
       return true;
     }
+    // Dedicated session chairs are not conference managers.
+    if (isSessionChairTitle(actor.profile?.academicTitle)) {
+      return false;
+    }
     const membership = row.conference.memberships.find(
       (item) => item.userId === actor.id,
     );
@@ -904,6 +913,9 @@ export class PaperService {
       trackName: track ? `${track.code} · ${track.name}` : null,
       canManage: manager,
       isAuthor: row.createdById === actor.id,
+      isSessionChair:
+        isSessionChairTitle(actor.profile?.academicTitle) &&
+        (row.sessionChairIds ?? []).includes(actor.id),
       templateValidated: row.templateValidatedAt !== null,
       doi: row.doi,
       files: dedupeFiles(
@@ -922,6 +934,11 @@ export class PaperService {
       presentedAt: presentedNow
         ? ((presentation?.presentedAt ?? row.presentedAt)?.toISOString() ?? null)
         : null,
+      absent:
+        scheduledNow &&
+        !presentedNow &&
+        /^\[ABSENT\]/i.test(presentation?.comment ?? ''),
+      presentationLanguage: await readPresentationLanguage(this.prisma, row.id),
       scheduled: scheduledNow,
       schedule: scheduledNow
         ? {
@@ -932,7 +949,13 @@ export class PaperService {
             endsAt: presentation!.session.endsAt.toISOString(),
             modality: presentation!.modality,
             score: presentation!.score,
-            chairRemarks: presentation!.comment || row.sessionComment || null,
+            chairRemarks: (() => {
+              const raw = presentation!.comment || row.sessionComment || null;
+              if (!raw) {
+                return null;
+              }
+              return raw.replace(/^\[ABSENT\]\s*/i, '').trim() || null;
+            })(),
           }
         : null,
       slidesStatus: row.slidesStatus,
