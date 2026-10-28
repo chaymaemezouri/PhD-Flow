@@ -2,11 +2,7 @@
 
 Password for every seeded account: `Demo-scholar-12`.
 
-In the app: **Guide démo** (`/workspace/demo-guide`) after login, or from the login page.
-
-## Mail
-
-Local mailbox: [http://localhost:8025](http://localhost:8025) (Mailpit).
+In the app: **Guide démo** (`/workspace/demo-guide`) after login.
 
 ## Accounts → first action
 
@@ -28,6 +24,7 @@ Local mailbox: [http://localhost:8025](http://localhost:8025) (Mailpit).
 3. Reviewer returns a score.
 4. Chair publishes a decision and places the talk.
 5. Session chair marks the talk presented.
-6. Show Mailpit for invitation / verification messages.
 
 Board shortcuts: `j` / `k` move, `[` / `]` change session or conference.
+
+Email verification is deferred for a later phase; new accounts can sign in immediately after registration.

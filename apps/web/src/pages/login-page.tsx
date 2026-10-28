@@ -44,6 +44,11 @@ export function LoginPage() {
     typeof location.state.from === 'string'
       ? location.state.from
       : '/workspace';
+  const justRegistered =
+    typeof location.state === 'object' &&
+    location.state !== null &&
+    'registered' in location.state &&
+    location.state.registered === true;
 
   return (
     <AuthLayout brand={false}>
@@ -52,6 +57,11 @@ export function LoginPage() {
           <h1 className="text-2xl font-extrabold tracking-tight text-[#1c2744]">
             {t('auth.loginTitle')}
           </h1>
+          {justRegistered ? (
+            <p className="mt-2 text-sm font-semibold text-[#1c9a57]">
+              {t('auth.registerReady')}
+            </p>
+          ) : null}
         </div>
         <span className="grid size-11 shrink-0 place-items-center rounded-2xl bg-[#eef2ff] text-[#3d4fd4]">
           <KeyRound className="size-5" aria-hidden />
@@ -169,17 +179,6 @@ export function LoginPage() {
           </div>
         ) : null}
       </div>
-      <p className="mt-4 text-xs font-semibold text-[#5c6578]">
-        {t('auth.mailpitHint')}{' '}
-        <a
-          href="http://localhost:8025"
-          target="_blank"
-          rel="noreferrer"
-          className="font-extrabold text-[#3d4fd4] no-underline hover:underline"
-        >
-          localhost:8025
-        </a>
-      </p>
       <div className="mt-5 flex flex-wrap gap-x-4 gap-y-2 text-sm font-semibold">
         <Link to="/forgot-password" className="text-[#1f9a7a] no-underline hover:underline">
           {t('auth.forgot')}

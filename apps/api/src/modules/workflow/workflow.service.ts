@@ -53,6 +53,10 @@ import {
   writePresentationLanguage,
   type PresentationLanguage,
 } from '../papers/presentation-language.js';
+import {
+  assertSubadminStage,
+  type SubadminStage,
+} from '../conferences/subadmin-stages.js';
 
 /** Conference ops on papers: admin, under-admin, and programme committee. */
 const CHAIRS = new Set<ConferenceRole>([
@@ -236,7 +240,7 @@ export class WorkflowService {
 
   async saveDecision(actor: AuthenticatedUser, paperId: string, input: DecisionInput) {
     const paper = await this.loadPaper(paperId);
-    this.assertChair(actor, paper.conference.memberships);
+    await this.assertChair(actor, paper.conference.memberships, paper.conferenceId, 'decisions');
     if (paper.status !== PaperStatus.SUBMITTED) {
       throw new ForbiddenException('Only a submitted paper can receive a decision');
     }
@@ -490,7 +494,7 @@ export class WorkflowService {
     const paper = await this.loadPaper(paperId);
     const presentationStaff = (paper.sessionChairIds ?? []).includes(actor.id);
     if (!presentationStaff) {
-      this.assertChair(actor, paper.conference.memberships);
+      await this.assertChair(actor, paper.conference.memberships, paper.conferenceId, 'program');
     }
     if (
       paper.slidesStatus !== SlidesStatus.DEPOSITED &&
@@ -532,7 +536,7 @@ export class WorkflowService {
     input: CameraReadyDecisionInput,
   ) {
     const paper = await this.loadPaper(paperId);
-    this.assertChair(actor, paper.conference.memberships);
+    await this.assertChair(actor, paper.conference.memberships, paper.conferenceId, 'camera');
     if (paper.cameraReadyStatus === CameraReadyStatus.VALIDATED) {
       throw new ForbiddenException('Camera-ready is already validated');
     }
@@ -692,7 +696,7 @@ export class WorkflowService {
 
   async assignSessionChair(actor: AuthenticatedUser, paperId: string, userId: string) {
     const paper = await this.loadPaper(paperId);
-    this.assertChair(actor, paper.conference.memberships);
+    await this.assertChair(actor, paper.conference.memberships, paper.conferenceId, 'program');
     this.assertPresentationStaffMember(paper, userId);
     const sessionChairIds = [userId];
     await this.prisma.paper.update({ where: { id: paperId }, data: { sessionChairIds } });
@@ -705,7 +709,7 @@ export class WorkflowService {
     userId: string,
   ) {
     const paper = await this.loadPaper(paperId);
-    this.assertChair(actor, paper.conference.memberships);
+    await this.assertChair(actor, paper.conference.memberships, paper.conferenceId, 'program');
     this.assertPresentationStaffMember(paper, userId);
     const { chairs, reviewers } = await this.presentationStaffOf(paper.sessionChairIds);
     if (
@@ -727,7 +731,7 @@ export class WorkflowService {
     const paper = await this.loadPaper(paperId);
     const sessionChair = paper.sessionChairIds.includes(actor.id);
     if (!sessionChair) {
-      this.assertChair(actor, paper.conference.memberships);
+      await this.assertChair(actor, paper.conference.memberships, paper.conferenceId, 'program');
     }
     await this.assertCanMarkPresented(paper);
     const now = paper.presentedAt ?? new Date();
@@ -772,7 +776,7 @@ export class WorkflowService {
 
   async verifyPayment(actor: AuthenticatedUser, paperId: string) {
     const paper = await this.loadPaper(paperId);
-    this.assertChair(actor, paper.conference.memberships);
+    await this.assertChair(actor, paper.conference.memberships, paper.conferenceId, 'registration');
     if (!paper.files.some((file) => file.kind === PaperFileKind.PAYMENT_PROOF)) {
       throw new NotFoundException('Payment receipt not found');
     }
@@ -829,21 +833,39 @@ export class WorkflowService {
     if (kind === 'attestation' && !paper.doi) {
       throw new ForbiddenException('The final attestation follows publication');
     }
-    const title =
-      kind === 'certificate'
-        ? 'Certificate of acceptance'
-        : kind === 'receipt'
-          ? 'Payment receipt'
-          : 'Attestation of acceptance for publication';
-    const lines = [
-      paper.conferenceId,
-      paper.publicId ?? paper.id,
-      paper.title,
-      kind === 'attestation' ? (paper.doi ?? '') : registered ? 'Registered' : '',
-    ];
+    const conference = paper.conference;
+    const place = [conference.city, conference.country].filter(Boolean).join(', ');
+    const dates =
+      conference.startsOn && conference.endsOn
+        ? `${conference.startsOn.toISOString().slice(0, 10)} – ${conference.endsOn.toISOString().slice(0, 10)}`
+        : conference.startsOn
+          ? conference.startsOn.toISOString().slice(0, 10)
+          : undefined;
+    const authors = [...paper.authors]
+      .sort((left, right) => left.position - right.position)
+      .map((author) => `${author.firstName} ${author.lastName}`.trim())
+      .filter(Boolean)
+      .join(', ');
     return {
       name: `${paper.publicId ?? 'paper'}-${kind}.pdf`,
-      bytes: certificatePdf(title, lines.filter(Boolean)),
+      bytes: certificatePdf({
+        kind,
+        brand: 'PapersManagement',
+        conferenceName: conference.name,
+        conferencePlace: place || undefined,
+        conferenceDates: dates,
+        paperTitle: paper.title,
+        publicId: paper.publicId ?? paper.id,
+        authors,
+        doi: kind === 'attestation' ? (paper.doi ?? undefined) : undefined,
+        issuedOn: new Date().toISOString().slice(0, 10),
+        statusLine:
+          kind === 'receipt' || kind === 'certificate'
+            ? registered
+              ? 'Inscription et paiement valides'
+              : undefined
+            : 'Article publie',
+      }),
     };
   }
 
@@ -883,7 +905,7 @@ export class WorkflowService {
 
   async validateTemplate(actor: AuthenticatedUser, paperId: string) {
     const paper = await this.loadPaper(paperId);
-    this.assertChair(actor, paper.conference.memberships);
+    await this.assertChair(actor, paper.conference.memberships, paper.conferenceId, 'camera');
     return this.prisma.paper.update({
       where: { id: paperId },
       data: { templateValidatedAt: new Date() },
@@ -893,7 +915,7 @@ export class WorkflowService {
 
   async verifySimilarity(actor: AuthenticatedUser, paperId: string) {
     const paper = await this.loadPaper(paperId);
-    this.assertChair(actor, paper.conference.memberships);
+    await this.assertChair(actor, paper.conference.memberships, paper.conferenceId, 'camera');
     if (
       paper.similarityStatus !== SimilarityStatus.DEPOSITED &&
       paper.similarityStatus !== SimilarityStatus.OPEN
@@ -961,7 +983,7 @@ export class WorkflowService {
     input: { accept: boolean; note?: string },
   ) {
     const paper = await this.loadPaper(paperId);
-    this.assertChair(actor, paper.conference.memberships);
+    await this.assertChair(actor, paper.conference.memberships, paper.conferenceId, 'camera');
     if (paper.copyrightStageStatus === CopyrightStageStatus.VALIDATED && input.accept) {
       throw new ForbiddenException('Copyright is already validated');
     }
@@ -1077,7 +1099,7 @@ export class WorkflowService {
     userId: string,
   ) {
     const conference = await this.loadConference(conferenceId);
-    this.assertChair(actor, conference.memberships);
+    await this.assertChair(actor, conference.memberships, conferenceId, 'registration');
     const row = await this.prisma.registration.findUnique({
       where: { conferenceId_userId: { conferenceId, userId } },
     });
@@ -1119,7 +1141,7 @@ export class WorkflowService {
 
   async addRoom(actor: AuthenticatedUser, conferenceId: string, input: RoomInput) {
     const conference = await this.loadConference(conferenceId);
-    this.assertChair(actor, conference.memberships);
+    await this.assertChair(actor, conference.memberships, conferenceId, 'program');
     return this.prisma.room.create({
       data: { conferenceId, name: input.name, capacity: input.capacity },
     });
@@ -1133,7 +1155,7 @@ export class WorkflowService {
     if (!room) {
       throw new NotFoundException('Room not found');
     }
-    this.assertChair(actor, room.conference.memberships);
+    await this.assertChair(actor, room.conference.memberships, room.conferenceId, 'program');
     return this.prisma.room.update({
       where: { id: roomId },
       data: { name: input.name, capacity: input.capacity },
@@ -1151,7 +1173,7 @@ export class WorkflowService {
     if (!room) {
       throw new NotFoundException('Room not found');
     }
-    this.assertChair(actor, room.conference.memberships);
+    await this.assertChair(actor, room.conference.memberships, room.conferenceId, 'program');
     if (room._count.sessions > 0) {
       throw new BadRequestException('Move or delete the sessions in this room first');
     }
@@ -1324,7 +1346,7 @@ export class WorkflowService {
       paper.createdById === actor.id ||
       paper.authors.some((item) => item.email === actor.email.toLowerCase());
     if (!sessionChair && !author) {
-      this.assertChair(actor, paper.conference.memberships);
+      await this.assertChair(actor, paper.conference.memberships, paper.conferenceId, 'program');
     }
     await writePresentationLanguage(this.prisma, paper.id, language);
     return { presentationLanguage: language };
@@ -1332,7 +1354,7 @@ export class WorkflowService {
 
   async publishDoi(actor: AuthenticatedUser, paperId: string) {
     const paper = await this.loadPaper(paperId);
-    this.assertChair(actor, paper.conference.memberships);
+    await this.assertChair(actor, paper.conference.memberships, paper.conferenceId, 'publication');
     if (!this.checklist(paper).ready) {
       throw new ForbiddenException('The paper is not ready to publish');
     }
@@ -1347,7 +1369,7 @@ export class WorkflowService {
 
   async addSession(actor: AuthenticatedUser, conferenceId: string, input: SessionInput) {
     const conference = await this.loadConference(conferenceId);
-    this.assertChair(actor, conference.memberships);
+    await this.assertChair(actor, conference.memberships, conferenceId, 'program');
     if (input.endsAt <= input.startsAt) {
       throw new BadRequestException('The session ends before it starts');
     }
@@ -1376,7 +1398,7 @@ export class WorkflowService {
     if (!session) {
       throw new NotFoundException('Session not found');
     }
-    this.assertChair(actor, session.conference.memberships);
+    await this.assertChair(actor, session.conference.memberships, session.conferenceId, 'program');
     if (input.endsAt <= input.startsAt) {
       throw new BadRequestException('The session ends before it starts');
     }
@@ -1405,7 +1427,7 @@ export class WorkflowService {
     if (!session) {
       throw new NotFoundException('Session not found');
     }
-    this.assertChair(actor, session.conference.memberships);
+    await this.assertChair(actor, session.conference.memberships, session.conferenceId, 'program');
     await this.prisma.programSession.delete({ where: { id: sessionId } });
     return { ok: true };
   }
@@ -1422,7 +1444,7 @@ export class WorkflowService {
     if (!session) {
       throw new NotFoundException('Session not found');
     }
-    this.assertChair(actor, session.conference.memberships);
+    await this.assertChair(actor, session.conference.memberships, session.conferenceId, 'program');
     const paper = await this.loadPaper(input.paperId);
     if (paper.conferenceId !== session.conferenceId) {
       throw new ForbiddenException('The paper belongs to another conference');
@@ -1466,7 +1488,7 @@ export class WorkflowService {
     const { chairs } = await this.presentationStaffOf(row.paper.sessionChairIds);
     const sessionChair = chairs.some((item) => item.id === actor.id);
     if (!sessionChair) {
-      this.assertChair(actor, row.session.conference.memberships);
+      await this.assertChair(actor, row.session.conference.memberships, row.session.conferenceId, 'program');
     }
 
     const alreadyPresented = Boolean(row.presentedAt || row.paper.presentedAt);
@@ -1519,7 +1541,7 @@ export class WorkflowService {
 
   async statistics(actor: AuthenticatedUser, conferenceId: string) {
     const conference = await this.loadConference(conferenceId);
-    this.assertChair(actor, conference.memberships);
+    await this.assertChair(actor, conference.memberships, conferenceId, 'assignments');
     const papers = await this.prisma.paper.groupBy({
       by: ['status'],
       where: { conferenceId },
@@ -1566,7 +1588,7 @@ export class WorkflowService {
 
   async remind(actor: AuthenticatedUser, conferenceId: string) {
     const conference = await this.loadConference(conferenceId);
-    this.assertChair(actor, conference.memberships);
+    await this.assertChair(actor, conference.memberships, conferenceId, 'assignments');
     const open = await this.prisma.reviewAssignment.findMany({
       where: {
         paper: { conferenceId },
@@ -1588,7 +1610,7 @@ export class WorkflowService {
 
   async exportMetadata(actor: AuthenticatedUser, conferenceId: string) {
     const conference = await this.loadConference(conferenceId);
-    this.assertChair(actor, conference.memberships);
+    await this.assertChair(actor, conference.memberships, conferenceId, 'publication');
     const papers = await this.prisma.paper.findMany({
       where: { conferenceId, status: PaperStatus.SUBMITTED },
       include: {
@@ -2203,13 +2225,16 @@ export class WorkflowService {
     );
   }
 
-  private assertChair(
+  private async assertChair(
     actor: AuthenticatedUser,
     memberships: { userId: string; role: ConferenceRole; status: MembershipStatus }[],
+    conferenceId: string,
+    stage: SubadminStage,
   ) {
     if (!this.isChair(actor, memberships)) {
       throw new NotFoundException('Conference not found');
     }
+    await assertSubadminStage(this.prisma, actor, memberships, conferenceId, stage);
   }
 
   private assertAuthor(

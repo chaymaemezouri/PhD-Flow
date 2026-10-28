@@ -9,6 +9,7 @@ import { EmptyState } from '@/components/empty-state';
 import { PaperWorkQueueList, type WorkPaper } from '@/components/paper-work-card';
 import { PapersLayoutToggle } from '@/components/papers-layout-toggle';
 import { PapersLayoutView } from '@/components/papers-layout-view';
+import { PrintPageButton } from '@/components/print-page-button';
 import { ReviewQueueList, ReviewQueueToolbar } from '@/components/review-queue-list';
 import { RoleContextBanner } from '@/components/role-context-banner';
 import { focusStep, type PaperStep } from '@/components/step-bar';
@@ -291,8 +292,6 @@ function AuthorDashboard() {
               actionLabel={
                 canSubmit ? t('home.submitPaper') : t('nav.conferences')
               }
-              secondaryTo="/workspace/demo-guide"
-              secondaryLabel={t('nav.demoGuide')}
             />
           </div>
         ) : null}
@@ -406,8 +405,6 @@ function ChairDashboard({ variant = 'admin' }: { variant?: 'admin' | 'committee'
         body={t('home.noManagedConference')}
         actionTo="/workspace/conferences"
         actionLabel={t('nav.conferences')}
-        secondaryTo="/workspace/demo-guide"
-        secondaryLabel={t('nav.demoGuide')}
       />
     );
   }
@@ -498,7 +495,8 @@ function ChairDashboard({ variant = 'admin' }: { variant?: 'admin' | 'committee'
               {t('home.chairBoardHint')}
             </p>
           </div>
-          <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
+          <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center print:hidden">
+            <PrintPageButton labelKey="print.papers" variant="outline" />
             <PapersLayoutToggle layout={layout} onChange={chooseLayout} />
             <label className="relative block w-full sm:max-w-xs">
               <Search className="pointer-events-none absolute top-1/2 left-3 size-3.5 -translate-y-1/2 text-[#8b909a] sm:size-4" />
@@ -708,8 +706,8 @@ function ReviewerDashboard() {
               scoped.length === 0 ? t('home.reviewEmpty') : t('reviews.noneMatch')
             }
             body={t('home.emptyFilterBody')}
-            actionTo="/workspace/demo-guide"
-            actionLabel={t('nav.demoGuide')}
+            actionTo="/workspace/conferences"
+            actionLabel={t('nav.conferences')}
           />
         ) : (
           <ReviewQueueList items={visible} empty={t('reviews.noneMatch')} />

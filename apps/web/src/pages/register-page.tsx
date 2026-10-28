@@ -3,7 +3,7 @@ import { registerSchema } from '@scholarflow/validation';
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
-import { Link } from 'react-router';
+import { Link, useNavigate } from 'react-router';
 import type { z } from 'zod';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -14,32 +14,12 @@ type RegisterValues = z.infer<typeof registerSchema>;
 
 export function RegisterPage() {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const [error, setError] = useState<string | null>(null);
-  const [done, setDone] = useState(false);
   const form = useForm<RegisterValues>({
     resolver: zodResolver(registerSchema),
     defaultValues: { email: '', password: '', firstName: '', lastName: '' },
   });
-
-  if (done) {
-    return (
-      <AuthLayout>
-        <h1 className="text-2xl text-navy">{t('auth.checkEmail')}</h1>
-        <p className="mt-3 text-sm text-muted-foreground">{t('auth.checkEmailBody')}</p>
-        <a
-          href="http://localhost:8025"
-          className="mt-4 inline-block text-sm font-bold text-teal"
-          target="_blank"
-          rel="noreferrer"
-        >
-          {t('auth.openMailpit')}
-        </a>
-        <Link to="/login" className="mt-4 block text-sm text-teal">
-          {t('auth.login')}
-        </Link>
-      </AuthLayout>
-    );
-  }
 
   return (
     <AuthLayout>
@@ -56,7 +36,7 @@ export function RegisterPage() {
             setError(await apiErrorMessage(response));
             return;
           }
-          setDone(true);
+          void navigate('/login', { replace: true, state: { registered: true } });
         })}
       >
         <label className="block text-sm">
@@ -118,7 +98,7 @@ export function RegisterPage() {
           {t('auth.createAccount')}
         </Button>
       </form>
-      <p className="mt-4 text-sm">
+      <p className="mt-6 text-sm">
         <Link to="/login" className="text-teal">
           {t('auth.haveAccount')}
         </Link>

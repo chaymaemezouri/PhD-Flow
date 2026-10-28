@@ -22,6 +22,7 @@ import {
 } from '@/components/conference-work-nav';
 import { CreateSessionChairDialog } from '@/components/create-session-chair-dialog';
 import { IconAction } from '@/components/icon-action';
+import { PrintPageButton } from '@/components/print-page-button';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -832,9 +833,6 @@ export function SessionBoardPage() {
                     </div>
                   ) : null}
                 </div>
-                <p className="text-sm font-semibold text-[#5c6578]">
-                  {t('sessionBoard.workflowHint')}
-                </p>
               </div>
             </div>
 
@@ -909,7 +907,8 @@ export function SessionBoardPage() {
                     {t('sessionBoard.sessionsInlineHint')}
                   </p>
                 </div>
-                <div className="flex flex-wrap items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2 print:hidden">
+                  <PrintPageButton labelKey="print.program" variant="outline" />
                   {conference ? (
                     <IconAction
                       icon={Download}

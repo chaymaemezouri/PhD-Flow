@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, Navigate, useLocation } from 'react-router';
 import { AssignmentField } from '@/components/assignment-picker';
+import { PrintPageButton } from '@/components/print-page-button';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -1112,7 +1113,8 @@ export function SuperadminPage() {
                 {filteredConferences.length} / {conferences.data?.length ?? 0}
               </p>
             </div>
-            <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:flex-wrap sm:items-center">
+            <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:flex-wrap sm:items-center print:hidden">
+              <PrintPageButton labelKey="print.conferences" variant="outline" />
               <Button
                 type="button"
                 size="sm"
@@ -1669,7 +1671,7 @@ export function SuperadminPage() {
               </h2>
               <p className="mt-1 text-sm text-[#5c6578]">{t('superadmin.usersIntro')}</p>
             </div>
-            <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:flex-wrap sm:items-center">
+            <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:flex-wrap sm:items-center print:hidden">
               <p className="text-xs font-bold text-[#8b909a]">
                 {filteredUsers.length} / {users.data?.length ?? 0}
               </p>

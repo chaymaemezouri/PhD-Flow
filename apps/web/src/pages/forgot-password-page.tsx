@@ -29,7 +29,6 @@ export function ForgotPasswordPage() {
       {sent ? (
         <div className="mt-4 rounded-2xl bg-[#e8f8ef] px-4 py-3 text-sm font-semibold text-[#1f7a4d]">
           <p>{t('auth.forgotSent')}</p>
-          <p className="mt-1 font-medium text-[#5c6578]">{t('auth.forgotMailpit')}</p>
         </div>
       ) : null}
       <form

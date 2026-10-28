@@ -28,6 +28,7 @@ import {
 import { PrismaService } from '../../prisma/prisma.service.js';
 import type { AuthenticatedUser } from '../auth/auth.types.js';
 import { readConferenceFee } from '../conferences/conference-fee.js';
+import { assertSubadminStage } from '../conferences/subadmin-stages.js';
 import { readCopyrightRemarks } from './copyright-remarks.js';
 import { ObjectStorage } from './object-storage.js';
 import { paperSteps } from './pipeline.js';
@@ -360,6 +361,13 @@ export class PaperService {
     if (!this.isManager(actor, row)) {
       throw new ForbiddenException('You cannot change this conference');
     }
+    await assertSubadminStage(
+      this.prisma,
+      actor,
+      row.conference.memberships,
+      row.conferenceId,
+      'scope',
+    );
     if (row.status !== 'SUBMITTED') {
       throw new ForbiddenException('Submit the paper before the scope check');
     }

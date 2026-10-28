@@ -24,7 +24,9 @@ import {
   conferencePasswordSchema,
   createAdminSchema,
   createConferenceSchema,
+  createSubAdminSchema,
   createTeamMemberSchema,
+  updateSubAdminStagesSchema,
   deadlineSchema,
   invitationResponseSchema,
   inviteMemberSchema,
@@ -112,10 +114,22 @@ export class ConferenceController {
   createSubAdmin(
     @Req() request: AuthenticatedRequest,
     @Param('id', ParseUUIDPipe) id: string,
-    @Body(new ZodValidationPipe(createAdminSchema))
-    body: z.infer<typeof createAdminSchema>,
+    @Body(new ZodValidationPipe(createSubAdminSchema))
+    body: z.infer<typeof createSubAdminSchema>,
   ) {
     return this.conferences.createSubAdmin(request.user!, id, body);
+  }
+
+  @Patch('conferences/:id/sub-admins/:userId/stages')
+  @UseGuards(AuthGuard)
+  setSubAdminStages(
+    @Req() request: AuthenticatedRequest,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('userId', ParseUUIDPipe) userId: string,
+    @Body(new ZodValidationPipe(updateSubAdminStagesSchema))
+    body: z.infer<typeof updateSubAdminStagesSchema>,
+  ) {
+    return this.conferences.setSubAdminStages(request.user!, id, userId, body.stages);
   }
 
   @Post('conferences/:id/team')

@@ -70,7 +70,6 @@ export function VerifyEmailPage() {
       {state === 'error' ? (
         <div className="mt-5 space-y-3 rounded-2xl border border-[#e4e7ee] bg-[#f6f7fb] p-4">
           <p className="text-sm font-semibold text-[#5c6578]">{t('auth.verifyResendHint')}</p>
-          <p className="text-xs font-medium text-[#8b909a]">{t('auth.forgotMailpit')}</p>
           <label className="block text-sm font-bold text-[#1c2744]">
             {t('auth.email')}
             <Input

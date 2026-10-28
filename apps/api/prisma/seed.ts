@@ -318,6 +318,7 @@ async function wipeDemos(): Promise<void> {
       OR: [
         { key: { startsWith: 'conference.fee.' } },
         { key: { startsWith: 'paper.presentationLanguage.' } },
+        { key: { startsWith: 'conference.subadminStages.' } },
       ],
     },
   });
@@ -1242,6 +1243,28 @@ async function seedConferenceA(input: {
       create: { key, value: language },
     });
   }
+
+  const allSubadminStages = [
+    'scope',
+    'assignments',
+    'decisions',
+    'registration',
+    'program',
+    'camera',
+    'publication',
+    'team',
+  ];
+  const subadminStagesKey = `conference.subadminStages.${conference.id}`;
+  await prisma.platformMetadata.upsert({
+    where: { key: subadminStagesKey },
+    update: {
+      value: JSON.stringify({ [input.subAdmin.id]: allSubadminStages }),
+    },
+    create: {
+      key: subadminStagesKey,
+      value: JSON.stringify({ [input.subAdmin.id]: allSubadminStages }),
+    },
+  });
 
   return conference;
 }

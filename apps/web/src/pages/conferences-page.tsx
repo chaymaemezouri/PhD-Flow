@@ -5,6 +5,7 @@ import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router';
 import { EmptyState } from '@/components/empty-state';
+import { PrintPageButton } from '@/components/print-page-button';
 import { Button } from '@/components/ui/button';
 import { useCurrentUser } from '@/features/auth/use-account';
 import { useFeedback } from '@/features/feedback/feedback';
@@ -144,11 +145,25 @@ export function ConferencesPage() {
             {t(createdAdmin ? 'conferences.introAdmin' : 'conferences.intro')}
           </p>
         </div>
-        {superadmin ? (
-          <Button asChild size="sm">
-            <Link to="/workspace/system">{t('conferences.create')}</Link>
-          </Button>
-        ) : null}
+        <div className="flex flex-wrap items-center gap-2 print:hidden">
+          {superadmin ||
+          createdAdmin ||
+          (mine.data?.some(
+            (item) =>
+              item.membershipStatus === 'ACTIVE' &&
+              (item.role === 'CHAIR' ||
+                item.role === 'ADMINISTRATOR' ||
+                item.role === 'COMMITTEE'),
+          ) ??
+            false) ? (
+            <PrintPageButton labelKey="print.conferences" variant="outline" />
+          ) : null}
+          {superadmin ? (
+            <Button asChild size="sm">
+              <Link to="/workspace/system">{t('conferences.create')}</Link>
+            </Button>
+          ) : null}
+        </div>
       </div>
 
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">

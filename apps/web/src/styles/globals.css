@@ -204,15 +204,28 @@
 
 @media print {
   .workspace-shell aside,
-  .workspace-shell header {
+  .workspace-shell header,
+  .workspace-shell > nav {
     display: none !important;
+  }
+
+  .workspace-shell {
+    background: white !important;
+    min-height: 0 !important;
   }
 
   body {
     background: white !important;
+    color: #111 !important;
   }
 
   main {
     padding: 0 !important;
+    overflow: visible !important;
+  }
+
+  a {
+    color: inherit !important;
+    text-decoration: none !important;
   }
 }

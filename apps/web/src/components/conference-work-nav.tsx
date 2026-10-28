@@ -23,6 +23,15 @@ function isManagerRole(role?: string) {
   return role === 'CHAIR' || role === 'ADMINISTRATOR' || role === 'COMMITTEE';
 }
 
+const TAB_STAGES: Record<ConferenceWorkTab, string[]> = {
+  record: ['scope', 'registration', 'team'],
+  papers: ['scope', 'decisions', 'camera', 'publication', 'registration'],
+  reviews: ['assignments', 'decisions'],
+  program: ['program'],
+  followUp: ['publication', 'camera'],
+  team: ['team', 'assignments'],
+};
+
 export function ConferenceWorkNav({
   conferenceId,
   conferenceName,
@@ -30,6 +39,7 @@ export function ConferenceWorkNav({
   slug,
   showPublic,
   current,
+  myStages,
 }: {
   conferenceId: string;
   conferenceName?: string;
@@ -37,6 +47,7 @@ export function ConferenceWorkNav({
   slug?: string | null;
   showPublic?: boolean;
   current: ConferenceWorkTab;
+  myStages?: string[];
 }) {
   const { t } = useTranslation();
   const query = `?conference=${conferenceId}`;
@@ -47,7 +58,9 @@ export function ConferenceWorkNav({
   const programTo = isManagerRole(role)
     ? `/workspace/session-board${query}`
     : `/workspace/program${query}`;
-  const items: { id: ConferenceWorkTab; to: string; label: string }[] = [
+  const stageSet =
+    role === 'ADMINISTRATOR' && myStages ? new Set(myStages) : null;
+  const allItems: { id: ConferenceWorkTab; to: string; label: string }[] = [
     {
       id: 'record',
       to: `/workspace/conferences/${conferenceId}`,
@@ -75,6 +88,11 @@ export function ConferenceWorkNav({
       label: t('conferences.workTeam'),
     },
   ];
+  const items = allItems.filter(
+    (item) =>
+      !stageSet ||
+      TAB_STAGES[item.id].some((stage: string) => stageSet.has(stage)),
+  );
 
   return (
     <div className="space-y-2">

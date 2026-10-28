@@ -14,6 +14,10 @@ import { InfoCards, PageSection, PageSplit, StagePanel, stageField } from '@/com
 import { Button } from '@/components/ui/button';
 import { useFeedback } from '@/features/feedback/feedback';
 import { isRegistrationComplete } from '@/features/papers/registration';
+import {
+  downloadPaperDocument,
+  printPaperDocument,
+} from '@/lib/paper-document';
 import { apiErrorMessage, apiFetch } from '@/services/api';
 
 interface StagePaper {
@@ -155,17 +159,19 @@ export function usePaperStageExtras(
   }
 
   async function download(path: string, name: string) {
-    const response = await apiFetch(path);
-    if (!response.ok) {
-      onError(await apiErrorMessage(response));
-      return;
+    try {
+      await downloadPaperDocument(path, name);
+    } catch (error) {
+      onError(error instanceof Error ? error.message : t('common.error'));
     }
-    const url = URL.createObjectURL(await response.blob());
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = name;
-    link.click();
-    URL.revokeObjectURL(url);
+  }
+
+  async function printDoc(path: string) {
+    try {
+      await printPaperDocument(path);
+    } catch (error) {
+      onError(error instanceof Error ? error.message : t('common.error'));
+    }
   }
 
   const actions: Partial<Record<string, ReactNode>> = {};
@@ -1750,7 +1756,7 @@ export function usePaperStageExtras(
               </p>
             )}
             {dossier.doi ? (
-              <div className="mt-5">
+              <div className="mt-5 flex flex-wrap gap-2">
                 <Button
                   type="button"
                   variant="outline"
@@ -1763,6 +1769,15 @@ export function usePaperStageExtras(
                   }
                 >
                   {t('dossier.downloadAttestation')}
+                </Button>
+                <Button
+                  type="button"
+                  className="bg-[#3d4fd4]"
+                  onClick={() =>
+                    void printDoc(`/api/v1/papers/${paper.id}/attestation`)
+                  }
+                >
+                  {t('dossier.printAttestation')}
                 </Button>
               </div>
             ) : null}
@@ -1831,16 +1846,29 @@ export function usePaperStageExtras(
           statusTone={dossier.doi ? 'ok' : 'wait'}
         >
           {dossier.doi ? (
-            <Button
-              type="button"
-              variant="outline"
-              className="border-[#c5cad6]"
-              onClick={() =>
-                void download(`/api/v1/papers/${paper.id}/attestation`, 'attestation.pdf')
-              }
-            >
-              {t('dossier.downloadAttestation')}
-            </Button>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                className="border-[#c5cad6]"
+                onClick={() =>
+                  void download(
+                    `/api/v1/papers/${paper.id}/attestation`,
+                    'attestation.pdf',
+                  )
+                }
+              >
+                {t('dossier.downloadAttestation')}
+              </Button>
+              <Button
+                type="button"
+                onClick={() =>
+                  void printDoc(`/api/v1/papers/${paper.id}/attestation`)
+                }
+              >
+                {t('dossier.printAttestation')}
+              </Button>
+            </div>
           ) : (
             <Button
               type="button"

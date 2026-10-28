@@ -59,7 +59,7 @@ export function CreateSessionChairDialog({
               }
               form.reset();
               onOpenChange(false);
-              feedback.success(t('sessionChair.created', { email, password }));
+              feedback.success(t('sessionChair.created', { email }));
               await queryClient.invalidateQueries({ queryKey: ['session-chairs'] });
               await queryClient.invalidateQueries({ queryKey: ['conference'] });
             });

@@ -67,19 +67,7 @@ describe('account authentication', () => {
       .send({ email: address, password, firstName: 'Ada', lastName: 'Lovelace' });
     expect(registered.status).toBe(201);
     expect(registered.body.passwordHash).toBeUndefined();
-    expect(registered.body.emailVerified).toBe(false);
-
-    const tooEarly = await agent
-      .post('/api/v1/auth/login')
-      .set('x-csrf-token', token)
-      .send({ email: address, password });
-    expect(tooEarly.status).toBe(403);
-
-    const verified = await agent
-      .post('/api/v1/auth/verify-email')
-      .set('x-csrf-token', token)
-      .send({ token: tokenFromLastEmail() });
-    expect(verified.status).toBe(204);
+    expect(registered.body.emailVerified).toBe(true);
 
     const signedIn = await agent
       .post('/api/v1/auth/login')

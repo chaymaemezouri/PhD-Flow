@@ -78,12 +78,12 @@ infrastructure  Notes for the local services
 
 Public directory: `/directory` (demo conference `demo-2027`).
 
-Soutenance walkthrough: [docs/DEMO.md](docs/DEMO.md) and in-app **Guide démo** at `/workspace/demo-guide`. Mailpit: `http://localhost:8025`.
+Soutenance walkthrough: [docs/DEMO.md](docs/DEMO.md) and in-app **Guide démo** at `/workspace/demo-guide`.
 
 Re-seed after pull if conference names still say ScholarFlow: `npm run db:seed`.
 
 ## Current scope
 
 - Sign-in, conferences, manuscript submission, review invitations and forms, decisions, registration, program board, publication follow-up, and document downloads are implemented for the local demo.
-- Redis is available with Docker Compose. Manuscript PDFs go to MinIO. Mailpit receives account and review mail.
+- Redis is available with Docker Compose. Manuscript PDFs go to MinIO. Email verification is deferred; new accounts can sign in right after registration.
 - Profile photo upload and MFA enrollment are still limited.

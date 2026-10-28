@@ -6,6 +6,10 @@ import { Button } from '@/components/ui/button';
 import { useFeedback } from '@/features/feedback/feedback';
 import { isRegistrationComplete } from '@/features/papers/registration';
 import { formatMoney } from '@/lib/money';
+import {
+  downloadPaperDocument,
+  printPaperDocument,
+} from '@/lib/paper-document';
 import { apiErrorMessage, apiFetch } from '@/services/api';
 
 function PaymentAmountCard({
@@ -98,17 +102,19 @@ export function RegistrationPaymentPanel({
   }
 
   async function download(path: string, name: string) {
-    const response = await apiFetch(path);
-    if (!response.ok) {
-      onError(await apiErrorMessage(response));
-      return;
+    try {
+      await downloadPaperDocument(path, name);
+    } catch (error) {
+      onError(error instanceof Error ? error.message : t('common.error'));
     }
-    const url = URL.createObjectURL(await response.blob());
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = name;
-    link.click();
-    URL.revokeObjectURL(url);
+  }
+
+  async function printDoc(path: string) {
+    try {
+      await printPaperDocument(path);
+    } catch (error) {
+      onError(error instanceof Error ? error.message : t('common.error'));
+    }
   }
 
   const registrationStatus = registeredNow
@@ -155,15 +161,26 @@ export function RegistrationPaymentPanel({
         </Button>
       ) : null}
       {registeredNow ? (
-        <Button
-          type="button"
-          variant="outline"
-          onClick={() =>
-            void download(`/api/v1/papers/${paperId}/certificate`, 'certificate.pdf')
-          }
-        >
-          {t('dossier.downloadCertificate')}
-        </Button>
+        <>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() =>
+              void download(`/api/v1/papers/${paperId}/certificate`, 'certificate.pdf')
+            }
+          >
+            {t('dossier.downloadCertificate')}
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() =>
+              void printDoc(`/api/v1/papers/${paperId}/certificate`)
+            }
+          >
+            {t('dossier.printCertificate')}
+          </Button>
+        </>
       ) : null}
       {authorCanUpload ? (
         <label className="inline-flex min-h-10 cursor-pointer items-center justify-center rounded-full border border-[#c5cad6] bg-white px-4 text-sm font-extrabold text-[#3d4fd4]">
@@ -312,10 +329,28 @@ export function RegistrationPaymentPanel({
                   type="button"
                   variant="outline"
                   onClick={() =>
+                    void printDoc(`/api/v1/papers/${paperId}/certificate`)
+                  }
+                >
+                  {t('dossier.printCertificate')}
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() =>
                     void download(`/api/v1/papers/${paperId}/receipt`, 'receipt.pdf')
                   }
                 >
                   {t('dossier.downloadReceipt')}
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() =>
+                    void printDoc(`/api/v1/papers/${paperId}/receipt`)
+                  }
+                >
+                  {t('dossier.printReceipt')}
                 </Button>
               </>
             ) : null}

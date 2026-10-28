@@ -60,22 +60,17 @@ export class AuthService {
     }
 
     const passwordHash = await this.passwords.hash(input.password);
-    const rawToken = newSecret();
+    // Email verification is deferred: accounts are usable immediately after register.
     const user = await this.prisma.$transaction(async (tx) => {
       const created = await tx.user.create({
         data: {
           email,
           passwordHash,
+          emailVerifiedAt: new Date(),
           profile: {
             create: {
               firstName: input.firstName.trim(),
               lastName: input.lastName.trim(),
-            },
-          },
-          verificationTokens: {
-            create: {
-              tokenHash: hashSecret(rawToken),
-              expiresAt: new Date(Date.now() + VERIFY_TTL_MS),
             },
           },
         },
@@ -85,16 +80,6 @@ export class AuthService {
       return created;
     });
 
-    await this.sendTemplate(
-      email,
-      'email_verification',
-      'Confirm your ScholarFlow account',
-      [
-        'Confirm your ScholarFlow account by opening this link:',
-        this.link('/verify-email', rawToken),
-        'The link expires in 24 hours. If you did not create an account, ignore this message.',
-      ],
-    );
     return this.toCurrentUser(this.requireProfile(user));
   }
 
@@ -117,9 +102,6 @@ export class AuthService {
     }
     if (user.disabledAt) {
       throw new ForbiddenException('This account is disabled');
-    }
-    if (!user.emailVerifiedAt) {
-      throw new ForbiddenException('Verify your email before signing in');
     }
     if (user.mfaEnabled && !verifyTotp(user.mfaSecret ?? '', input.mfaCode ?? '')) {
       throw new UnauthorizedException('MFA code required');

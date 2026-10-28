@@ -10,6 +10,7 @@ import { ConfigService } from '@nestjs/config';
 import type {
   createAdminSchema,
   createConferenceSchema,
+  createSubAdminSchema,
   createTeamMemberSchema,
   deadlineSchema,
   inviteMemberSchema,
@@ -35,6 +36,13 @@ import {
   writeConferenceFee,
   type ConferenceFee,
 } from './conference-fee.js';
+import {
+  assertSubadminStage,
+  readConferenceSubadminStages,
+  SUBADMIN_STAGES,
+  writeSubadminStages,
+  type SubadminStage,
+} from './subadmin-stages.js';
 
 const TEMPLATE_FILE_PREFIX = 'SF_FILE:';
 const TEMPLATE_TYPES = new Set([
@@ -298,12 +306,50 @@ export class ConferenceService {
   async createSubAdmin(
     actor: AuthenticatedUser,
     conferenceId: string,
-    input: z.infer<typeof createAdminSchema>,
+    input: z.infer<typeof createSubAdminSchema>,
   ) {
-    return this.createTeamMember(actor, conferenceId, {
-      ...input,
+    const created = await this.createTeamMember(actor, conferenceId, {
+      email: input.email,
+      password: input.password,
+      firstName: input.firstName,
+      lastName: input.lastName,
       role: 'ADMINISTRATOR',
     });
+    const stages = await writeSubadminStages(
+      this.prisma,
+      conferenceId,
+      created.id,
+      input.stages as SubadminStage[],
+    );
+    return { ...created, stages };
+  }
+
+  async setSubAdminStages(
+    actor: AuthenticatedUser,
+    conferenceId: string,
+    userId: string,
+    stages: SubadminStage[],
+  ) {
+    const row = await this.load(conferenceId);
+    this.assertManager(actor, row);
+    const membership = this.membershipOf(actor, row);
+    if (
+      actor.platformRole !== PlatformRole.SYSTEM_ADMIN &&
+      membership?.role !== ConferenceRole.CHAIR
+    ) {
+      throw new ForbiddenException('Only the conference admin can assign sub-admin steps');
+    }
+    const target = row.memberships.find(
+      (item) =>
+        item.userId === userId &&
+        item.role === ConferenceRole.ADMINISTRATOR &&
+        item.status === MembershipStatus.ACTIVE,
+    );
+    if (!target) {
+      throw new NotFoundException('Sub-admin not found');
+    }
+    const saved = await writeSubadminStages(this.prisma, conferenceId, userId, stages);
+    return { userId, stages: saved };
   }
 
   async createTeamMember(
@@ -320,6 +366,18 @@ export class ConferenceService {
       membership?.role !== ConferenceRole.CHAIR
     ) {
       throw new ForbiddenException('Only the conference admin can create a sub-admin');
+    }
+    if (
+      input.role !== 'ADMINISTRATOR' &&
+      membership?.role === ConferenceRole.ADMINISTRATOR
+    ) {
+      await assertSubadminStage(
+        this.prisma,
+        actor,
+        row.memberships,
+        conferenceId,
+        'team',
+      );
     }
     const email = input.email.trim().toLowerCase();
     const existing = await this.prisma.user.findUnique({ where: { email } });
@@ -404,9 +462,13 @@ export class ConferenceService {
     return this.toDetail(actor, row, fee);
   }
 
+  listSubadminStages() {
+    return [...SUBADMIN_STAGES];
+  }
+
   async update(actor: AuthenticatedUser, id: string, input: UpdateInput) {
     const row = await this.load(id);
-    this.assertManager(actor, row);
+    await this.assertManagerStage(actor, row, 'scope');
     await this.prisma.$transaction(async (tx) => {
       await tx.conference.update({
         where: { id },
@@ -428,7 +490,7 @@ export class ConferenceService {
 
   async addTrack(actor: AuthenticatedUser, conferenceId: string, input: TrackInput) {
     const row = await this.load(conferenceId);
-    this.assertManager(actor, row);
+    await this.assertManagerStage(actor, row, 'scope');
     try {
       const track = await this.prisma.track.create({
         data: {
@@ -458,7 +520,7 @@ export class ConferenceService {
 
   async removeTrack(actor: AuthenticatedUser, conferenceId: string, trackId: string) {
     const row = await this.load(conferenceId);
-    this.assertManager(actor, row);
+    await this.assertManagerStage(actor, row, 'scope');
     const track = row.tracks.find((item) => item.id === trackId);
     if (!track) {
       throw new NotFoundException('Track not found');
@@ -472,7 +534,7 @@ export class ConferenceService {
     input: DeadlineInput,
   ) {
     const row = await this.load(conferenceId);
-    this.assertManager(actor, row);
+    await this.assertManagerStage(actor, row, 'scope');
     if (input.trackId && !row.tracks.some((track) => track.id === input.trackId)) {
       throw new NotFoundException('Track not found');
     }
@@ -500,7 +562,7 @@ export class ConferenceService {
     deadlineId: string,
   ) {
     const row = await this.load(conferenceId);
-    this.assertManager(actor, row);
+    await this.assertManagerStage(actor, row, 'scope');
     const deadline = row.deadlines.find((item) => item.id === deadlineId);
     if (!deadline) {
       throw new NotFoundException('Deadline not found');
@@ -514,7 +576,7 @@ export class ConferenceService {
     input: TemplateInput,
   ) {
     const row = await this.load(conferenceId);
-    this.assertManager(actor, row);
+    await this.assertManagerStage(actor, row, 'scope');
     const template = await this.prisma.conferenceTemplate.upsert({
       where: {
         conferenceId_kind_language: {
@@ -542,7 +604,7 @@ export class ConferenceService {
     file: Express.Multer.File,
   ) {
     const row = await this.load(conferenceId);
-    this.assertManager(actor, row);
+    await this.assertManagerStage(actor, row, 'scope');
     if (
       !['INVITATION', 'DECISION_LETTER', 'COPYRIGHT', 'NOTIFICATION'].includes(input.kind) ||
       !['en', 'fr'].includes(input.language)
@@ -607,7 +669,7 @@ export class ConferenceService {
 
   async downloadTemplateFile(actor: AuthenticatedUser, conferenceId: string, templateId: string) {
     const row = await this.load(conferenceId);
-    this.assertManager(actor, row);
+    await this.assertManagerStage(actor, row, 'scope');
     const template = row.templates.find((item) => item.id === templateId);
     const meta = template ? parseTemplateFile(template.body) : null;
     if (!meta) {
@@ -673,7 +735,7 @@ export class ConferenceService {
 
   async invite(actor: AuthenticatedUser, conferenceId: string, input: InviteInput) {
     const row = await this.load(conferenceId);
-    this.assertManager(actor, row);
+    await this.assertManagerStage(actor, row, 'team');
     const email = input.email.toLowerCase();
     if (email === actor.email.toLowerCase()) {
       throw new ConflictException('You are already a member of this conference');
@@ -828,7 +890,7 @@ export class ConferenceService {
     membershipId: string,
   ) {
     const row = await this.load(conferenceId);
-    this.assertManager(actor, row);
+    await this.assertManagerStage(actor, row, 'team');
     const membership = row.memberships.find((item) => item.id === membershipId);
     if (!membership) {
       throw new NotFoundException('Membership not found');
@@ -953,6 +1015,21 @@ export class ConferenceService {
     }
   }
 
+  private async assertManagerStage(
+    actor: AuthenticatedUser,
+    row: ConferenceRecord,
+    stage: SubadminStage,
+  ): Promise<void> {
+    this.assertManager(actor, row);
+    await assertSubadminStage(
+      this.prisma,
+      actor,
+      row.memberships,
+      row.id,
+      stage,
+    );
+  }
+
   private toPublic(row: ConferenceRecord) {
     return {
       id: row.id,
@@ -983,7 +1060,7 @@ export class ConferenceService {
     };
   }
 
-  private toDetail(
+  private async toDetail(
     actor: AuthenticatedUser,
     row: ConferenceRecord,
     fee: ConferenceFee | null,
@@ -997,6 +1074,17 @@ export class ConferenceService {
       canManage ||
       (membership?.status === MembershipStatus.ACTIVE &&
         MEMBER_READERS.has(membership.role));
+    const subadminStages = canViewMembers
+      ? await readConferenceSubadminStages(this.prisma, row.id)
+      : {};
+    const myStages =
+      membership?.role === ConferenceRole.ADMINISTRATOR
+        ? (subadminStages[actor.id] ?? [])
+        : membership?.role === ConferenceRole.CHAIR || isAdmin
+          ? [...SUBADMIN_STAGES]
+          : membership?.role === ConferenceRole.COMMITTEE
+            ? [...SUBADMIN_STAGES]
+            : [];
     return {
       ...this.toPublic(row),
       status: row.status,
@@ -1007,6 +1095,8 @@ export class ConferenceService {
       accessLocked: false,
       canManage,
       canViewMembers,
+      myStages,
+      subadminStageOptions: [...SUBADMIN_STAGES],
       myMembership: membership
         ? { id: membership.id, role: membership.role, status: membership.status }
         : null,
@@ -1034,12 +1124,17 @@ export class ConferenceService {
             .filter((item) => item.status !== MembershipStatus.REMOVED)
             .map((item) => ({
               id: item.id,
+              userId: item.userId,
               email: item.user.email,
               role: item.role,
               status: item.status,
               firstName: item.user.profile?.firstName ?? '',
               lastName: item.user.profile?.lastName ?? '',
               academicTitle: item.user.profile?.academicTitle ?? null,
+              stages:
+                item.role === ConferenceRole.ADMINISTRATOR
+                  ? (subadminStages[item.userId] ?? [])
+                  : undefined,
             }))
         : [],
       invitations: canManage

@@ -1,10 +1,13 @@
-import { ArrowUpRight, FileBadge, FileCheck, Receipt } from 'lucide-react';
+import { ArrowUpRight, FileBadge, FileCheck, Printer, Receipt } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router';
 import { IconAction } from '@/components/icon-action';
 import { focusStep, stepAction, type PaperStep } from '@/components/step-bar';
-import { apiErrorMessage, apiFetch } from '@/services/api';
 import { useFeedback } from '@/features/feedback/feedback';
+import {
+  downloadPaperDocument,
+  printPaperDocument,
+} from '@/lib/paper-document';
 
 export interface WorkPaper {
   id: string;
@@ -95,17 +98,14 @@ const actionStyles = {
   done: 'bg-[#eef2ff] text-[#3d4fd4]',
 } as const;
 
-async function downloadPaperDoc(path: string, name: string) {
-  const response = await apiFetch(path);
-  if (!response.ok) {
-    throw new Error(await apiErrorMessage(response));
-  }
-  const url = URL.createObjectURL(await response.blob());
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = name;
-  link.click();
-  URL.revokeObjectURL(url);
+function runDoc(
+  action: () => Promise<void>,
+  feedback: { error: (message: string) => void },
+  fallback: string,
+) {
+  void action().catch((error: unknown) => {
+    feedback.error(error instanceof Error ? error.message : fallback);
+  });
 }
 
 export function PaperWorkQueueList({
@@ -164,44 +164,61 @@ export function PaperWorkQueueList({
                       icon={FileBadge}
                       label={t('dossier.downloadCertificate')}
                       tone="accent"
-                      onClick={() => {
-                        void downloadPaperDoc(
-                          `/api/v1/papers/${paper.id}/certificate`,
-                          'certificate.pdf',
-                        ).catch(async (error: unknown) => {
-                          feedback.error(
-                            error instanceof Error ? error.message : t('common.error'),
-                          );
-                        });
-                      }}
+                      onClick={() =>
+                        runDoc(
+                          () =>
+                            downloadPaperDocument(
+                              `/api/v1/papers/${paper.id}/certificate`,
+                              'certificate.pdf',
+                            ),
+                          feedback,
+                          t('common.error'),
+                        )
+                      }
                     />
                     <IconAction
                       icon={Receipt}
                       label={t('dossier.downloadReceipt')}
-                      onClick={() => {
-                        void downloadPaperDoc(
-                          `/api/v1/papers/${paper.id}/receipt`,
-                          'receipt.pdf',
-                        ).catch(async (error: unknown) => {
-                          feedback.error(
-                            error instanceof Error ? error.message : t('common.error'),
-                          );
-                        });
-                      }}
+                      onClick={() =>
+                        runDoc(
+                          () =>
+                            downloadPaperDocument(
+                              `/api/v1/papers/${paper.id}/receipt`,
+                              'receipt.pdf',
+                            ),
+                          feedback,
+                          t('common.error'),
+                        )
+                      }
                     />
                     <IconAction
                       icon={FileCheck}
                       label={t('dossier.downloadAttestation')}
-                      onClick={() => {
-                        void downloadPaperDoc(
-                          `/api/v1/papers/${paper.id}/attestation`,
-                          'attestation.pdf',
-                        ).catch(async (error: unknown) => {
-                          feedback.error(
-                            error instanceof Error ? error.message : t('common.error'),
-                          );
-                        });
-                      }}
+                      onClick={() =>
+                        runDoc(
+                          () =>
+                            downloadPaperDocument(
+                              `/api/v1/papers/${paper.id}/attestation`,
+                              'attestation.pdf',
+                            ),
+                          feedback,
+                          t('common.error'),
+                        )
+                      }
+                    />
+                    <IconAction
+                      icon={Printer}
+                      label={t('dossier.printAttestation')}
+                      onClick={() =>
+                        runDoc(
+                          () =>
+                            printPaperDocument(
+                              `/api/v1/papers/${paper.id}/attestation`,
+                            ),
+                          feedback,
+                          t('common.error'),
+                        )
+                      }
                     />
                   </>
                 ) : null}
@@ -279,44 +296,58 @@ export function PaperWorkCard({
             icon={FileBadge}
             label={t('dossier.downloadCertificate')}
             tone="accent"
-            onClick={() => {
-              void downloadPaperDoc(
-                `/api/v1/papers/${paper.id}/certificate`,
-                'certificate.pdf',
-              ).catch((error: unknown) => {
-                feedback.error(
-                  error instanceof Error ? error.message : t('common.error'),
-                );
-              });
-            }}
+            onClick={() =>
+              runDoc(
+                () =>
+                  downloadPaperDocument(
+                    `/api/v1/papers/${paper.id}/certificate`,
+                    'certificate.pdf',
+                  ),
+                feedback,
+                t('common.error'),
+              )
+            }
           />
           <IconAction
             icon={Receipt}
             label={t('dossier.downloadReceipt')}
-            onClick={() => {
-              void downloadPaperDoc(
-                `/api/v1/papers/${paper.id}/receipt`,
-                'receipt.pdf',
-              ).catch((error: unknown) => {
-                feedback.error(
-                  error instanceof Error ? error.message : t('common.error'),
-                );
-              });
-            }}
+            onClick={() =>
+              runDoc(
+                () =>
+                  downloadPaperDocument(
+                    `/api/v1/papers/${paper.id}/receipt`,
+                    'receipt.pdf',
+                  ),
+                feedback,
+                t('common.error'),
+              )
+            }
           />
           <IconAction
             icon={FileCheck}
             label={t('dossier.downloadAttestation')}
-            onClick={() => {
-              void downloadPaperDoc(
-                `/api/v1/papers/${paper.id}/attestation`,
-                'attestation.pdf',
-              ).catch((error: unknown) => {
-                feedback.error(
-                  error instanceof Error ? error.message : t('common.error'),
-                );
-              });
-            }}
+            onClick={() =>
+              runDoc(
+                () =>
+                  downloadPaperDocument(
+                    `/api/v1/papers/${paper.id}/attestation`,
+                    'attestation.pdf',
+                  ),
+                feedback,
+                t('common.error'),
+              )
+            }
+          />
+          <IconAction
+            icon={Printer}
+            label={t('dossier.printAttestation')}
+            onClick={() =>
+              runDoc(
+                () => printPaperDocument(`/api/v1/papers/${paper.id}/attestation`),
+                feedback,
+                t('common.error'),
+              )
+            }
           />
         </div>
       ) : null}

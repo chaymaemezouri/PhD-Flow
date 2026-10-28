@@ -8,7 +8,6 @@ import { ConferenceAccessPage } from '@/pages/conference-access-page';
 import { ConferenceManagePage } from '@/pages/conference-manage-page';
 import { ConferencesPage } from '@/pages/conferences-page';
 import { DirectoryPage } from '@/pages/directory-page';
-import { DemoGuidePage } from '@/pages/demo-guide-page';
 import { InvitationPage } from '@/pages/invitation-page';
 import { ForgotPasswordPage } from '@/pages/forgot-password-page';
 import { LoginPage } from '@/pages/login-page';
@@ -69,7 +68,6 @@ export const routes = [
           { path: 'system/*', element: <SuperadminPage /> },
           { path: 'conference-access', element: <ConferenceAccessPage /> },
           { path: 'preferences', element: <PreferencesPage /> },
-          { path: 'demo-guide', element: <DemoGuidePage /> },
           { path: 'account', element: <AccountPage /> },
           { path: 'conferences', element: <ConferencesPage /> },
           { path: 'conferences/:conferenceId', element: <ConferenceManagePage /> },

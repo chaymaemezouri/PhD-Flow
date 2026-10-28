@@ -43,13 +43,6 @@ describe('papers', () => {
       .post('/api/v1/auth/register')
       .set('x-csrf-token', csrf)
       .send({ email: address, password, firstName, lastName: 'Tester' });
-    const token = decodeURIComponent(
-      email.sent.at(-1)?.text.match(/token=([^&\s]+)/)?.[1] ?? '',
-    );
-    await agent
-      .post('/api/v1/auth/verify-email')
-      .set('x-csrf-token', csrf)
-      .send({ token });
     await agent
       .post('/api/v1/auth/login')
       .set('x-csrf-token', csrf)

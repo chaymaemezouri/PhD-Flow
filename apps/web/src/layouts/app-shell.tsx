@@ -12,7 +12,6 @@ import {
   ScrollText,
   Settings2,
   Shield,
-  Sparkles,
   Users,
   UserRound,
   X,
@@ -51,13 +50,6 @@ const shared = {
     to: '/workspace/preferences',
     label: 'nav.preferences',
     icon: Settings2,
-    end: false,
-  },
-  demoGuide: {
-    id: 'demoGuide',
-    to: '/workspace/demo-guide',
-    label: 'nav.demoGuide',
-    icon: Sparkles,
     end: false,
   },
 } as const;
@@ -154,7 +146,6 @@ function tabsFor(home: string, audience: NavAudience): NavTab[] {
         icon: ListChecks,
         end: false,
       },
-      shared.demoGuide,
       shared.account,
       shared.preferences,
     ];
@@ -183,7 +174,6 @@ function tabsFor(home: string, audience: NavAudience): NavTab[] {
         icon: CalendarRange,
         end: false,
       },
-      shared.demoGuide,
       shared.account,
       shared.preferences,
     ];
@@ -213,7 +203,6 @@ function tabsFor(home: string, audience: NavAudience): NavTab[] {
         icon: CalendarRange,
         end: false,
       },
-      shared.demoGuide,
       shared.account,
       shared.preferences,
     ];
@@ -264,7 +253,6 @@ function tabsFor(home: string, audience: NavAudience): NavTab[] {
         icon: Users,
         end: false,
       },
-      shared.demoGuide,
       shared.account,
       shared.preferences,
     ];
@@ -307,7 +295,6 @@ function tabsFor(home: string, audience: NavAudience): NavTab[] {
       icon: CalendarRange,
       end: false,
     },
-    shared.demoGuide,
     shared.account,
     shared.preferences,
   ];
@@ -325,7 +312,7 @@ const workIds = new Set([
   'program',
 ]);
 const teamIds = new Set(['reviewers']);
-const accountIds = new Set(['account', 'preferences', 'demoGuide']);
+const accountIds = new Set(['account', 'preferences']);
 
 const SYSTEM_PLATFORM_IDS = [
   'home',
@@ -670,7 +657,7 @@ export function AppShell() {
       </div>
 
       {menuOpen ? (
-        <div className="fixed inset-0 z-40 lg:hidden">
+        <div className="fixed inset-0 z-[60] lg:hidden">
           <button
             type="button"
             className="absolute inset-0 bg-[#243044]/40"
@@ -681,10 +668,9 @@ export function AppShell() {
             role="dialog"
             aria-modal="true"
             aria-label={t('nav.workspace')}
-            className="absolute inset-x-0 bottom-0 flex max-h-[min(85vh,40rem)] flex-col rounded-t-[28px] border border-[#e6e8ec] bg-white shadow-[0_-12px_40px_rgba(28,36,48,0.16)]"
-            style={{ paddingBottom: 'max(1rem, env(safe-area-inset-bottom))' }}
+            className="absolute inset-x-0 bottom-0 flex max-h-[min(88vh,42rem)] flex-col rounded-t-[28px] border border-[#e6e8ec] bg-white shadow-[0_-12px_40px_rgba(28,36,48,0.16)]"
           >
-            <div className="flex items-center justify-between gap-3 border-b border-[#eef1f8] px-4 py-3">
+            <div className="flex shrink-0 items-center justify-between gap-3 border-b border-[#eef1f8] px-4 py-3">
               <div className="min-w-0">
                 <p className="truncate text-sm font-extrabold text-[#1c2744]">
                   {displayName}
@@ -700,7 +686,10 @@ export function AppShell() {
                 <X className="size-5" />
               </button>
             </div>
-            <nav className="overflow-y-auto px-3 py-3" aria-label={t('nav.workspace')}>
+            <nav
+              className="min-h-0 flex-1 overflow-y-auto px-3 py-3"
+              aria-label={t('nav.workspace')}
+            >
               <div className="grid gap-3">
                 {platformAdmin ? (
                   <>
@@ -755,23 +744,29 @@ export function AppShell() {
                   </>
                 )}
               </div>
+            </nav>
+            <div
+              className="shrink-0 border-t border-[#eef1f8] bg-white px-3 pt-2"
+              style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))' }}
+            >
               <button
                 type="button"
-                className="mt-3 flex min-h-11 w-full items-center gap-3 rounded-lg px-2 py-2.5 text-sm font-semibold text-[#5c6573] hover:bg-[#f4f5f7] hover:text-[#c54545]"
+                className="flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-[#fdeeee] px-3 text-sm font-extrabold text-[#c54545]"
                 onClick={signOut}
               >
                 <LogOut className="size-4" />
                 {t('auth.logout')}
               </button>
-            </nav>
+            </div>
           </div>
         </div>
       ) : null}
 
       <nav
-        className="fixed inset-x-0 bottom-0 z-50 px-1 pt-1 lg:hidden"
+        className={`fixed inset-x-0 bottom-0 z-50 px-1 pt-1 print:hidden lg:hidden ${menuOpen ? 'pointer-events-none opacity-0' : ''}`}
         style={{ paddingBottom: 'max(0.35rem, env(safe-area-inset-bottom))' }}
         aria-label={t('nav.workspace')}
+        aria-hidden={menuOpen}
       >
         <ul className="grid grid-cols-5 gap-0.5">
           {mobileBar.map((tab) => (

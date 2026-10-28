@@ -123,7 +123,7 @@ export function AccountPage() {
           </div>
         </div>
       </section>
-      <section className="flex flex-wrap items-center gap-3">
+      <section className="flex flex-wrap items-center gap-3 print:hidden">
         <label className="rounded-full bg-white px-4 py-2 text-sm font-bold">
           {t('auth.uploadPhoto')}
           <input

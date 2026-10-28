@@ -4,6 +4,7 @@ import { Search } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Link, useSearchParams } from 'react-router';
 import { ConferenceWorkNav } from '@/components/conference-work-nav';
+import { PrintPageButton } from '@/components/print-page-button';
 import { type PaperStep } from '@/components/step-bar';
 import { pickConference } from '@/features/navigation/pick-conference';
 import { isPublishedPaper, isReadyToPublish } from '@/features/papers/admin-board';
@@ -158,11 +159,14 @@ export function FollowUpPage() {
             />
           </label>
         </div>
-        <PapersLayoutToggle
-          layout={layout}
-          onChange={chooseLayout}
-          labelKey="followUp.layoutLabel"
-        />
+        <div className="flex flex-wrap items-center gap-2 print:hidden">
+          <PrintPageButton labelKey="print.publication" variant="outline" />
+          <PapersLayoutToggle
+            layout={layout}
+            onChange={chooseLayout}
+            labelKey="followUp.layoutLabel"
+          />
+        </div>
       </div>
       {papers.isPending ? (
         <p className="text-sm text-[#8b909a]">{t('common.loading')}</p>

@@ -28,6 +28,10 @@ import { PrismaService } from '../../prisma/prisma.service.js';
 import { hashSecret, newSecret } from '../auth/auth.constants.js';
 import type { AuthenticatedUser } from '../auth/auth.types.js';
 import { EmailService } from '../auth/email.service.js';
+import {
+  assertSubadminStage,
+  type SubadminStage,
+} from '../conferences/subadmin-stages.js';
 
 const INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const MANAGERS = new Set<ConferenceRole>([
@@ -61,7 +65,7 @@ export class ReviewService {
 
   async directory(actor: AuthenticatedUser, conferenceId: string) {
     const conference = await this.loadConference(conferenceId);
-    this.assertManager(actor, conference.memberships);
+    await this.assertManager(actor, conference.memberships, conferenceId, 'assignments');
     const members = conference.memberships.filter(
       (item) => item.status === MembershipStatus.ACTIVE && REVIEWERS.has(item.role),
     );
@@ -80,7 +84,7 @@ export class ReviewService {
 
   async chairs(actor: AuthenticatedUser, conferenceId: string) {
     const conference = await this.loadConference(conferenceId);
-    this.assertManager(actor, conference.memberships);
+    await this.assertManager(actor, conference.memberships, conferenceId, 'program');
     const roles = new Set<ConferenceRole>([
       ConferenceRole.REVIEWER,
       ConferenceRole.COMMITTEE,
@@ -105,7 +109,7 @@ export class ReviewService {
     input: ConflictInput,
   ) {
     const conference = await this.loadConference(conferenceId);
-    this.assertManager(actor, conference.memberships);
+    await this.assertManager(actor, conference.memberships, conferenceId, 'assignments');
     if (input.paperId) {
       const paper = conference.papers.find((item) => item.id === input.paperId);
       if (!paper) {
@@ -127,7 +131,7 @@ export class ReviewService {
 
   async listConflicts(actor: AuthenticatedUser, conferenceId: string) {
     const conference = await this.loadConference(conferenceId);
-    this.assertManager(actor, conference.memberships);
+    await this.assertManager(actor, conference.memberships, conferenceId, 'assignments');
     const rows = await this.prisma.conflictDeclaration.findMany({
       where: { conferenceId },
       orderBy: { createdAt: 'desc' },
@@ -160,7 +164,12 @@ export class ReviewService {
         'Accept the paper for presentation before assigning reviewers',
       );
     }
-    this.assertManager(actor, paper.conference.memberships);
+    await this.assertManager(
+      actor,
+      paper.conference.memberships,
+      paper.conferenceId,
+      'assignments',
+    );
     const reviewer = paper.conference.memberships.find(
       (item) => item.userId === input.reviewerId,
     );
@@ -439,7 +448,12 @@ export class ReviewService {
     if (!row) {
       throw new NotFoundException('Assignment not found');
     }
-    this.assertManager(actor, row.paper.conference.memberships);
+    await this.assertManager(
+      actor,
+      row.paper.conference.memberships,
+      row.paper.conferenceId,
+      'assignments',
+    );
     if (
       row.status === AssignmentStatus.DECLINED ||
       row.status === AssignmentStatus.CANCELLED ||
@@ -667,12 +681,15 @@ export class ReviewService {
     );
   }
 
-  private assertManager(
+  private async assertManager(
     actor: AuthenticatedUser,
     memberships: { userId: string; role: ConferenceRole; status: MembershipStatus }[],
+    conferenceId: string,
+    stage: SubadminStage,
   ) {
     if (!this.isManager(actor, memberships)) {
       throw new ForbiddenException('You cannot manage reviews for this conference');
     }
+    await assertSubadminStage(this.prisma, actor, memberships, conferenceId, stage);
   }
 }

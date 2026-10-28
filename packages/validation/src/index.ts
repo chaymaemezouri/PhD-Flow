@@ -260,6 +260,25 @@ export const createAdminSchema = z.object({
   lastName: z.string().trim().min(1).max(80),
 });
 
+export const subadminStageSchema = z.enum([
+  'scope',
+  'assignments',
+  'decisions',
+  'registration',
+  'program',
+  'camera',
+  'publication',
+  'team',
+]);
+
+export const createSubAdminSchema = createAdminSchema.extend({
+  stages: z.array(subadminStageSchema).min(1).max(8),
+});
+
+export const updateSubAdminStagesSchema = z.object({
+  stages: z.array(subadminStageSchema).max(8),
+});
+
 export const createTeamMemberSchema = createAdminSchema.extend({
   role: z.enum(['ADMINISTRATOR', 'COMMITTEE', 'REVIEWER']),
 });

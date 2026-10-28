@@ -9,7 +9,9 @@ import {
   ConferenceWorkNav,
 } from '@/components/conference-work-nav';
 import { CreateTeamMemberDialog } from '@/components/create-team-member-dialog';
+import { EditSubadminStagesDialog } from '@/components/edit-subadmin-stages-dialog';
 import { FieldSelect } from '@/components/field-select';
+import { PrintPageButton } from '@/components/print-page-button';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -32,6 +34,7 @@ interface ConferenceDetail extends PublicConference {
   accessLocked: boolean;
   canManage: boolean;
   canViewMembers: boolean;
+  myStages?: string[];
   myMembership: { id: string; role: string; status: string } | null;
   templates: {
     id: string;
@@ -43,12 +46,14 @@ interface ConferenceDetail extends PublicConference {
   }[];
   members: {
     id: string;
+    userId?: string;
     email: string;
     role: string;
     status: string;
     firstName: string;
     lastName: string;
     academicTitle?: string | null;
+    stages?: string[];
   }[];
   invitations?: {
     id: string;
@@ -85,6 +90,11 @@ export function ConferenceManagePage() {
   const [teamRoleOpen, setTeamRoleOpen] = useState(false);
   const [inviteEmail, setInviteEmail] = useState('');
   const [createTeamOpen, setCreateTeamOpen] = useState(false);
+  const [editStagesMember, setEditStagesMember] = useState<{
+    userId: string;
+    email: string;
+    stages: string[];
+  } | null>(null);
   const [addTrackOpen, setAddTrackOpen] = useState(false);
   const [addDeadlineOpen, setAddDeadlineOpen] = useState(false);
   const [addTemplateOpen, setAddTemplateOpen] = useState(false);
@@ -317,15 +327,21 @@ export function ConferenceManagePage() {
               ) : null}
             </div>
           </div>
-          {conference.canManage && conference.status === 'DRAFT' ? (
-            <Button
-              type="button"
-              onClick={() => void publish.mutate()}
-              disabled={publish.isPending}
-            >
-              {t('conferences.publish')}
-            </Button>
-          ) : null}
+          <div className="flex flex-wrap items-center gap-2 print:hidden">
+            {conference.canManage ||
+            account.data?.platformRole === 'SYSTEM_ADMIN' ? (
+              <PrintPageButton labelKey="print.conference" variant="outline" />
+            ) : null}
+            {conference.canManage && conference.status === 'DRAFT' ? (
+              <Button
+                type="button"
+                onClick={() => void publish.mutate()}
+                disabled={publish.isPending}
+              >
+                {t('conferences.publish')}
+              </Button>
+            ) : null}
+          </div>
         </div>
       </header>
 
@@ -339,6 +355,7 @@ export function ConferenceManagePage() {
               conference.status === 'PUBLISHED' && conference.visibility === 'PUBLIC'
             }
             current="record"
+            myStages={conference.myStages}
           />
           <ConferenceFicheParts />
         </div>
@@ -832,22 +849,61 @@ export function ConferenceManagePage() {
                             defaultValue: member.status,
                           })}
                         </span>
+                        {member.role === 'ADMINISTRATOR' && member.stages?.length ? (
+                          <span className="mt-1.5 flex flex-wrap gap-1">
+                            {member.stages.map((stage) => (
+                              <span
+                                key={stage}
+                                className="rounded-full bg-[#5d74ff]/12 px-2 py-0.5 text-[10px] font-bold text-[#3d4fd4]"
+                              >
+                                {t(`conferences.stages.${stage}`, { defaultValue: stage })}
+                              </span>
+                            ))}
+                          </span>
+                        ) : null}
+                        {member.role === 'ADMINISTRATOR' &&
+                        (!member.stages || member.stages.length === 0) ? (
+                          <span className="mt-1 block text-[11px] font-semibold text-[#9a6410]">
+                            {t('conferences.stagesNone')}
+                          </span>
+                        ) : null}
                       </span>
-                      {conference.canManage && editingAll && member.role !== 'CHAIR' ? (
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="outline"
-                          onClick={() =>
-                            void send(
-                              `/api/v1/conferences/${conferenceId}/members/${member.id}/remove`,
-                              'POST',
-                            )
-                          }
-                        >
-                          {t('conferences.remove')}
-                        </Button>
-                      ) : null}
+                      <span className="flex flex-wrap gap-2">
+                        {canCreateAdmin &&
+                        editingAll &&
+                        member.role === 'ADMINISTRATOR' &&
+                        member.userId ? (
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            onClick={() =>
+                              setEditStagesMember({
+                                userId: member.userId!,
+                                email: member.email,
+                                stages: member.stages ?? [],
+                              })
+                            }
+                          >
+                            {t('conferences.editStages')}
+                          </Button>
+                        ) : null}
+                        {conference.canManage && editingAll && member.role !== 'CHAIR' ? (
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            onClick={() =>
+                              void send(
+                                `/api/v1/conferences/${conferenceId}/members/${member.id}/remove`,
+                                'POST',
+                              )
+                            }
+                          >
+                            {t('conferences.remove')}
+                          </Button>
+                        ) : null}
+                      </span>
                     </li>
                   ))}
                 </ul>
@@ -965,6 +1021,31 @@ export function ConferenceManagePage() {
                         onOpenChange={setCreateTeamOpen}
                         conferenceId={conferenceId}
                         role={createRole}
+                      />
+                    ) : null}
+                    {editStagesMember ? (
+                      <EditSubadminStagesDialog
+                        open
+                        onOpenChange={(open) => {
+                          if (!open) {
+                            setEditStagesMember(null);
+                          }
+                        }}
+                        conferenceId={conferenceId}
+                        userId={editStagesMember.userId}
+                        email={editStagesMember.email}
+                        initialStages={
+                          editStagesMember.stages as (
+                            | 'scope'
+                            | 'assignments'
+                            | 'decisions'
+                            | 'registration'
+                            | 'program'
+                            | 'camera'
+                            | 'publication'
+                            | 'team'
+                          )[]
+                        }
                       />
                     ) : null}
                     <p className="mt-2 text-xs font-semibold text-[#8b909a]">

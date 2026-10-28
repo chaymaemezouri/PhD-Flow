@@ -3,6 +3,7 @@ import { type ReactNode, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { PaperFilesStrip, type PaperFileInfo } from '@/components/paper-file-preview';
 import { isRegistrationComplete } from '@/features/papers/registration';
+import { PrintPageButton } from '@/components/print-page-button';
 import { InfoCards, InfoGrid, StagePanel } from '@/components/stage-panel';
 import { Button } from '@/components/ui/button';
 import { useFeedback } from '@/features/feedback/feedback';
@@ -1438,18 +1439,23 @@ export function PaperWorkflow({
         <h1 className="min-w-0 break-words text-xl font-extrabold text-[#1c2744] sm:text-2xl lg:text-3xl">
           {heading}
         </h1>
-        {currentStage ? (
-          <p
-            aria-label={t('dossier.currentState')}
-            className="shrink-0 rounded-full border border-[#e4e7ee] bg-white px-3.5 py-1.5 text-sm font-extrabold text-[#1c2744]"
-          >
-            <span className="text-[#3d4fd4]">{t('dossier.currentState')}</span>
-            <span className="mx-1.5 text-[#c5cad6]">·</span>
-            {currentNumber}. {currentStage.title}
-            <span className="mx-1.5 text-[#c5cad6]">·</span>
-            <span className={currentBadgeTone}>{currentStage.status}</span>
-          </p>
-        ) : null}
+        <div className="flex flex-wrap items-center gap-2">
+          {dossier?.canManage || (!authorLayout && Boolean(paper?.id)) ? (
+            <PrintPageButton labelKey="print.paper" variant="outline" />
+          ) : null}
+          {currentStage ? (
+            <p
+              aria-label={t('dossier.currentState')}
+              className="shrink-0 rounded-full border border-[#e4e7ee] bg-white px-3.5 py-1.5 text-sm font-extrabold text-[#1c2744]"
+            >
+              <span className="text-[#3d4fd4]">{t('dossier.currentState')}</span>
+              <span className="mx-1.5 text-[#c5cad6]">·</span>
+              {currentNumber}. {currentStage.title}
+              <span className="mx-1.5 text-[#c5cad6]">·</span>
+              <span className={currentBadgeTone}>{currentStage.status}</span>
+            </p>
+          ) : null}
+        </div>
       </div>
 
       <section aria-label={t('dossier.evolutionTitle')}>

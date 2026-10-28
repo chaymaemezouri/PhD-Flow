@@ -33,13 +33,16 @@ export function FeedbackProvider({ children }: { children: ReactNode }) {
       {children}
       <Toaster
         position="top-center"
-        richColors
         closeButton
         toastOptions={{
           classNames: {
-            toast: 'rounded-2xl border border-[#e4e7ee] font-semibold shadow-lg',
-            title: 'font-extrabold',
-            description: 'font-semibold text-[#1c2744]',
+            toast:
+              'rounded-2xl border border-[#e4e7ee] bg-white font-semibold text-[#1c2744] shadow-[0_12px_32px_rgba(28,39,68,0.12)]',
+            title: 'font-extrabold text-[#1c2744]',
+            description: 'font-semibold text-[#5c6578]',
+            success: 'border-[#b8e6cb]',
+            error: 'border-[#f3b4b4]',
+            closeButton: 'border-[#e4e7ee] bg-white text-[#5c6578]',
           },
         }}
       />
